@@ -5,7 +5,7 @@ import hashlib
 import os
 from asyncio import QueueEmpty
 from dataclasses import dataclass
-from datetime import datetime, time, timedelta
+from datetime import datetime, time, timedelta, timezone
 from time import monotonic
 from typing import Any, Iterable, Mapping, Sequence
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
