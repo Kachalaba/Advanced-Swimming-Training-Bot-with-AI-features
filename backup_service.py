@@ -194,7 +194,9 @@ class BackupService:
             raise FileNotFoundError(self.db_path)
 
         client = self._get_client()
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        timestamp = (
+            datetime.utcnow().replace(tzinfo=timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        )
         key = f"{self.backup_prefix}{timestamp}-{self.db_path.name}"
         extra_args: dict[str, str] = {}
         if self.storage_class:
@@ -224,7 +226,9 @@ class BackupService:
         except (BotoCoreError, ClientError) as exc:
             raise RuntimeError("Failed to download backup from S3") from exc
 
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        timestamp = (
+            datetime.utcnow().replace(tzinfo=timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        )
         if self.db_path.exists():
             backup_copy = self.db_path.with_suffix(
                 self.db_path.suffix + f".{timestamp}.bak"

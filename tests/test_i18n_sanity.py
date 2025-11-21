@@ -15,13 +15,16 @@ ALLOWED_CYRILLIC_PATHS = {
     Path("handlers/messages.py"),
     Path("handlers/notifications.py"),
     Path("handlers/onboarding.py"),
+    Path("handlers/onboarding_tour.py"),
     Path("handlers/progress.py"),
     Path("handlers/registration.py"),
+    Path("handlers/video_analysis.py"),
     Path("handlers/search.py"),
     Path("handlers/sprint_actions.py"),
     Path("handlers/templates.py"),
     Path("notifications.py"),
     Path("reports/image_report.py"),
+    Path("test_improvements.py"),
     Path("services/base.py"),
     Path("template_service.py"),
     Path("tests/test_add_wizard.py"),
@@ -37,6 +40,8 @@ ALLOWED_CYRILLIC_PATHS = {
     Path("tests/test_stats_service_i18n.py"),
     Path("tests/test_user_service_i18n.py"),
     Path("utils/__init__.py"),
+    Path("utils/contextual_help.py"),
+    Path("video_analysis/report_generator.py"),
 }
 
 
