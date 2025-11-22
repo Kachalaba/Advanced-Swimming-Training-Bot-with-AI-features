@@ -22,10 +22,20 @@ flowchart LR
 
 ## Как запустить
 
-1. Установите зависимости: `pip install -r requirements.txt` и `pip install -r video_analysis/requirements.txt` (YOLO/pose/визуализации).
+1. Установите зависимости: `pip install -r requirements.txt` и `pip install -r video_analysis/requirements.txt` (YOLO/pose/визуализации). Для Linux может понадобиться `sudo apt-get install -y libgl1` (OpenCV).
 2. Подготовьте пути к моделям и директории логов в `.env` или передавайте их в параметры своих скриптов.
-3. Запускайте локальный скрипт, используя API из `video_analysis` (пример ниже), без Telegram-бота или внешних сервисов.
-4. На выходе получите аннотированные кадры, кривую скорости и PDF/PNG-отчёт рядом с исходным видео.
+3. Запустите готовый пример локального анализа (без Telegram):
+
+```bash
+python examples/run_local_video_analysis.py \
+  --video path/to/video.mp4 \
+  --output ./run_outputs/session_01 \
+  --fps 2 \
+  --pool-length 25 \
+  --athlete "Атлет"
+```
+
+4. На выходе получите аннотированные кадры, кривую скорости и PDF/PNG-отчёт рядом с исходным видео (`run_outputs/**`), логи — в `logs/bot.log`.
 
 ## Архитектура
 

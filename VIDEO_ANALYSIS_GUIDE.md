@@ -45,6 +45,19 @@ generator = ReportGenerator()
 report = generator.generate_complete_report(analysis, "Атлет")
 ```
 
+### Быстрый запуск без кода (CLI)
+
+```bash
+python examples/run_local_video_analysis.py \
+  --video path/to/video.mp4 \
+  --output ./run_outputs/session_01 \
+  --fps 2 \
+  --pool-length 25 \
+  --athlete "Атлет"
+```
+
+Зависимости: `pip install -r requirements.txt` + `pip install -r video_analysis/requirements.txt` (+ `sudo apt-get install -y libgl1` для OpenCV в Linux).
+
 ## Готовые модули
 
 - `video_analysis/frame_extractor.py` — извлечение кадров.
