@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from aiogram import F, Router, types
@@ -11,11 +11,7 @@ from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
 
 from i18n import t
-from keyboards import (
-    build_contextual_greeting,
-    build_modern_main_menu,
-    get_quick_actions_keyboard,
-)
+from keyboards import build_contextual_greeting, build_modern_main_menu
 from menu_callbacks import (
     CB_MENU_MY_RECENT_PRS,
     CB_MENU_NOOP,

@@ -6,7 +6,6 @@ for Kubernetes and other orchestrators.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from typing import TYPE_CHECKING
 
@@ -23,7 +22,7 @@ class HealthcheckServer:
 
     def __init__(self, container: "ServiceContainer", port: int = 8080):
         """Initialize healthcheck server.
-        
+
         Args:
             container: Service container with all bot services
             port: HTTP port to listen on (default: 8080)
@@ -39,7 +38,7 @@ class HealthcheckServer:
 
     async def health(self, request: web.Request) -> web.Response:
         """Liveness probe - is the process alive?
-        
+
         Returns:
             200 OK if process is alive
         """
@@ -53,12 +52,12 @@ class HealthcheckServer:
 
     async def ready(self, request: web.Request) -> web.Response:
         """Readiness probe - can the service handle traffic?
-        
+
         Checks:
         - Database connection
         - Bot API connection
         - Critical services availability
-        
+
         Returns:
             200 OK if ready to serve traffic
             503 Service Unavailable if not ready
@@ -71,7 +70,7 @@ class HealthcheckServer:
         all_ready = all(checks.values())
 
         status_code = 200 if all_ready else 503
-        
+
         return web.json_response(
             {
                 "ready": all_ready,
@@ -82,7 +81,7 @@ class HealthcheckServer:
 
     async def metrics_redirect(self, request: web.Request) -> web.Response:
         """Redirect to Prometheus metrics endpoint.
-        
+
         Returns:
             Redirect to :9090/metrics if Prometheus is enabled
         """
@@ -95,7 +94,7 @@ class HealthcheckServer:
 
     async def _check_bot_api(self) -> bool:
         """Check if Telegram Bot API is accessible.
-        
+
         Returns:
             True if bot can communicate with Telegram
         """
@@ -108,7 +107,7 @@ class HealthcheckServer:
 
     async def _check_database(self) -> bool:
         """Check if database is accessible.
-        
+
         Returns:
             True if database connection is healthy
         """
