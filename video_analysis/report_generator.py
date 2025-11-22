@@ -196,34 +196,61 @@ class ReportGenerator:
         # Generate summaries
         summaries = self.generate_text_summary(analysis)
         
-        # Create PDF
-        pdf = FPDF()
-        pdf.add_page()
+        # Create PDF (skip if font not available on macOS)
+        try:
+            pdf = FPDF()
+            pdf.add_page()
+            
+            # Try to add Unicode font support
+            # On macOS, DejaVu fonts are in different location
+            font_paths = [
+                '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',  # Linux
+                '/System/Library/Fonts/Supplemental/Arial Unicode.ttf',  # macOS
+                '/Library/Fonts/Arial Unicode.ttf',  # macOS alternative
+            ]
+            
+            font_loaded = False
+            for font_path in font_paths:
+                if Path(font_path).exists():
+                    pdf.add_font('CustomFont', '', font_path, uni=True)
+                    pdf.set_font('CustomFont', '', 16)
+                    font_loaded = True
+                    break
+            
+            if not font_loaded:
+                # Fallback to built-in font (no Cyrillic support)
+                logger.warning("Unicode font not found, using built-in font (no Cyrillic)")
+                pdf.set_font('Arial', '', 16)
+            
+            # Title
+            pdf.cell(0, 10, f'Video Analysis Report - {athlete_name}', ln=True, align='C')
+            pdf.ln(10)
+            
+            # Athlete summary (convert to ASCII if needed)
+            if font_loaded:
+                pdf.set_font('CustomFont', '', 12)
+                for line in summaries["athlete"].split('\n'):
+                    pdf.multi_cell(0, 6, line)
+            else:
+                pdf.set_font('Arial', '', 12)
+                pdf.multi_cell(0, 6, "Report generated. See text files for details.")
+            
+            pdf.ln(10)
+            
+            # Add chart if available
+            if chart_path and Path(chart_path).exists():
+                pdf.image(chart_path, x=10, w=190)
+            
+            # Save
+            pdf.output(output_path)
+            logger.info(f"Saved PDF report: {output_path}")
+            
+            return output_path
         
-        # Add Unicode font support
-        pdf.add_font('DejaVu', '', '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', uni=True)
-        pdf.set_font('DejaVu', '', 16)
-        
-        # Title
-        pdf.cell(0, 10, f'Отчёт анализа видео - {athlete_name}', ln=True, align='C')
-        pdf.ln(10)
-        
-        # Athlete summary
-        pdf.set_font('DejaVu', '', 12)
-        for line in summaries["athlete"].split('\n'):
-            pdf.multi_cell(0, 6, line)
-        
-        pdf.ln(10)
-        
-        # Add chart if available
-        if chart_path and Path(chart_path).exists():
-            pdf.image(chart_path, x=10, w=190)
-        
-        # Save
-        pdf.output(output_path)
-        logger.info(f"Saved PDF report: {output_path}")
-        
-        return output_path
+        except Exception as e:
+            logger.warning(f"Could not generate PDF: {e}")
+            logger.info("Skipping PDF generation, text reports still available")
+            return ""
     
     def generate_complete_report(
         self,

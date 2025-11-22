@@ -17,6 +17,7 @@ from video_analysis.report_generator import ReportGenerator
 from video_analysis.split_analyzer import analyze_swimming_video
 from video_analysis.swimmer_detector import detect_swimmer_in_frames
 from video_analysis.video_overlay import VideoOverlayGenerator
+from video_analysis.biomechanics_analyzer import analyze_biomechanics
 
 LOG_DIR = Path("logs")
 LOG_PATH = LOG_DIR / "bot.log"
@@ -111,12 +112,33 @@ def main() -> None:
     )
     logging.info("Detections saved to %s", detection_result["output_dir"])
 
+    # Biomechanics and hydrodynamics analysis
+    biomechanics_dir = output_root / "biomechanics"
+    biomechanics_result = analyze_biomechanics(
+        frame_result["frames"],
+        detection_result["detections"],
+        output_dir=str(biomechanics_dir),
+    )
+    logging.info("Biomechanics analysis saved to %s", biomechanics_dir)
+    
+    # Display key biomechanics metrics
+    avg_metrics = biomechanics_result.get("average_metrics", {})
+    if avg_metrics:
+        logging.info(
+            "Biomechanics: Posture=%.1f/100, Drag Cd=%.2f, Streamline=%.0f%%",
+            avg_metrics.get("average_posture_score", 0),
+            avg_metrics.get("average_drag_coefficient", 0),
+            avg_metrics.get("average_streamline_score", 0),
+        )
+
     analysis = analyze_swimming_video(
         detection_result["detections"],
         pool_length=args.pool_length,
         fps=max(1, int(args.fps)),
         output_path=str(output_root / "analysis.json"),
     )
+    # Add biomechanics to main analysis
+    analysis["biomechanics"] = biomechanics_result
     logging.info(
         "Analysis complete: %s m in %s s",
         analysis["summary"]["total_distance_m"],
@@ -130,9 +152,11 @@ def main() -> None:
     )
     logging.info("Reports generated in %s", reports_dir)
 
+    # Use higher fps for smoother video (10 fps minimum)
+    video_fps = max(10.0, float(args.fps))
     overlay_generator = VideoOverlayGenerator(
         output_dir=str(output_root),
-        fps=max(1, int(args.fps)),
+        fps=video_fps,
     )
     annotated_video_path = overlay_generator.generate_annotated_video(
         frame_result["frames"],
@@ -146,9 +170,20 @@ def main() -> None:
     print(f"Видео: {video_path}")
     print(f"Кадры: {frames_dir}")
     print(f"Детекции: {detections_dir}")
+    print(f"Биомеханика: {biomechanics_dir}")
     print(f"Отчёты: {reports_dir}")
     print(f"Аннотированное видео: {annotated_video_path}")
     print(f"Логи: {LOG_PATH}")
+    
+    # Display biomechanics summary
+    if avg_metrics and biomechanics_result.get("recommendations"):
+        print("\n🔬 Биомеханика и гидродинамика:")
+        print(f"  Оценка позы: {avg_metrics.get('average_posture_score', 0):.1f}/100")
+        print(f"  Коэффициент сопротивления: {avg_metrics.get('average_drag_coefficient', 0):.2f}")
+        print(f"  Обтекаемость: {avg_metrics.get('average_streamline_score', 0):.0f}%")
+        print("\n📋 Рекомендации:")
+        for rec in biomechanics_result["recommendations"]:
+            print(f"  {rec}")
 
 
 if __name__ == "__main__":

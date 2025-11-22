@@ -14,16 +14,16 @@ logger = logging.getLogger(__name__)
 class VideoOverlayGenerator:
     """Create annotated videos from extracted frames and analysis results."""
 
-    def __init__(self, output_dir: str = "./overlays", fps: float = 1.0):
+    def __init__(self, output_dir: str = "./overlays", fps: float = 10.0):
         """Configure output directory and playback speed.
 
         Args:
             output_dir: Directory where the annotated video will be written.
-            fps: Frames per second to encode the resulting video.
+            fps: Frames per second to encode the resulting video (default: 10).
         """
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        self.fps = fps
+        self.fps = max(5.0, fps)  # Minimum 5 fps for smooth playback
 
     def generate_annotated_video(
         self,
@@ -56,8 +56,15 @@ class VideoOverlayGenerator:
         height, width = first_frame.shape[:2]
         output_path = output_path or str(self.output_dir / "annotated_video.mp4")
 
-        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-        writer = cv2.VideoWriter(str(output_path), fourcc, self.fps, (width, height))
+        # Try better codecs for quality
+        # h264 > avc1 > mp4v
+        for codec in ["avc1", "mp4v"]:
+            fourcc = cv2.VideoWriter_fourcc(*codec)
+            writer = cv2.VideoWriter(str(output_path), fourcc, self.fps, (width, height))
+            if writer.isOpened():
+                logger.info(f"Using codec: {codec} at {self.fps} fps")
+                break
+        
         if not writer.isOpened():
             raise ValueError(f"Unable to open video writer for {output_path}")
 

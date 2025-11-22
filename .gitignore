@@ -19,3 +19,8 @@ creds.json
 creds/
 .coverage
 coverage.xml
+test_*/
+__pycache__/
+*.pt
+.DS_Store
+logs/
