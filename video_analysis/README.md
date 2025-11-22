@@ -33,6 +33,9 @@
    - End-to-end пример без Telegram
    - Консольный запуск с путём к mp4
    - Выход: кадры, детекции, JSON + PDF/PNG отчёты
+6. **Видео-оверлеи** (`video_overlay.py`)
+   - Строит mp4 с боксами, осями тела и отметками касаний
+   - Позволяет просматривать ключевые моменты в реальном времени
 
 ## 📦 Установка
 
@@ -70,6 +73,7 @@ python examples/run_local_video_analysis.py \
 from video_analysis.frame_extractor import extract_frames_from_video
 from video_analysis.swimmer_detector import detect_swimmer_in_frames
 from video_analysis.split_analyzer import analyze_swimming_video
+from video_analysis.video_overlay import VideoOverlayGenerator
 from video_analysis.report_generator import ReportGenerator
 
 # 1. Извлечь кадры
@@ -84,6 +88,12 @@ analysis = analyze_swimming_video(detections["detections"])
 # 4. Сгенерировать отчёт
 generator = ReportGenerator()
 report = generator.generate_complete_report(analysis, "Иван Петров")
+
+# 5. Собрать аннотированное видео
+overlay = VideoOverlayGenerator(fps=2.0)
+overlay_path = overlay.generate_annotated_video(
+    frames["frames"], detections["detections"], analysis
+)
 ```
 
 ## 📊 Пример вывода

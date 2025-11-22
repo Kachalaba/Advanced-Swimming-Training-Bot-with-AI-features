@@ -16,6 +16,7 @@ from video_analysis.frame_extractor import extract_frames_from_video
 from video_analysis.report_generator import ReportGenerator
 from video_analysis.split_analyzer import analyze_swimming_video
 from video_analysis.swimmer_detector import detect_swimmer_in_frames
+from video_analysis.video_overlay import VideoOverlayGenerator
 
 LOG_DIR = Path("logs")
 LOG_PATH = LOG_DIR / "bot.log"
@@ -129,11 +130,24 @@ def main() -> None:
     )
     logging.info("Reports generated in %s", reports_dir)
 
+    overlay_generator = VideoOverlayGenerator(
+        output_dir=str(output_root),
+        fps=max(1, int(args.fps)),
+    )
+    annotated_video_path = overlay_generator.generate_annotated_video(
+        frame_result["frames"],
+        detection_result["detections"],
+        analysis=analysis,
+        output_path=str(output_root / "annotated_video.mp4"),
+    )
+    logging.info("Annotated video saved to %s", annotated_video_path)
+
     print("\n✅ Локальный анализ выполнен")
     print(f"Видео: {video_path}")
     print(f"Кадры: {frames_dir}")
     print(f"Детекции: {detections_dir}")
     print(f"Отчёты: {reports_dir}")
+    print(f"Аннотированное видео: {annotated_video_path}")
     print(f"Логи: {LOG_PATH}")
 
 
