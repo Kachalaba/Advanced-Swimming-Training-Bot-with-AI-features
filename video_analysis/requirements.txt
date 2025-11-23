@@ -25,3 +25,6 @@ fpdf2>=2.7.0
 
 # Async processing
 aiofiles>=23.0.0
+
+# Web UI
+streamlit>=1.28.0

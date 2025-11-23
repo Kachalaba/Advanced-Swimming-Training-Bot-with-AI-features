@@ -49,9 +49,16 @@ class VideoOverlayGenerator:
         if not frame_paths:
             raise ValueError("No frames provided for overlay generation")
 
-        first_frame = cv2.imread(frame_paths[0])
+        # Поддержка нового формата (dict) и старого (str)
+        first_frame_info = frame_paths[0]
+        if isinstance(first_frame_info, dict):
+            first_frame_path = first_frame_info["path"]
+        else:
+            first_frame_path = first_frame_info
+        
+        first_frame = cv2.imread(first_frame_path)
         if first_frame is None:
-            raise ValueError(f"Cannot read first frame: {frame_paths[0]}")
+            raise ValueError(f"Cannot read first frame: {first_frame_path}")
 
         height, width = first_frame.shape[:2]
         output_path = output_path or str(self.output_dir / "annotated_video.mp4")
@@ -71,7 +78,13 @@ class VideoOverlayGenerator:
         detection_map = {det.get("frame_index"): det for det in detections}
         touch_frames = self._extract_touch_frames(analysis)
 
-        for frame_index, frame_path in enumerate(frame_paths):
+        for frame_index, frame_info in enumerate(frame_paths):
+            # Поддержка нового формата (dict) и старого (str)
+            if isinstance(frame_info, dict):
+                frame_path = frame_info["path"]
+            else:
+                frame_path = frame_info
+            
             frame = cv2.imread(frame_path)
             if frame is None:
                 logger.warning("Skipping unreadable frame: %s", frame_path)

@@ -1,0 +1,29 @@
+{
+  "wall_touches": {
+    "count": 2,
+    "frames": [
+      0,
+      467
+    ]
+  },
+  "splits": [
+    {
+      "split_number": 1,
+      "start_frame": 0,
+      "end_frame": 467,
+      "time_seconds": 15.58,
+      "distance_meters": 25,
+      "speed_mps": 1.6,
+      "pace_per_100m": 62.31
+    }
+  ],
+  "stroke_rate_spm": 23.1,
+  "summary": {
+    "total_distance_m": 25,
+    "total_time_s": 15.58,
+    "average_speed_mps": 1.6,
+    "average_pace_per_100m": 62.32,
+    "uses_video_timestamps": true,
+    "timing_source": "video_timestamps"
+  }
+}

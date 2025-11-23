@@ -18,6 +18,7 @@ from video_analysis.split_analyzer import analyze_swimming_video
 from video_analysis.swimmer_detector import detect_swimmer_in_frames
 from video_analysis.video_overlay import VideoOverlayGenerator
 from video_analysis.biomechanics_analyzer import analyze_biomechanics
+from video_analysis.trajectory_analyzer import analyze_trajectory
 
 LOG_DIR = Path("logs")
 LOG_PATH = LOG_DIR / "bot.log"
@@ -81,6 +82,12 @@ def parse_args() -> argparse.Namespace:
         default="Атлет",
         help="Name to place in the generated PDF report",
     )
+    parser.add_argument(
+        "--analysis-method",
+        choices=["pose", "trajectory", "hybrid"],
+        default="hybrid",
+        help="Analysis method: 'pose' (MediaPipe), 'trajectory' (bbox only), 'hybrid' (both)",
+    )
     return parser.parse_args()
 
 
@@ -99,10 +106,13 @@ def main() -> None:
 
     logging.info("Starting analysis for %s", video_path)
 
+    # Используем точный FPS (float) для правильного расчёта времени
+    target_fps = max(1.0, float(args.fps))
+    
     frame_result = extract_frames_from_video(
         str(video_path),
         output_dir=str(frames_dir),
-        fps=max(1, int(args.fps)),
+        fps=target_fps,
     )
     logging.info("Extracted %s frames", frame_result["count"])
 
@@ -114,31 +124,70 @@ def main() -> None:
 
     # Biomechanics and hydrodynamics analysis
     biomechanics_dir = output_root / "biomechanics"
-    biomechanics_result = analyze_biomechanics(
-        frame_result["frames"],
-        detection_result["detections"],
-        output_dir=str(biomechanics_dir),
-    )
-    logging.info("Biomechanics analysis saved to %s", biomechanics_dir)
+    biomechanics_result = None
+    trajectory_result = None
     
-    # Display key biomechanics metrics
-    avg_metrics = biomechanics_result.get("average_metrics", {})
-    if avg_metrics:
-        logging.info(
-            "Biomechanics: Posture=%.1f/100, Drag Cd=%.2f, Streamline=%.0f%%",
-            avg_metrics.get("average_posture_score", 0),
-            avg_metrics.get("average_drag_coefficient", 0),
-            avg_metrics.get("average_streamline_score", 0),
+    if args.analysis_method in ["pose", "hybrid"]:
+        logging.info("Running pose-based biomechanics analysis...")
+        biomechanics_result = analyze_biomechanics(
+            frame_result["frames"],
+            detection_result["detections"],
+            output_dir=str(biomechanics_dir),
         )
+        logging.info("Biomechanics analysis saved to %s", biomechanics_dir)
+        
+        # Display key biomechanics metrics
+        avg_metrics = biomechanics_result.get("average_metrics", {})
+        if avg_metrics:
+            frames_with_pose = avg_metrics.get("frames_with_pose", 0)
+            total_frames = avg_metrics.get("total_frames", 0)
+            detection_rate = (frames_with_pose / total_frames * 100) if total_frames > 0 else 0
+            
+            logging.info(
+                "Pose detection: %d/%d кадров (%.1f%%)",
+                frames_with_pose,
+                total_frames,
+                detection_rate
+            )
+            
+            if frames_with_pose > 0:
+                logging.info(
+                    "Biomechanics: Posture=%.1f/100, Drag Cd=%.2f, Streamline=%.0f%%",
+                    avg_metrics.get("average_posture_score", 0),
+                    avg_metrics.get("average_drag_coefficient", 0),
+                    avg_metrics.get("average_streamline_score", 0),
+                )
+    
+    if args.analysis_method in ["trajectory", "hybrid"]:
+        logging.info("Running trajectory-based analysis...")
+        trajectory_dir = output_root / "trajectory"
+        trajectory_result = analyze_trajectory(
+            detection_result["detections"],
+            fps=max(1, int(args.fps)),
+            pool_length=args.pool_length,
+            output_dir=str(trajectory_dir),
+        )
+        logging.info("Trajectory analysis saved to %s", trajectory_dir)
+        
+        # Display trajectory metrics
+        summary = trajectory_result.get("summary", {})
+        if summary:
+            logging.info(
+                "Trajectory: Movement Quality=%.1f/100, Streamline=%.0f%%",
+                summary.get("movement_quality_score", 0),
+                summary.get("streamline_score", 0),
+            )
 
     analysis = analyze_swimming_video(
         detection_result["detections"],
         pool_length=args.pool_length,
-        fps=max(1, int(args.fps)),
+        fps=target_fps,  # Используем точный FPS, не округлённый
         output_path=str(output_root / "analysis.json"),
     )
-    # Add biomechanics to main analysis
+    # Add biomechanics and trajectory to main analysis
     analysis["biomechanics"] = biomechanics_result
+    analysis["trajectory"] = trajectory_result
+    analysis["analysis_method"] = args.analysis_method
     logging.info(
         "Analysis complete: %s m in %s s",
         analysis["summary"]["total_distance_m"],
@@ -167,23 +216,48 @@ def main() -> None:
     logging.info("Annotated video saved to %s", annotated_video_path)
 
     print("\n✅ Локальный анализ выполнен")
+    print(f"Метод: {args.analysis_method}")
     print(f"Видео: {video_path}")
     print(f"Кадры: {frames_dir}")
     print(f"Детекции: {detections_dir}")
-    print(f"Биомеханика: {biomechanics_dir}")
+    
+    if biomechanics_result:
+        print(f"Биомеханика (pose): {biomechanics_dir}")
+    if trajectory_result:
+        print(f"Траектория (bbox): {output_root / 'trajectory'}")
+    
     print(f"Отчёты: {reports_dir}")
     print(f"Аннотированное видео: {annotated_video_path}")
     print(f"Логи: {LOG_PATH}")
     
     # Display biomechanics summary
-    if avg_metrics and biomechanics_result.get("recommendations"):
-        print("\n🔬 Биомеханика и гидродинамика:")
-        print(f"  Оценка позы: {avg_metrics.get('average_posture_score', 0):.1f}/100")
-        print(f"  Коэффициент сопротивления: {avg_metrics.get('average_drag_coefficient', 0):.2f}")
-        print(f"  Обтекаемость: {avg_metrics.get('average_streamline_score', 0):.0f}%")
-        print("\n📋 Рекомендации:")
-        for rec in biomechanics_result["recommendations"]:
-            print(f"  {rec}")
+    if biomechanics_result:
+        avg_metrics = biomechanics_result.get("average_metrics", {})
+        if avg_metrics and avg_metrics.get("frames_with_pose", 0) > 0:
+            print("\n🔬 Биомеханика (pose-based):")
+            print(f"  Детекция: {avg_metrics.get('frames_with_pose', 0)}/{avg_metrics.get('total_frames', 0)} кадров")
+            print(f"  Оценка позы: {avg_metrics.get('average_posture_score', 0):.1f}/100")
+            print(f"  Коэффициент сопротивления: {avg_metrics.get('average_drag_coefficient', 0):.2f}")
+            print(f"  Обтекаемость: {avg_metrics.get('average_streamline_score', 0):.0f}%")
+            
+            if biomechanics_result.get("recommendations"):
+                print("\n📋 Рекомендации (pose):")
+                for rec in biomechanics_result["recommendations"]:
+                    print(f"  {rec}")
+    
+    # Display trajectory summary
+    if trajectory_result:
+        summary = trajectory_result.get("summary", {})
+        if summary:
+            print("\n🎯 Анализ траектории (bbox-based):")
+            print(f"  Качество движения: {summary.get('movement_quality_score', 0):.1f}/100")
+            print(f"  Обтекаемость: {summary.get('streamline_score', 0):.0f}%")
+            print(f"  Стабильность скорости: {summary.get('velocity_consistency', 0):.0f}%")
+            
+            if trajectory_result.get("recommendations"):
+                print("\n📋 Рекомендации (trajectory):")
+                for rec in trajectory_result["recommendations"]:
+                    print(f"  {rec}")
 
 
 if __name__ == "__main__":

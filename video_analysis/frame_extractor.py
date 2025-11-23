@@ -26,14 +26,14 @@ class FrameExtractor:
     def extract_frames(
         self,
         video_path: str,
-        fps: int = 1,
+        fps: float = 1.0,
         max_duration: int = 60,
     ) -> List[str]:
         """Extract frames from video.
         
         Args:
             video_path: Path to input video (mp4)
-            fps: Frames per second to extract (default: 1)
+            fps: Frames per second to extract (float, default: 1.0)
             max_duration: Maximum video duration in seconds
             
         Returns:
@@ -57,31 +57,51 @@ class FrameExtractor:
             raise ValueError(f"Video too long: {duration:.1f}s (max: {max_duration}s)")
         
         logger.info(f"Video: {duration:.1f}s, {video_fps:.1f} fps, {total_frames} frames")
+        logger.info(f"Target extraction rate: {fps:.2f} fps")
         
-        # Calculate frame interval
-        frame_interval = int(video_fps / fps)
+        # Используем накопление времени для точного извлечения кадров
+        # Вместо округления frame_interval
+        time_per_extracted_frame = 1.0 / fps  # Время между извлекаемыми кадрами (сек)
+        time_per_video_frame = 1.0 / video_fps  # Время одного кадра видео (сек)
         
         saved_frames = []
         frame_count = 0
         saved_count = 0
+        next_save_time = 0.0  # Время когда нужно сохранить следующий кадр
         
         while True:
             ret, frame = cap.read()
             if not ret:
                 break
             
-            # Save frame at intervals
-            if frame_count % frame_interval == 0:
+            current_time = frame_count * time_per_video_frame
+            
+            # Сохраняем кадр если текущее время >= времени следующего сохранения
+            if current_time >= next_save_time:
                 frame_path = self.output_dir / f"frame_{saved_count:04d}.jpg"
                 cv2.imwrite(str(frame_path), frame)
-                saved_frames.append(str(frame_path))
+                
+                # Сохраняем как словарь с timestamp из реального видео
+                saved_frames.append({
+                    "path": str(frame_path),
+                    "timestamp": current_time,  # Реальное время в видео (сек)
+                    "video_frame": frame_count,  # Номер кадра в исходном видео
+                    "extracted_index": saved_count,  # Индекс среди извлечённых
+                })
+                
+                logger.debug(f"Saved frame {saved_count} at {current_time:.3f}s (video frame {frame_count})")
                 saved_count += 1
-                logger.debug(f"Saved frame {saved_count} at {frame_count / video_fps:.1f}s")
+                
+                # Планируем следующий кадр для сохранения
+                next_save_time += time_per_extracted_frame
             
             frame_count += 1
         
         cap.release()
+        
+        actual_fps = saved_count / duration if duration > 0 else 0
         logger.info(f"Extracted {saved_count} frames from {video_path}")
+        logger.info(f"Actual extraction rate: {actual_fps:.2f} fps (target: {fps:.2f} fps)")
         
         return saved_frames
 
@@ -89,20 +109,21 @@ class FrameExtractor:
 def extract_frames_from_video(
     video_path: str,
     output_dir: str = "./frames",
-    fps: int = 1,
+    fps: float = 1.0,
 ) -> dict:
     """Extract frames from video (convenience function).
     
     Args:
         video_path: Path to video file
         output_dir: Output directory
-        fps: Frames per second to extract
+        fps: Frames per second to extract (float for precise timing)
         
     Returns:
         Dict with:
             - frames: List of frame paths
             - count: Number of frames
             - output_dir: Output directory
+            - actual_fps: Actual extraction rate
     """
     extractor = FrameExtractor(output_dir)
     frames = extractor.extract_frames(video_path, fps=fps)

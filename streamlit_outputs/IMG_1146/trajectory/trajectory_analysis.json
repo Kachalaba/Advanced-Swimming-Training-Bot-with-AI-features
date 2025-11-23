@@ -1,0 +1,20 @@
+{
+  "method": "trajectory_analysis",
+  "trajectory": [],
+  "velocity_profile": {},
+  "body_rotation": {},
+  "streamline_quality": {},
+  "rhythm_metrics": {},
+  "wall_touches": {
+    "wall_touches": [],
+    "count": 0
+  },
+  "movement_score": 0.0,
+  "recommendations": [
+    "⚠️ Недостаточно данных для анализа траектории."
+  ],
+  "summary": {
+    "total_frames": 0,
+    "movement_quality_score": 0.0
+  }
+}

@@ -28,24 +28,65 @@ class BiomechanicsAnalyzer:
         self.pose = self.mp_pose.Pose(
             static_image_mode=True,
             model_complexity=2,  # 0=lite, 1=full, 2=heavy (best accuracy)
-            enable_segmentation=False,
-            min_detection_confidence=0.5,
+            enable_segmentation=True,  # Better for underwater/complex backgrounds
+            min_detection_confidence=0.3,  # Lower for underwater (was 0.5)
+            min_tracking_confidence=0.3,   # Lower for challenging conditions
         )
         
         # Water resistance coefficients (empirical values)
         self.WATER_DENSITY = 1000  # kg/m³
         self.BASE_DRAG_COEFFICIENT = 0.4  # Streamlined swimmer
         
+    def _preprocess_underwater_frame(self, frame: np.ndarray) -> np.ndarray:
+        """Preprocess frame for better underwater pose detection.
+        
+        Args:
+            frame: Input frame in BGR
+            
+        Returns:
+            Preprocessed frame in RGB
+        """
+        # Проверяем что frame не пустой
+        if frame is None or frame.size == 0:
+            logger.error(f"Empty frame in _preprocess_underwater_frame")
+            # Возвращаем dummy RGB frame
+            return np.zeros((100, 100, 3), dtype=np.uint8)
+        
+        # Convert to RGB
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        
+        # Enhance contrast using CLAHE (Contrast Limited Adaptive Histogram Equalization)
+        lab = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)
+        l, a, b = cv2.split(lab)
+        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+        l_enhanced = clahe.apply(l)
+        enhanced = cv2.merge([l_enhanced, a, b])
+        enhanced_bgr = cv2.cvtColor(enhanced, cv2.COLOR_LAB2BGR)
+        enhanced_rgb = cv2.cvtColor(enhanced_bgr, cv2.COLOR_BGR2RGB)
+        
+        # Denoise (reduce underwater noise)
+        denoised = cv2.fastNlMeansDenoisingColored(enhanced_rgb, None, 10, 10, 7, 21)
+        
+        # Sharpen
+        kernel_sharpening = np.array([[-1,-1,-1], 
+                                       [-1, 9,-1],
+                                       [-1,-1,-1]])
+        sharpened = cv2.filter2D(denoised, -1, kernel_sharpening)
+        
+        return sharpened
+    
     def analyze_frame(
         self,
         frame_path: str,
         swimmer_bbox: Optional[List[int]] = None,
+        enhance_underwater: bool = True,
     ) -> Dict:
         """Analyze biomechanics for a single frame.
         
         Args:
             frame_path: Path to frame image
             swimmer_bbox: Optional bounding box [x1, y1, x2, y2] to crop to swimmer
+            enhance_underwater: Apply underwater preprocessing (recommended for underwater videos)
             
         Returns:
             Dict with:
@@ -57,16 +98,33 @@ class BiomechanicsAnalyzer:
         """
         frame = cv2.imread(frame_path)
         if frame is None:
-            logger.error(f"Cannot read frame: {frame_path}")
+            logger.error(f"Cannot read frame: {frame_path} (type: {type(frame_path)})")
             return self._empty_result()
         
         # Crop to swimmer if bbox provided
         if swimmer_bbox:
             x1, y1, x2, y2 = swimmer_bbox
+            # Проверяем валидность координат
+            if x1 < 0 or y1 < 0 or x2 > frame.shape[1] or y2 > frame.shape[0]:
+                logger.warning(f"Invalid bbox {swimmer_bbox} for frame shape {frame.shape}")
+                # Обрезаем bbox до валидных значений
+                x1 = max(0, x1)
+                y1 = max(0, y1)
+                x2 = min(frame.shape[1], x2)
+                y2 = min(frame.shape[0], y2)
+            
             frame = frame[y1:y2, x1:x2]
+            
+            # Проверяем что после обрезки кадр не пустой
+            if frame.size == 0:
+                logger.error(f"Empty frame after crop with bbox {swimmer_bbox}")
+                return self._empty_result()
         
-        # Convert BGR to RGB
-        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        # Preprocess for underwater if enabled
+        if enhance_underwater:
+            rgb_frame = self._preprocess_underwater_frame(frame)
+        else:
+            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         
         # Process with MediaPipe
         results = self.pose.process(rgb_frame)
@@ -120,7 +178,13 @@ class BiomechanicsAnalyzer:
         """
         frame_analyses = []
         
-        for i, frame_path in enumerate(frame_paths):
+        for i, frame_info in enumerate(frame_paths):
+            # Поддержка нового формата (dict) и старого (str)
+            if isinstance(frame_info, dict):
+                frame_path = frame_info["path"]  # Извлекаем путь из словаря
+            else:
+                frame_path = frame_info  # Старый формат - просто строка
+            
             # Get swimmer bbox from detection
             bbox = None
             if i < len(detections) and detections[i].get("bbox"):
@@ -557,34 +621,171 @@ class BiomechanicsAnalyzer:
         angles = analysis["angles"]
         hydro = analysis["hydrodynamics"]
         
-        # Draw keypoints
+        # Draw skeleton with color coding
+        # Цвета для разных частей тела (BGR format)
+        COLORS = {
+            "head": (255, 0, 255),      # Магента - голова
+            "torso": (0, 255, 255),     # Желтый - торс
+            "arms": (255, 100, 0),      # Синий - руки
+            "legs": (0, 255, 0),        # Зеленый - ноги
+        }
+        
+        # Группировка соединений по частям тела
+        skeleton_groups = {
+            "head": [
+                ("nose", "left_eye"),
+                ("nose", "right_eye"),
+                ("left_eye", "left_ear"),
+                ("right_eye", "right_ear"),
+                ("nose", "left_shoulder"),
+                ("nose", "right_shoulder"),
+            ],
+            "torso": [
+                ("left_shoulder", "right_shoulder"),
+                ("left_shoulder", "left_hip"),
+                ("right_shoulder", "right_hip"),
+                ("left_hip", "right_hip"),
+            ],
+            "arms": [
+                ("left_shoulder", "left_elbow"),
+                ("left_elbow", "left_wrist"),
+                ("left_wrist", "left_pinky"),
+                ("left_wrist", "left_index"),
+                ("left_wrist", "left_thumb"),
+                ("right_shoulder", "right_elbow"),
+                ("right_elbow", "right_wrist"),
+                ("right_wrist", "right_pinky"),
+                ("right_wrist", "right_index"),
+                ("right_wrist", "right_thumb"),
+            ],
+            "legs": [
+                ("left_hip", "left_knee"),
+                ("left_knee", "left_ankle"),
+                ("left_ankle", "left_heel"),
+                ("left_ankle", "left_foot_index"),
+                ("right_hip", "right_knee"),
+                ("right_knee", "right_ankle"),
+                ("right_ankle", "right_heel"),
+                ("right_ankle", "right_foot_index"),
+            ],
+        }
+        
+        # Рисуем соединения по группам
+        for part, connections in skeleton_groups.items():
+            color = COLORS[part]
+            thickness = 3 if part in ["torso", "legs"] else 2
+            
+            for p1_name, p2_name in connections:
+                if p1_name in keypoints and p2_name in keypoints:
+                    p1 = keypoints[p1_name]
+                    p2 = keypoints[p2_name]
+                    if p1["visibility"] > 0.4 and p2["visibility"] > 0.4:
+                        cv2.line(frame, (p1["x"], p1["y"]), (p2["x"], p2["y"]), 
+                                color, thickness)
+        
+        # Рисуем ключевые точки поверх линий
         for name, kp in keypoints.items():
-            if kp["visibility"] > 0.5:
-                cv2.circle(frame, (kp["x"], kp["y"]), 3, (0, 255, 0), -1)
+            if kp["visibility"] > 0.4:
+                # Определяем цвет точки по части тела
+                if "nose" in name or "eye" in name or "ear" in name:
+                    color = COLORS["head"]
+                    radius = 5
+                elif "shoulder" in name or "hip" in name:
+                    color = COLORS["torso"]
+                    radius = 6
+                elif "elbow" in name or "wrist" in name or "hand" in name or "thumb" in name or "pinky" in name or "index" in name:
+                    color = COLORS["arms"]
+                    radius = 5
+                elif "knee" in name or "ankle" in name or "heel" in name or "foot" in name:
+                    color = COLORS["legs"]
+                    radius = 5
+                else:
+                    color = (255, 255, 255)
+                    radius = 4
+                
+                # Рисуем точку с обводкой
+                cv2.circle(frame, (kp["x"], kp["y"]), radius, color, -1)
+                cv2.circle(frame, (kp["x"], kp["y"]), radius + 1, (0, 0, 0), 1)
         
-        # Draw skeleton connections
-        connections = [
-            ("left_shoulder", "right_shoulder"),
-            ("left_shoulder", "left_elbow"),
-            ("left_elbow", "left_wrist"),
-            ("right_shoulder", "right_elbow"),
-            ("right_elbow", "right_wrist"),
-            ("left_shoulder", "left_hip"),
-            ("right_shoulder", "right_hip"),
-            ("left_hip", "right_hip"),
-            ("left_hip", "left_knee"),
-            ("left_knee", "left_ankle"),
-            ("right_hip", "right_knee"),
-            ("right_knee", "right_ankle"),
-        ]
+        # Рисуем центральную ось позвоночника (для горизонтального пловца)
+        spine_points = []
+        spine_color = (0, 255, 255)  # Ярко-желтый для оси
         
-        for p1_name, p2_name in connections:
-            if p1_name in keypoints and p2_name in keypoints:
-                p1 = keypoints[p1_name]
-                p2 = keypoints[p2_name]
-                if p1["visibility"] > 0.5 and p2["visibility"] > 0.5:
-                    cv2.line(frame, (p1["x"], p1["y"]), (p2["x"], p2["y"]), 
-                            (255, 255, 0), 2)
+        # Собираем точки для оси позвоночника
+        # 1. Голова (нос)
+        if "nose" in keypoints and keypoints["nose"]["visibility"] > 0.4:
+            spine_points.append((keypoints["nose"]["x"], keypoints["nose"]["y"]))
+        
+        # 2. Середина плеч
+        if ("left_shoulder" in keypoints and "right_shoulder" in keypoints and
+            keypoints["left_shoulder"]["visibility"] > 0.4 and 
+            keypoints["right_shoulder"]["visibility"] > 0.4):
+            mid_shoulder_x = (keypoints["left_shoulder"]["x"] + keypoints["right_shoulder"]["x"]) // 2
+            mid_shoulder_y = (keypoints["left_shoulder"]["y"] + keypoints["right_shoulder"]["y"]) // 2
+            spine_points.append((mid_shoulder_x, mid_shoulder_y))
+        
+        # 3. Середина бёдер
+        if ("left_hip" in keypoints and "right_hip" in keypoints and
+            keypoints["left_hip"]["visibility"] > 0.4 and 
+            keypoints["right_hip"]["visibility"] > 0.4):
+            mid_hip_x = (keypoints["left_hip"]["x"] + keypoints["right_hip"]["x"]) // 2
+            mid_hip_y = (keypoints["left_hip"]["y"] + keypoints["right_hip"]["y"]) // 2
+            spine_points.append((mid_hip_x, mid_hip_y))
+        
+        # 4. Середина коленей (если видны)
+        if ("left_knee" in keypoints and "right_knee" in keypoints and
+            keypoints["left_knee"]["visibility"] > 0.4 and 
+            keypoints["right_knee"]["visibility"] > 0.4):
+            mid_knee_x = (keypoints["left_knee"]["x"] + keypoints["right_knee"]["x"]) // 2
+            mid_knee_y = (keypoints["left_knee"]["y"] + keypoints["right_knee"]["y"]) // 2
+            spine_points.append((mid_knee_x, mid_knee_y))
+        
+        # Рисуем ось позвоночника
+        if len(spine_points) >= 2:
+            # Толстая яркая линия для оси
+            for i in range(len(spine_points) - 1):
+                cv2.line(frame, spine_points[i], spine_points[i + 1], spine_color, 4)
+            
+            # Точки на оси
+            for point in spine_points:
+                cv2.circle(frame, point, 6, spine_color, -1)
+                cv2.circle(frame, point, 7, (0, 0, 0), 2)
+            
+            # Рассчитываем угол отклонения от горизонтали
+            if len(spine_points) >= 2:
+                # Берём первую и последнюю точку для расчёта угла
+                start_point = spine_points[0]
+                end_point = spine_points[-1]
+                
+                dx = end_point[0] - start_point[0]
+                dy = end_point[1] - start_point[1]
+                
+                # Угол к горизонтали (0° = идеально горизонтально)
+                angle_rad = math.atan2(dy, dx)
+                angle_deg = math.degrees(angle_rad)
+                
+                # Отклонение от горизонтали (0° должно быть целью)
+                deviation = abs(angle_deg)
+                
+                # Добавляем информацию об угле позвоночника
+                spine_text = f"Spine: {angle_deg:.1f}deg (dev: {deviation:.1f}deg)"
+                # Рисуем текст рядом с серединой оси
+                if len(spine_points) >= 2:
+                    mid_idx = len(spine_points) // 2
+                    text_x = spine_points[mid_idx][0] + 20
+                    text_y = spine_points[mid_idx][1]
+                    
+                    # Фон для текста
+                    text_size = cv2.getTextSize(spine_text, font, 0.6, 2)[0]
+                    cv2.rectangle(frame, 
+                                (text_x - 5, text_y - text_size[1] - 5),
+                                (text_x + text_size[0] + 5, text_y + 5),
+                                (0, 0, 0), -1)
+                    
+                    # Цвет текста в зависимости от отклонения
+                    text_color = (0, 255, 0) if deviation < 10 else (0, 165, 255) if deviation < 20 else (0, 0, 255)
+                    cv2.putText(frame, spine_text, (text_x, text_y), 
+                              font, 0.6, text_color, 2)
         
         # Draw metrics overlay
         y_offset = 30
@@ -609,6 +810,26 @@ class BiomechanicsAnalyzer:
             streamline = hydro["streamline_score"]
             cv2.putText(frame, f"Streamline: {streamline:.0f}%", (10, y_offset), 
                        font, 0.6, (255, 255, 255), 2)
+        
+        # Легенда цветов внизу кадра
+        legend_y = frame.shape[0] - 40
+        legend_x = 10
+        legend_items = [
+            ("Голова", COLORS["head"]),
+            ("Торс", COLORS["torso"]),
+            ("Руки", COLORS["arms"]),
+            ("Ноги", COLORS["legs"]),
+            ("Ось", spine_color),  # Добавляем ось позвоночника
+        ]
+        
+        for i, (label, color) in enumerate(legend_items):
+            x = legend_x + i * 95
+            # Рисуем цветной квадратик
+            cv2.rectangle(frame, (x, legend_y), (x + 15, legend_y + 15), color, -1)
+            cv2.rectangle(frame, (x, legend_y), (x + 15, legend_y + 15), (0, 0, 0), 1)
+            # Рисуем текст
+            cv2.putText(frame, label, (x + 20, legend_y + 12), 
+                       font, 0.5, (255, 255, 255), 1)
         
         # Save output
         if output_path is None:

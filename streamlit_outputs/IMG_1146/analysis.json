@@ -1,0 +1,14 @@
+{
+  "wall_touches": {
+    "count": 0,
+    "frames": []
+  },
+  "splits": [],
+  "stroke_rate_spm": null,
+  "summary": {
+    "total_distance_m": 0,
+    "total_time_s": 0,
+    "average_speed_mps": 0,
+    "average_pace_per_100m": 0
+  }
+}
