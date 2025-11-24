@@ -1,4 +1,7 @@
-"""Веб-додаток для аналізу відео плавців."""
+"""
+🏊 SPRINT AI - Професійний аналіз спортсменів
+Плавання • Суходіл • AI-біомеханіка
+"""
 
 import streamlit as st
 import tempfile
@@ -7,7 +10,6 @@ from pathlib import Path
 import json
 import sys
 
-# Додаємо проект до path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from video_analysis.frame_extractor import extract_frames_from_video
@@ -19,214 +21,592 @@ from video_analysis.report_generator import ReportGenerator
 from video_analysis.video_overlay import VideoOverlayGenerator
 from video_analysis.swimming_pose_analyzer import SwimmingPoseAnalyzer, analyze_swimming_pose
 
-# Налаштування сторінки
+# ============================================================================
+# PAGE CONFIG
+# ============================================================================
 st.set_page_config(
-    page_title="Аналіз відео плавання",
-    page_icon="🏊‍♂️",
+    page_title="SPRINT AI • Аналіз спортсменів",
+    page_icon="⚡",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
-# Стильний CSS
+# ============================================================================
+# PREMIUM CSS
+# ============================================================================
 st.markdown("""
 <style>
-    /* Градієнт для заголовка */
-    .main-header {
+    /* === PREMIUM DARK THEME === */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+    
+    :root {
+        --bg-primary: #0a0a0f;
+        --bg-secondary: #12121a;
+        --bg-card: #1a1a24;
+        --accent-blue: #3b82f6;
+        --accent-purple: #8b5cf6;
+        --accent-cyan: #06b6d4;
+        --accent-green: #10b981;
+        --accent-orange: #f59e0b;
+        --text-primary: #ffffff;
+        --text-secondary: #94a3b8;
+        --border-color: #2d2d3a;
+    }
+    
+    .stApp {
+        background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+    }
+    
+    /* === HEADER === */
+    .premium-header {
+        text-align: center;
+        padding: 2rem 0;
+        margin-bottom: 1rem;
+    }
+    
+    .logo-text {
+        font-family: 'Inter', sans-serif;
         font-size: 3.5rem;
         font-weight: 800;
-        text-align: center;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 50%, #06b6d4 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        margin-bottom: 1rem;
-        padding: 1rem;
+        letter-spacing: -2px;
+        margin-bottom: 0.5rem;
     }
     
-    /* Підзаголовок */
-    .subtitle {
+    .tagline {
+        font-family: 'Inter', sans-serif;
+        font-size: 1.1rem;
+        color: var(--text-secondary);
+        font-weight: 400;
+        letter-spacing: 3px;
+        text-transform: uppercase;
+    }
+    
+    /* === TAB NAVIGATION === */
+    .tab-container {
+        display: flex;
+        justify-content: center;
+        gap: 1rem;
+        margin: 2rem 0;
+    }
+    
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        background: var(--bg-card);
+        padding: 8px;
+        border-radius: 16px;
+        border: 1px solid var(--border-color);
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        background: transparent;
+        border-radius: 12px;
+        color: var(--text-secondary);
+        font-weight: 600;
+        padding: 12px 32px;
+        font-size: 1rem;
+    }
+    
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(135deg, var(--accent-blue) 0%, var(--accent-purple) 100%);
+        color: white !important;
+    }
+    
+    /* === CARDS === */
+    .glass-card {
+        background: rgba(26, 26, 36, 0.8);
+        backdrop-filter: blur(20px);
+        border: 1px solid var(--border-color);
+        border-radius: 20px;
+        padding: 2rem;
+        margin: 1rem 0;
+    }
+    
+    .metric-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin: 1rem 0;
+    }
+    
+    .metric-item {
+        background: linear-gradient(135deg, rgba(59,130,246,0.1) 0%, rgba(139,92,246,0.1) 100%);
+        border: 1px solid rgba(59,130,246,0.3);
+        border-radius: 16px;
+        padding: 1.5rem;
         text-align: center;
-        color: #6c757d;
-        font-size: 1.2rem;
-        margin-bottom: 2rem;
+        transition: all 0.3s ease;
     }
     
-    /* Карточки метрик */
-    .metric-card {
-        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-        padding: 1.5rem;
-        border-radius: 1rem;
-        margin: 0.5rem 0;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        transition: transform 0.2s;
+    .metric-item:hover {
+        transform: translateY(-4px);
+        border-color: var(--accent-blue);
+        box-shadow: 0 20px 40px rgba(59,130,246,0.2);
     }
     
-    .metric-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+    .metric-value {
+        font-size: 2.5rem;
+        font-weight: 800;
+        background: linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
     }
     
-    /* Успішний блок */
-    .success-box {
-        background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
-        border: 2px solid #28a745;
-        border-radius: 1rem;
-        padding: 1.5rem;
-        margin: 1rem 0;
-        box-shadow: 0 4px 6px rgba(40,167,69,0.2);
+    .metric-label {
+        font-size: 0.9rem;
+        color: var(--text-secondary);
+        margin-top: 0.5rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
     }
     
-    /* Попередження */
-    .warning-box {
-        background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
-        border: 2px solid #ffc107;
-        border-radius: 1rem;
-        padding: 1.5rem;
-        margin: 1rem 0;
-        box-shadow: 0 4px 6px rgba(255,193,7,0.2);
-    }
-    
-    /* Інфо блок */
-    .info-box {
-        background: linear-gradient(135deg, #d1ecf1 0%, #bee5eb 100%);
-        border: 2px solid #17a2b8;
-        border-radius: 1rem;
-        padding: 1.5rem;
-        margin: 1rem 0;
-        box-shadow: 0 4px 6px rgba(23,162,184,0.2);
-    }
-    
-    /* Кнопки */
+    /* === BUTTONS === */
     .stButton>button {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, var(--accent-blue) 0%, var(--accent-purple) 100%);
         color: white;
         border: none;
-        border-radius: 0.5rem;
-        padding: 0.75rem 2rem;
+        border-radius: 12px;
+        padding: 1rem 2rem;
         font-size: 1.1rem;
         font-weight: 600;
-        transition: all 0.3s;
+        font-family: 'Inter', sans-serif;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 20px rgba(59,130,246,0.3);
     }
     
     .stButton>button:hover {
-        transform: scale(1.05);
-        box-shadow: 0 6px 20px rgba(102,126,234,0.4);
+        transform: translateY(-2px);
+        box-shadow: 0 8px 30px rgba(59,130,246,0.5);
     }
     
-    /* Сайдбар */
-    .css-1d391kg {
-        background: linear-gradient(180deg, #f8f9fa 0%, #e9ecef 100%);
+    /* === STATUS BOXES === */
+    .status-success {
+        background: linear-gradient(135deg, rgba(16,185,129,0.15) 0%, rgba(6,182,212,0.15) 100%);
+        border: 1px solid var(--accent-green);
+        border-radius: 12px;
+        padding: 1rem 1.5rem;
+        margin: 0.5rem 0;
+        color: var(--accent-green);
+        font-weight: 500;
     }
     
-    /* Заголовки розділів */
-    .section-header {
-        font-size: 1.8rem;
+    .status-info {
+        background: linear-gradient(135deg, rgba(59,130,246,0.15) 0%, rgba(139,92,246,0.15) 100%);
+        border: 1px solid var(--accent-blue);
+        border-radius: 12px;
+        padding: 1rem 1.5rem;
+        margin: 0.5rem 0;
+        color: var(--accent-blue);
+        font-weight: 500;
+    }
+    
+    .status-warning {
+        background: linear-gradient(135deg, rgba(245,158,11,0.15) 0%, rgba(249,115,22,0.15) 100%);
+        border: 1px solid var(--accent-orange);
+        border-radius: 12px;
+        padding: 1rem 1.5rem;
+        margin: 0.5rem 0;
+        color: var(--accent-orange);
+        font-weight: 500;
+    }
+    
+    /* === UPLOAD AREA === */
+    .upload-zone {
+        border: 2px dashed var(--border-color);
+        border-radius: 20px;
+        padding: 3rem;
+        text-align: center;
+        background: rgba(26, 26, 36, 0.5);
+        transition: all 0.3s ease;
+    }
+    
+    .upload-zone:hover {
+        border-color: var(--accent-blue);
+        background: rgba(59,130,246,0.05);
+    }
+    
+    /* === SECTION HEADERS === */
+    .section-title {
+        font-family: 'Inter', sans-serif;
+        font-size: 1.5rem;
         font-weight: 700;
-        color: #495057;
+        color: var(--text-primary);
         margin: 2rem 0 1rem 0;
-        padding-bottom: 0.5rem;
-        border-bottom: 3px solid #667eea;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+    
+    .section-title::before {
+        content: '';
+        width: 4px;
+        height: 24px;
+        background: linear-gradient(180deg, var(--accent-blue) 0%, var(--accent-purple) 100%);
+        border-radius: 2px;
+    }
+    
+    /* === SIDEBAR === */
+    [data-testid="stSidebar"] {
+        background: var(--bg-card);
+        border-right: 1px solid var(--border-color);
+    }
+    
+    /* === INPUTS === */
+    .stTextInput>div>div>input, .stSelectbox>div>div, .stSlider {
+        background: var(--bg-card) !important;
+        border-color: var(--border-color) !important;
+        color: var(--text-primary) !important;
+    }
+    
+    /* === EXPANDER === */
+    .streamlit-expanderHeader {
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+    }
+    
+    /* === HIDE STREAMLIT BRANDING === */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    
+    /* === LEGACY COMPAT === */
+    .success-box { 
+        background: linear-gradient(135deg, rgba(16,185,129,0.15) 0%, rgba(6,182,212,0.15) 100%);
+        border: 1px solid var(--accent-green);
+        border-radius: 12px;
+        padding: 1rem 1.5rem;
+        margin: 0.5rem 0;
+    }
+    .warning-box {
+        background: linear-gradient(135deg, rgba(245,158,11,0.15) 0%, rgba(249,115,22,0.15) 100%);
+        border: 1px solid var(--accent-orange);
+        border-radius: 12px;
+        padding: 1rem 1.5rem;
+        margin: 0.5rem 0;
+    }
+    .info-box {
+        background: linear-gradient(135deg, rgba(59,130,246,0.15) 0%, rgba(139,92,246,0.15) 100%);
+        border: 1px solid var(--accent-blue);
+        border-radius: 12px;
+        padding: 1rem 1.5rem;
+        margin: 0.5rem 0;
     }
 </style>
 """, unsafe_allow_html=True)
 
 
+# ============================================================================
+# HEADER
+# ============================================================================
+st.markdown("""
+<div class="premium-header">
+    <div class="logo-text">⚡ SPRINT AI</div>
+    <div class="tagline">Професійний аналіз спортсменів</div>
+</div>
+""", unsafe_allow_html=True)
+
+
 def main():
-    """Main Streamlit app."""
+    """Main Streamlit app with tabs."""
     
-    # Заголовок
-    st.markdown('<h1 class="main-header">🏊‍♂️ Аналіз Відео Плавання</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="subtitle">✨ Професійний аналіз техніки плавання з AI • Velocity Tracking • Підводна детекція</p>', unsafe_allow_html=True)
-    st.markdown("---")
+    # ========================================================================
+    # MAIN TABS
+    # ========================================================================
+    tab_swimming, tab_dryland = st.tabs([
+        "🏊 ПЛАВАННЯ",
+        "🏋️ СУХОДІЛ"
+    ])
     
-    # Бокова панель
-    with st.sidebar:
-        st.header("⚙️ Налаштування")
-        
-        athlete_name = st.text_input(
-            "👤 Ім'я спортсмена",
-            value="Спортсмен",
-            help="Ім'я буде використано в звітах"
-        )
-        
-        pool_length = st.slider(
-            "🏊 Довжина басейну (метри)",
-            min_value=25,
-            max_value=50,
-            value=25,
-            step=5,
-            help="Оберіть довжину басейну: 25м або 50м"
-        )
-        
-        fps = st.slider(
-            "🎬 Частота кадрів (FPS)",
-            min_value=1.0,
-            max_value=60.0,
-            value=10.0,
-            step=1.0,
-            help="Кількість кадрів за секунду для аналізу. Рекомендовано: 10-15 FPS. Повна розкадровка: 30-60 FPS (кожен кадр відео, тривала обробка!)"
-        )
-        
-        # Попередження для високих FPS
-        if fps >= 30:
-            st.markdown(f'<div class="warning-box">⚠️ FPS {fps:.0f} - повна розкадровка! Обробка займе 5-10 хвилин для 30 сек відео. Рекомендовано для фінального аналізу.</div>', unsafe_allow_html=True)
-        elif fps >= 20:
-            st.markdown(f'<div class="info-box">ℹ️ FPS {fps:.0f} - висока деталізація. Обробка займе 3-5 хвилин.</div>', unsafe_allow_html=True)
-        
-        analysis_method = st.selectbox(
-            "🔬 Метод аналізу",
-            options=["hybrid", "pose", "trajectory"],
-            index=0,
-            format_func=lambda x: {
-                "hybrid": "🎯 Гібридний (поза + траєкторія)",
-                "pose": "🔬 Тільки поза (MediaPipe)",
-                "trajectory": "📍 Тільки траєкторія (bbox)"
-            }[x],
-            help="Гібридний: обидва методи. Pose: детальна біомеханіка. Trajectory: працює на всіх кадрах"
-        )
-        
-        st.markdown("---")
-        st.markdown("### 📊 Що аналізується:")
-        st.markdown("""
-        - ✅ Детекція плавця (YOLO)
-        - ✅ Трекінг рухів (Velocity Prediction)
-        - ✅ Біомеханіка (33 точки тіла)
-        - ✅ Гідродинаміка (опір)
-        - ✅ Сплітай (за реальним timestamp)
-        - ✅ Швидкість і темп
-        - ✅ Підводна детекція 🌊
-        - ✅ Рекомендації з техніки
-        """)
+    # ========================================================================
+    # TAB 1: SWIMMING
+    # ========================================================================
+    with tab_swimming:
+        render_swimming_tab()
     
-    # Основний контент
-    col1, col2 = st.columns([2, 1])
+    # ========================================================================
+    # TAB 2: DRYLAND
+    # ========================================================================
+    with tab_dryland:
+        render_dryland_tab()
+
+
+def render_swimming_tab():
+    """Render swimming analysis tab."""
     
-    with col1:
-        st.markdown('<h2 class="section-header">📹 Завантажте відео</h2>', unsafe_allow_html=True)
-        uploaded_file = st.file_uploader(
-            "Перетягніть файл або натисніть Browse",
-            type=["mp4", "mov", "avi"],
-            help="Підтримуються формати: MP4, MOV, AVI. Макс. 60 секунд."
-        )
+    st.markdown("""
+    <div class="section-title">Аналіз техніки плавання</div>
+    """, unsafe_allow_html=True)
     
-    with col2:
-        if uploaded_file:
-            st.markdown('<div class="success-box">✅ Відео завантажено!</div>', unsafe_allow_html=True)
-            st.markdown("**📄 Деталі файлу:**")
-            file_details = {
-                "📝 Назва": uploaded_file.name,
-                "💾 Розмір": f"{uploaded_file.size / (1024*1024):.2f} МБ",
-                "📦 Тип": uploaded_file.type
-            }
-            for key, value in file_details.items():
-                st.text(f"{key}: {value}")
+    # Settings in expander
+    with st.expander("⚙️ Налаштування аналізу", expanded=True):
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            athlete_name = st.text_input(
+                "👤 Ім'я спортсмена",
+                value="Спортсмен",
+                key="swim_athlete"
+            )
+        
+        with col2:
+            pool_length = st.selectbox(
+                "🏊 Басейн",
+                options=[25, 50],
+                index=0,
+                format_func=lambda x: f"{x}м",
+                key="swim_pool"
+            )
+        
+        with col3:
+            fps = st.select_slider(
+                "🎬 FPS",
+                options=[5, 10, 15, 20, 30, 60],
+                value=15,
+                key="swim_fps"
+            )
+        
+        col4, col5 = st.columns(2)
+        
+        with col4:
+            analysis_method = st.selectbox(
+                "🔬 Метод",
+                options=["hybrid", "pose", "trajectory"],
+                format_func=lambda x: {
+                    "hybrid": "🎯 Гібридний",
+                    "pose": "🔬 Поза",
+                    "trajectory": "📍 Траєкторія"
+                }[x],
+                key="swim_method"
+            )
+        
+        with col5:
+            # FPS info
+            if fps >= 30:
+                st.markdown('<div class="status-warning">⚡ Детальний аналіз (5-10 хв)</div>', unsafe_allow_html=True)
+            else:
+                st.markdown('<div class="status-info">⏱️ Швидкий аналіз (1-3 хв)</div>', unsafe_allow_html=True)
     
-    # Кнопка аналізу
+    # Upload area
+    st.markdown("""
+    <div class="section-title">Завантаження відео</div>
+    """, unsafe_allow_html=True)
+    
+    uploaded_file = st.file_uploader(
+        "Перетягніть файл або оберіть",
+        type=["mp4", "mov", "avi"],
+        key="swim_upload",
+        help="MP4, MOV, AVI до 200 МБ"
+    )
+    
     if uploaded_file:
-        st.markdown("---")
-        st.markdown('<h2 class="section-header">🚀 Запустити аналіз</h2>', unsafe_allow_html=True)
+        # File info
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.markdown(f"""
+            <div class="metric-item">
+                <div class="metric-value">{uploaded_file.size / (1024*1024):.1f}</div>
+                <div class="metric-label">МБ</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with col2:
+            st.markdown(f"""
+            <div class="metric-item">
+                <div class="metric-value">{fps}</div>
+                <div class="metric-label">FPS</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with col3:
+            st.markdown(f"""
+            <div class="metric-item">
+                <div class="metric-value">{pool_length}м</div>
+                <div class="metric-label">Басейн</div>
+            </div>
+            """, unsafe_allow_html=True)
         
-        if st.button("🏊‍♂️ Аналізувати відео", type="primary", use_container_width=True):
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        if st.button("🏊 АНАЛІЗУВАТИ ПЛАВАННЯ", type="primary", use_container_width=True, key="swim_analyze"):
             analyze_video(uploaded_file, athlete_name, pool_length, fps, analysis_method)
+    
+    # Features list
+    with st.expander("📊 Можливості аналізу"):
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("""
+            **Детекція:**
+            - 🎯 YOLO детекція плавця
+            - 🔄 Velocity Tracking
+            - 🌊 Підводна детекція
+            - 📍 Сегментація тіла
+            """)
+        with col2:
+            st.markdown("""
+            **Біомеханіка:**
+            - 📐 33 точки тіла
+            - 📏 Вісь хребта
+            - 💧 Гідродинаміка
+            - ⏱️ Точні спліти
+            """)
+
+
+def render_dryland_tab():
+    """Render dryland/gym analysis tab."""
+    
+    st.markdown("""
+    <div class="section-title">Аналіз сухих тренувань</div>
+    """, unsafe_allow_html=True)
+    
+    # Settings
+    with st.expander("⚙️ Налаштування", expanded=True):
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            athlete_name = st.text_input(
+                "👤 Ім'я спортсмена",
+                value="Спортсмен",
+                key="gym_athlete"
+            )
+        
+        with col2:
+            exercise_type = st.selectbox(
+                "🏋️ Тип вправи",
+                options=["general", "strength", "flexibility", "technique"],
+                format_func=lambda x: {
+                    "general": "🎯 Загальний аналіз",
+                    "strength": "💪 Силові вправи",
+                    "flexibility": "🤸 Гнучкість",
+                    "technique": "🎓 Техніка рухів"
+                }[x],
+                key="gym_type"
+            )
+        
+        with col3:
+            fps = st.select_slider(
+                "🎬 FPS",
+                options=[10, 15, 20, 30],
+                value=15,
+                key="gym_fps"
+            )
+    
+    # Upload
+    st.markdown("""
+    <div class="section-title">Завантаження відео</div>
+    """, unsafe_allow_html=True)
+    
+    uploaded_file = st.file_uploader(
+        "Перетягніть файл або оберіть",
+        type=["mp4", "mov", "avi"],
+        key="gym_upload"
+    )
+    
+    if uploaded_file:
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown(f"""
+            <div class="metric-item">
+                <div class="metric-value">{uploaded_file.size / (1024*1024):.1f}</div>
+                <div class="metric-label">МБ</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with col2:
+            st.markdown(f"""
+            <div class="metric-item">
+                <div class="metric-value">{fps}</div>
+                <div class="metric-label">FPS</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        if st.button("🏋️ АНАЛІЗУВАТИ ВПРАВУ", type="primary", use_container_width=True, key="gym_analyze"):
+            analyze_dryland(uploaded_file, athlete_name, exercise_type, fps)
+    
+    # Features
+    with st.expander("📊 Можливості аналізу"):
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("""
+            **Поза тіла:**
+            - 📐 33 ключові точки
+            - 📏 Кути суглобів
+            - 🦴 Вісь хребта
+            - ⚖️ Баланс тіла
+            """)
+        with col2:
+            st.markdown("""
+            **Аналіз руху:**
+            - 🔄 Траєкторія руху
+            - ⏱️ Темп виконання
+            - 📈 Амплітуда
+            - ✅ Рекомендації
+            """)
+
+
+def analyze_dryland(uploaded_file, athlete_name, exercise_type, fps):
+    """Analyze dryland/gym exercise video."""
+    
+    with st.spinner("🏋️ Аналізуємо вправу..."):
+        # Create temp directory
+        temp_dir = tempfile.mkdtemp()
+        output_dir = Path(temp_dir) / "dryland_analysis"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        try:
+            # Save uploaded file
+            video_path = output_dir / uploaded_file.name
+            with open(video_path, "wb") as f:
+                f.write(uploaded_file.read())
+            
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
+            # Step 1: Extract frames
+            status_text.text("🎬 Витягуємо кадри...")
+            frame_result = extract_frames_from_video(
+                str(video_path),
+                output_dir=str(output_dir / "frames"),
+                fps=float(fps),
+            )
+            progress_bar.progress(25)
+            st.markdown(f'<div class="status-success">✅ Витягнуто {frame_result["count"]} кадрів</div>', unsafe_allow_html=True)
+            
+            # Step 2: Detect person
+            status_text.text("🎯 Детекція людини...")
+            detection_result = detect_swimmer_in_frames(
+                frame_result["frames"],
+                output_dir=str(output_dir / "detections"),
+                draw_boxes=True,
+                enable_tracking=True,
+            )
+            progress_bar.progress(50)
+            st.markdown('<div class="status-success">✅ Детекція завершена</div>', unsafe_allow_html=True)
+            
+            # Step 3: Swimming pose analysis (works for dryland too!)
+            status_text.text("🔬 Аналіз пози...")
+            pose_dir = output_dir / "pose_analysis"
+            pose_result = analyze_swimming_pose(
+                frame_result["frames"],
+                detection_result["detections"],
+                output_dir=str(pose_dir),
+            )
+            progress_bar.progress(80)
+            st.markdown(f'<div class="status-success">✅ Поза: {pose_result["detection_rate"]*100:.0f}% кадрів, streamline {pose_result["avg_streamline"]:.0f}/100</div>', unsafe_allow_html=True)
+            
+            # Step 4: Done
+            progress_bar.progress(100)
+            status_text.text("✅ Аналіз завершено!")
+            
+            # Display results
+            display_dryland_results(pose_result, detection_result, output_dir)
+            
+        except Exception as e:
+            st.error(f"❌ Помилка: {str(e)}")
+        finally:
+            # Cleanup
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 def analyze_video(uploaded_file, athlete_name, pool_length, fps, analysis_method):
@@ -712,6 +1092,128 @@ def display_downloads(output_dir):
     
     # Info about output directory
     st.info(f"📁 Все файлы также сохранены в: `{output_dir}`")
+
+
+def display_dryland_results(pose_result, detection_result, output_dir):
+    """Display dryland exercise analysis results."""
+    
+    st.markdown('<div class="section-title">Результати аналізу</div>', unsafe_allow_html=True)
+    
+    # Main metrics
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        det_rate = pose_result.get("detection_rate", 0) * 100
+        st.markdown(f"""
+        <div class="metric-item">
+            <div class="metric-value">{det_rate:.0f}%</div>
+            <div class="metric-label">Детекція</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        streamline = pose_result.get("avg_streamline", 0)
+        st.markdown(f"""
+        <div class="metric-item">
+            <div class="metric-value">{streamline:.0f}</div>
+            <div class="metric-label">Streamline</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        deviation = pose_result.get("avg_deviation", 0)
+        st.markdown(f"""
+        <div class="metric-item">
+            <div class="metric-value">{deviation:.1f}°</div>
+            <div class="metric-label">Відхилення</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col4:
+        frames = len(pose_result.get("frame_analyses", []))
+        st.markdown(f"""
+        <div class="metric-item">
+            <div class="metric-value">{frames}</div>
+            <div class="metric-label">Кадрів</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Detailed analysis
+    st.markdown('<div class="section-title">Детальний аналіз</div>', unsafe_allow_html=True)
+    
+    frame_analyses = pose_result.get("frame_analyses", [])
+    valid_frames = [f for f in frame_analyses if f.get("has_pose")]
+    
+    if valid_frames:
+        # Average metrics
+        avg_metrics = {}
+        metrics_keys = ["body_roll", "hip_drop", "streamline_score", "kick_amplitude"]
+        
+        for key in metrics_keys:
+            values = [f["metrics"].get(key, 0) for f in valid_frames if f.get("metrics")]
+            if values:
+                avg_metrics[key] = sum(values) / len(values)
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("**📐 Положення тіла:**")
+            if "body_roll" in avg_metrics:
+                roll = avg_metrics["body_roll"]
+                status = "✅" if abs(roll) < 15 else "⚠️"
+                st.write(f"{status} Body Roll: {roll:.1f}°")
+            
+            if "hip_drop" in avg_metrics:
+                hip = avg_metrics["hip_drop"]
+                status = "✅" if abs(hip) < 30 else "⚠️"
+                st.write(f"{status} Hip Drop: {hip:.1f}px")
+        
+        with col2:
+            st.markdown("**📊 Оцінка:**")
+            if "streamline_score" in avg_metrics:
+                score = avg_metrics["streamline_score"]
+                status = "✅" if score > 70 else "⚠️" if score > 50 else "❌"
+                st.write(f"{status} Streamline Score: {score:.0f}/100")
+            
+            if "kick_amplitude" in avg_metrics:
+                amp = avg_metrics["kick_amplitude"]
+                st.write(f"📈 Амплітуда: {amp:.0f}px")
+        
+        # Recommendations
+        st.markdown('<div class="section-title">Рекомендації</div>', unsafe_allow_html=True)
+        
+        recommendations = []
+        
+        if avg_metrics.get("streamline_score", 100) < 70:
+            recommendations.append("⚠️ Покращуйте положення тіла - тримайте спину рівно")
+        
+        if abs(avg_metrics.get("body_roll", 0)) > 20:
+            recommendations.append("⚠️ Зменшіть обертання тіла - стабілізуйте корпус")
+        
+        if abs(avg_metrics.get("hip_drop", 0)) > 40:
+            recommendations.append("⚠️ Контролюйте положення стегон - не опускайте їх")
+        
+        if not recommendations:
+            recommendations.append("✅ Відмінна техніка! Продовжуйте в тому ж дусі.")
+        
+        for rec in recommendations:
+            if "⚠️" in rec:
+                st.markdown(f'<div class="status-warning">{rec}</div>', unsafe_allow_html=True)
+            else:
+                st.markdown(f'<div class="status-success">{rec}</div>', unsafe_allow_html=True)
+    
+    # Sample pose images
+    pose_dir = output_dir / "pose_analysis"
+    if pose_dir.exists():
+        st.markdown('<div class="section-title">Візуалізація пози</div>', unsafe_allow_html=True)
+        
+        pose_images = sorted(pose_dir.glob("pose_*.jpg"))[:6]  # First 6
+        
+        if pose_images:
+            cols = st.columns(3)
+            for i, img_path in enumerate(pose_images):
+                with cols[i % 3]:
+                    st.image(str(img_path), caption=f"Кадр {i+1}", use_container_width=True)
 
 
 if __name__ == "__main__":
