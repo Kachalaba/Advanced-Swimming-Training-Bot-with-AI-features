@@ -8,7 +8,11 @@ from typing import Dict, List
 
 import matplotlib.pyplot as plt
 import seaborn as sns
-from fpdf import FPDF
+
+try:
+    from fpdf import FPDF
+except ImportError:  # pragma: no cover - optional dependency for PDF export
+    FPDF = None
 
 logger = logging.getLogger(__name__)
 
@@ -193,6 +197,11 @@ class ReportGenerator:
         if output_path is None:
             output_path = str(self.output_dir / "report.pdf")
         
+        if FPDF is None:
+            raise RuntimeError(
+                "PDF generation requires the optional 'fpdf2' package. Install it to enable exports."
+            )
+
         # Generate summaries
         summaries = self.generate_text_summary(analysis)
         

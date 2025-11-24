@@ -2,6 +2,8 @@
 
 Sprint-Bot сфокусирован только на видеоаналитике: вы локально запускаете скрипт, загружаете mp4, а движок автоматически извлекает метрики техники в реальном времени — без Telegram и облачных зависимостей.
 
+> Репозиторий очищен от всего Telegram-бота и инфраструктуры БД: остались только модули локального анализа и примеры запуска на macOS.
+
 ```mermaid
 flowchart LR
     A[Локальный mp4] --> B[Детекция позы и осей тела]
@@ -22,7 +24,7 @@ flowchart LR
 
 ## Как запустить
 
-1. Установите зависимости: `pip install -r requirements.txt` и `pip install -r video_analysis/requirements.txt` (YOLO/pose/визуализации). Для Linux может понадобиться `sudo apt-get install -y libgl1` (OpenCV).
+1. Установите зависимости: `pip install -r requirements.txt` и `pip install -r video_analysis/requirements.txt` (YOLO/pose/визуализации). Для Linux может понадобиться `sudo apt-get install -y libgl1` (OpenCV). Для PDF-экспорта отчётов установите опциональный пакет `fpdf2`.
 2. Подготовьте пути к моделям и директории логов в `.env` или передавайте их в параметры своих скриптов.
 3. Запустите готовый пример локального анализа (без Telegram):
 
