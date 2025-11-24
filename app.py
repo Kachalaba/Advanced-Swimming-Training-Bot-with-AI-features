@@ -651,6 +651,8 @@ def analyze_video(uploaded_file, athlete_name, pool_length, fps, analysis_method
             detection_result = detect_swimmer_in_frames(
                 frame_result["frames"],
                 output_dir=str(detections_dir),
+                draw_boxes=True,
+                enable_tracking=True,  # CRITICAL for swimmer tracking!
             )
             
             st.markdown('<div class="success-box">✅ Детекція завершена (Velocity Tracking + 🌊 підводна детекція)</div>', unsafe_allow_html=True)
