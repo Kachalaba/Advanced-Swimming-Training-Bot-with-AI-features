@@ -20,6 +20,7 @@ from video_analysis.trajectory_analyzer import analyze_trajectory
 from video_analysis.report_generator import ReportGenerator
 from video_analysis.video_overlay import VideoOverlayGenerator
 from video_analysis.swimming_pose_analyzer import SwimmingPoseAnalyzer, analyze_swimming_pose
+from video_analysis.ai_coach import AICoach, get_ai_coaching
 
 # ============================================================================
 # PAGE CONFIG
@@ -739,22 +740,93 @@ def analyze_video(uploaded_file, athlete_name, pool_length, fps, analysis_method
                 output_path=str(output_dir / "annotated_video.mp4"),
             )
             
+            progress_bar.progress(95)
+            
+            # Крок 7: AI Coach аналіз
+            status_text.text("🤖 AI тренер аналізує результати...")
+            
+            swimming_pose_data = biomechanics_result.get("swimming_pose") if biomechanics_result else None
+            ai_advice = get_ai_coaching(
+                biomechanics=biomechanics_result,
+                trajectory=trajectory_result,
+                splits=analysis,
+                swimming_pose=swimming_pose_data,
+                athlete_name=athlete_name,
+            )
+            analysis["ai_coaching"] = {
+                "summary": ai_advice.summary,
+                "strengths": ai_advice.strengths,
+                "improvements": ai_advice.improvements,
+                "drills": ai_advice.drills,
+                "score": ai_advice.score,
+                "priority": ai_advice.priority,
+            }
+            
+            st.markdown(f'<div class="success-box">🤖 AI Coach: оцінка {ai_advice.score}/100</div>', unsafe_allow_html=True)
+            
             progress_bar.progress(100)
             status_text.text("✅ Аналіз завершено!")
             
             # Відображаємо результати
-            display_results(analysis, biomechanics_result, trajectory_result, output_dir)
+            display_results(analysis, biomechanics_result, trajectory_result, output_dir, ai_advice)
             
         except Exception as e:
             st.error(f"❌ Помилка при аналізі: {str(e)}")
             st.exception(e)
 
 
-def display_results(analysis, biomechanics, trajectory, output_dir):
+def display_results(analysis, biomechanics, trajectory, output_dir, ai_advice=None):
     """Відображаємо результати аналізу."""
     
     st.markdown("---")
     st.markdown('<div class="success-box" style="text-align: center; font-size: 1.3rem;">🎉 Аналіз успішно завершено!</div>', unsafe_allow_html=True)
+    
+    # ========================================================================
+    # AI COACH SECTION (якщо є)
+    # ========================================================================
+    if ai_advice:
+        st.markdown('<div class="section-title">🤖 AI Тренер</div>', unsafe_allow_html=True)
+        
+        # Score card
+        score = ai_advice.score
+        score_color = "#10b981" if score >= 70 else "#f59e0b" if score >= 50 else "#ef4444"
+        
+        st.markdown(f"""
+        <div style="background: linear-gradient(135deg, rgba(59,130,246,0.2) 0%, rgba(139,92,246,0.2) 100%);
+                    border: 1px solid {score_color}; border-radius: 16px; padding: 1.5rem; margin: 1rem 0;">
+            <div style="display: flex; align-items: center; gap: 2rem;">
+                <div style="text-align: center;">
+                    <div style="font-size: 3rem; font-weight: 800; color: {score_color};">{score}</div>
+                    <div style="color: #94a3b8; font-size: 0.9rem;">ЗАГАЛЬНА ОЦІНКА</div>
+                </div>
+                <div style="flex: 1;">
+                    <div style="font-size: 1.1rem; color: #fff; margin-bottom: 0.5rem;">{ai_advice.summary}</div>
+                    <div style="color: #94a3b8;">Пріоритет: <strong style="color: {score_color};">{ai_advice.priority.upper()}</strong></div>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Strengths & Improvements
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("### ✅ Сильні сторони")
+            for s in ai_advice.strengths:
+                st.markdown(f'<div class="status-success">{s}</div>', unsafe_allow_html=True)
+        
+        with col2:
+            st.markdown("### ⚠️ Що покращити")
+            for imp in ai_advice.improvements:
+                st.markdown(f'<div class="status-warning">{imp}</div>', unsafe_allow_html=True)
+        
+        # Drills
+        if ai_advice.drills:
+            st.markdown("### 🏊 Рекомендовані вправи")
+            for drill in ai_advice.drills:
+                st.markdown(f'<div class="status-info">{drill}</div>', unsafe_allow_html=True)
+        
+        st.markdown("---")
     
     # Вкладки для різних результатів
     tab1, tab2, tab3, tab4, tab5 = st.tabs([

@@ -18,8 +18,9 @@ from .trajectory_analyzer import TrajectoryAnalyzer, analyze_trajectory
 from .video_overlay import VideoOverlayGenerator, generate_annotated_video
 from .report_generator import ReportGenerator
 from .swimming_pose_analyzer import SwimmingPoseAnalyzer, analyze_swimming_pose
+from .ai_coach import AICoach, get_ai_coaching
 
-__version__ = "2.2.0"
+__version__ = "2.3.0"
 
 __all__ = [
     # Frame extraction
