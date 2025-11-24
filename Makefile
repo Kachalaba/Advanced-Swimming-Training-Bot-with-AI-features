@@ -1,24 +1,11 @@
-.PHONY: format lint test build run migrate import_sheets
+.PHONY: format lint test
 
 format:
-	isort .
-	black .
+	isort video_analysis examples tests
+	black video_analysis examples tests
 
 lint:
-	ruff check .
-	mypy --config-file mypy.ini sprint_bot/domain services
+	ruff check video_analysis examples tests
 
 test:
-	pytest --cov=sprint_bot --cov=services --cov-report=term-missing --cov-report=xml
-
-build:
-	docker build -t sprint-bot:local .
-
-run:
-	docker compose up --build
-
-migrate:
-	alembic upgrade head
-
-import_sheets:
-	python -m scripts.import_sheets
+	pytest
