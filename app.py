@@ -17,6 +17,7 @@ from video_analysis.biomechanics_analyzer import analyze_biomechanics
 from video_analysis.trajectory_analyzer import analyze_trajectory
 from video_analysis.report_generator import ReportGenerator
 from video_analysis.video_overlay import VideoOverlayGenerator
+from video_analysis.swimming_pose_analyzer import SwimmingPoseAnalyzer, analyze_swimming_pose
 
 # Налаштування сторінки
 st.set_page_config(
@@ -288,6 +289,17 @@ def analyze_video(uploaded_file, athlete_name, pool_length, fps, analysis_method
                     output_dir=str(biomechanics_dir),
                 )
                 st.markdown('<div class="success-box">✅ Біомеханічний аналіз (pose) завершено</div>', unsafe_allow_html=True)
+                
+                # NEW: Swimming-specific pose analysis with rotation compensation
+                status_text.text("🏊 Аналіз пози плавця (rotation + spine)...")
+                swimming_pose_dir = output_dir / "swimming_pose"
+                swimming_pose_result = analyze_swimming_pose(
+                    frame_result["frames"],
+                    detection_result["detections"],
+                    output_dir=str(swimming_pose_dir),
+                )
+                biomechanics_result["swimming_pose"] = swimming_pose_result
+                st.markdown(f'<div class="success-box">✅ Pose: detection rate {swimming_pose_result["detection_rate"]*100:.0f}%, streamline {swimming_pose_result["avg_streamline"]:.0f}/100</div>', unsafe_allow_html=True)
             
             if analysis_method in ["trajectory", "hybrid"]:
                 status_text.text("📍 Аналіз траєкторії (bbox)...")

@@ -17,8 +17,9 @@ from .split_analyzer import analyze_swimming_video
 from .trajectory_analyzer import TrajectoryAnalyzer, analyze_trajectory
 from .video_overlay import VideoOverlayGenerator, generate_annotated_video
 from .report_generator import ReportGenerator
+from .swimming_pose_analyzer import SwimmingPoseAnalyzer, analyze_swimming_pose
 
-__version__ = "2.1.0"
+__version__ = "2.2.0"
 
 __all__ = [
     # Frame extraction
@@ -26,9 +27,12 @@ __all__ = [
     # Detection
     "SwimmerDetector",
     "detect_swimmer_in_frames",
-    # Biomechanics
+    # Biomechanics (legacy)
     "BiomechanicsAnalyzer",
     "analyze_biomechanics",
+    # NEW: Swimming-specific pose analysis
+    "SwimmingPoseAnalyzer",
+    "analyze_swimming_pose",
     # Splits
     "analyze_swimming_video",
     # Trajectory
