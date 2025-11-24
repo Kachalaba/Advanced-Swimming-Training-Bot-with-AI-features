@@ -21,6 +21,7 @@ from video_analysis.report_generator import ReportGenerator
 from video_analysis.video_overlay import VideoOverlayGenerator
 from video_analysis.swimming_pose_analyzer import SwimmingPoseAnalyzer, analyze_swimming_pose
 from video_analysis.ai_coach import AICoach, get_ai_coaching
+from video_analysis.biomechanics_visualizer import BiomechanicsVisualizer, visualize_biomechanics
 
 # ============================================================================
 # PAGE CONFIG
@@ -683,6 +684,17 @@ def analyze_video(uploaded_file, athlete_name, pool_length, fps, analysis_method
                 )
                 biomechanics_result["swimming_pose"] = swimming_pose_result
                 st.markdown(f'<div class="success-box">✅ Pose: detection rate {swimming_pose_result["detection_rate"]*100:.0f}%, streamline {swimming_pose_result["avg_streamline"]:.0f}/100</div>', unsafe_allow_html=True)
+                
+                # NEW: Advanced biomechanics visualization (skeleton + angles + trajectories)
+                status_text.text("🦴 Візуалізація біомеханіки...")
+                biomech_viz_dir = output_dir / "biomech_viz"
+                biomech_viz_result = visualize_biomechanics(
+                    frame_result["frames"],
+                    detection_result["detections"],
+                    output_dir=str(biomech_viz_dir),
+                )
+                biomechanics_result["visualization"] = biomech_viz_result
+                st.markdown(f'<div class="success-box">🦴 Візуалізація: {biomech_viz_result["with_pose"]}/{biomech_viz_result["total"]} кадрів з скелетом</div>', unsafe_allow_html=True)
             
             if analysis_method in ["trajectory", "hybrid"]:
                 status_text.text("📍 Аналіз траєкторії (bbox)...")
