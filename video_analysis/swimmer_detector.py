@@ -792,6 +792,11 @@ class SwimmerDetector:
         if frame is None or prev_frame is None:
             return None
         
+        # Check frames are not empty
+        if frame.size == 0 or prev_frame.size == 0:
+            logger.debug("Empty frame in underwater detection")
+            return None
+        
         # Конвертируем в grayscale
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         prev_gray = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2GRAY)
@@ -802,6 +807,11 @@ class SwimmerDetector:
             x1, y1 = max(0, x1), max(0, y1)
             x2, y2 = min(frame.shape[1], x2), min(frame.shape[0], y2)
             
+            # Validate ROI dimensions
+            if x2 <= x1 or y2 <= y1:
+                logger.debug("Invalid search_bbox dimensions")
+                return None
+            
             gray_roi = gray[y1:y2, x1:x2]
             prev_gray_roi = prev_gray[y1:y2, x1:x2]
         else:
@@ -809,11 +819,24 @@ class SwimmerDetector:
             prev_gray_roi = prev_gray
             x1, y1 = 0, 0
         
+        # Check for empty ROIs
+        if gray_roi is None or gray_roi.size == 0 or prev_gray_roi is None or prev_gray_roi.size == 0:
+            logger.debug("Empty ROI in underwater detection")
+            return None
+        
         # Frame difference для детекции движения
         diff = cv2.absdiff(gray_roi, prev_gray_roi)
         
+        # Check diff is valid
+        if diff is None or diff.size == 0:
+            return None
+        
         # Threshold для бинаризации
         _, thresh = cv2.threshold(diff, 25, 255, cv2.THRESH_BINARY)
+        
+        # Check thresh is valid before morphology
+        if thresh is None or thresh.size == 0:
+            return None
         
         # Морфологические операции для удаления шума
         kernel = np.ones((5, 5), np.uint8)
