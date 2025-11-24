@@ -140,7 +140,17 @@ class SwimmerDetector:
         prev_center = None
         target_lane = None
         
-        for i, frame_path in enumerate(frame_paths):
+        for i, frame_info in enumerate(frame_paths):
+            # Support both dict format {"path": ..., "timestamp": ...} and plain string
+            if isinstance(frame_info, dict):
+                frame_path = frame_info.get("path", frame_info)
+                timestamp = frame_info.get("timestamp", i / 30.0)
+                video_frame = frame_info.get("video_frame", i)
+            else:
+                frame_path = frame_info
+                timestamp = i / 30.0
+                video_frame = i
+            
             # Get all person detections in frame
             all_detections = self._detect_all_persons(frame_path, confidence_threshold)
             
@@ -149,6 +159,8 @@ class SwimmerDetector:
                 results.append({
                     "frame_index": i,
                     "frame_path": frame_path,
+                    "timestamp": timestamp,
+                    "video_frame": video_frame,
                     "bbox": None,
                     "confidence": None,
                     "center": None,
@@ -168,6 +180,8 @@ class SwimmerDetector:
             
             best_det["frame_index"] = i
             best_det["frame_path"] = frame_path
+            best_det["timestamp"] = timestamp
+            best_det["video_frame"] = video_frame
             results.append(best_det)
             
             # Update tracking state
