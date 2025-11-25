@@ -593,7 +593,52 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type):
                     cv2.putText(frame, f"#{person_idx+1}", label_pt, 
                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
             
-            # Use YOLO detections for multi-person
+            # Stable tracking: track runners by position (IoU matching)
+            prev_bboxes = {}  # track_id -> last bbox
+            track_id_counter = 0
+            
+            def calculate_iou(box1, box2):
+                """Calculate IoU between two bboxes."""
+                x1 = max(box1[0], box2[0])
+                y1 = max(box1[1], box2[1])
+                x2 = min(box1[2], box2[2])
+                y2 = min(box1[3], box2[3])
+                
+                inter_area = max(0, x2 - x1) * max(0, y2 - y1)
+                box1_area = (box1[2] - box1[0]) * (box1[3] - box1[1])
+                box2_area = (box2[2] - box2[0]) * (box2[3] - box2[1])
+                
+                iou = inter_area / (box1_area + box2_area - inter_area + 1e-6)
+                return iou
+            
+            def match_tracks(current_bboxes, prev_bboxes, iou_threshold=0.3):
+                """Match current detections to previous tracks using IoU."""
+                matches = {}  # current_idx -> track_id
+                used_tracks = set()
+                
+                # Sort by X position for consistent ordering
+                sorted_current = sorted(enumerate(current_bboxes), 
+                                        key=lambda x: (x[1][0] + x[1][2]) / 2)
+                
+                for curr_idx, curr_box in sorted_current:
+                    best_iou = 0
+                    best_track = None
+                    
+                    for track_id, prev_box in prev_bboxes.items():
+                        if track_id in used_tracks:
+                            continue
+                        iou = calculate_iou(curr_box, prev_box)
+                        if iou > best_iou and iou >= iou_threshold:
+                            best_iou = iou
+                            best_track = track_id
+                    
+                    if best_track is not None:
+                        matches[curr_idx] = best_track
+                        used_tracks.add(best_track)
+                
+                return matches
+            
+            # Use YOLO detections for multi-person with stable tracking
             for i, frame_info in enumerate(frame_result["frames"]):
                 frame_path = frame_info["path"] if isinstance(frame_info, dict) else frame_info
                 frame = cv2.imread(frame_path)
@@ -604,54 +649,78 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type):
                     continue
                 
                 annotated_frame = frame.copy()
-                frame_persons_kps = []
+                frame_persons_kps = {}  # track_id -> keypoints
+                current_bboxes = []
                 
                 # Get all person detections for this frame
                 if i < len(detection_result["detections"]):
                     det = detection_result["detections"][i]
                     bboxes = det.get("all_boxes", [det.get("bbox")] if det.get("bbox") else [])
+                    current_bboxes = [b for b in bboxes if b is not None]
+                
+                # Sort bboxes by X position (left to right) for consistent initial ordering
+                current_bboxes = sorted(current_bboxes, key=lambda b: (b[0] + b[2]) / 2)
+                
+                # Match to previous tracks
+                if prev_bboxes:
+                    matches = match_tracks(current_bboxes, prev_bboxes)
+                else:
+                    # First frame: assign new track IDs based on X position
+                    matches = {idx: idx for idx in range(len(current_bboxes))}
+                    track_id_counter = len(current_bboxes)
+                
+                # Process each detection
+                new_prev_bboxes = {}
+                for curr_idx, bbox in enumerate(current_bboxes):
+                    # Get or assign track ID
+                    if curr_idx in matches:
+                        track_id = matches[curr_idx]
+                    else:
+                        # New track
+                        track_id = track_id_counter
+                        track_id_counter += 1
                     
-                    for person_idx, bbox in enumerate(bboxes):
-                        if bbox is None:
-                            continue
+                    persons_detected.add(track_id)
+                    new_prev_bboxes[track_id] = bbox
+                    
+                    x1, y1, x2, y2 = [int(c) for c in bbox[:4]]
+                    
+                    # Crop and analyze person
+                    person_crop = frame[max(0,y1):min(h,y2), max(0,x1):min(w,x2)]
+                    if person_crop.size == 0:
+                        continue
+                    
+                    rgb_crop = cv2.cvtColor(person_crop, cv2.COLOR_BGR2RGB)
+                    results = pose.process(rgb_crop)
+                    
+                    kps = {}
+                    if results.pose_landmarks:
+                        frames_with_pose += 1
+                        crop_h, crop_w = person_crop.shape[:2]
                         
-                        persons_detected.add(person_idx)
-                        x1, y1, x2, y2 = [int(c) for c in bbox[:4]]
+                        for idx, name in FULL_LANDMARK_MAP.items():
+                            lm = results.pose_landmarks.landmark[idx]
+                            # Convert to full frame coordinates
+                            px = x1 + lm.x * crop_w
+                            py = y1 + lm.y * crop_h
+                            kps[name] = (px, py)
                         
-                        # Crop and analyze person
-                        person_crop = frame[max(0,y1):min(h,y2), max(0,x1):min(w,x2)]
-                        if person_crop.size == 0:
-                            continue
+                        # Apply smoothing to reduce flickering
+                        kps = smooth_keypoints(kps, prev_keypoints.get(track_id, {}))
+                        prev_keypoints[track_id] = kps
                         
-                        rgb_crop = cv2.cvtColor(person_crop, cv2.COLOR_BGR2RGB)
-                        results = pose.process(rgb_crop)
-                        
-                        kps = {}
-                        if results.pose_landmarks:
-                            frames_with_pose += 1
-                            crop_h, crop_w = person_crop.shape[:2]
-                            
-                            for idx, name in FULL_LANDMARK_MAP.items():
-                                lm = results.pose_landmarks.landmark[idx]
-                                # Convert to full frame coordinates
-                                px = x1 + lm.x * crop_w
-                                py = y1 + lm.y * crop_h
-                                kps[name] = (px, py)
-                            
-                            # Apply smoothing to reduce flickering
-                            kps = smooth_keypoints(kps, prev_keypoints.get(person_idx, {}))
-                            prev_keypoints[person_idx] = kps
-                            
-                            # Draw skeleton manually with smoothed keypoints
-                            draw_skeleton_smooth(annotated_frame, kps, person_idx)
-                        
-                        elif person_idx in prev_keypoints:
-                            # Use previous keypoints if detection failed (interpolation)
-                            kps = prev_keypoints[person_idx]
-                            draw_skeleton_smooth(annotated_frame, kps, person_idx, faded=True)
-                        
-                        if kps:
-                            frame_persons_kps.append(kps)
+                        # Draw skeleton with stable track ID
+                        draw_skeleton_smooth(annotated_frame, kps, track_id)
+                    
+                    elif track_id in prev_keypoints:
+                        # Use previous keypoints if detection failed (interpolation)
+                        kps = prev_keypoints[track_id]
+                        draw_skeleton_smooth(annotated_frame, kps, track_id, faded=True)
+                    
+                    if kps:
+                        frame_persons_kps[track_id] = kps
+                
+                prev_bboxes = new_prev_bboxes
                 
                 # If no YOLO detections, try full frame
                 if not frame_persons_kps:
@@ -668,17 +737,24 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type):
                         # Apply smoothing
                         kps = smooth_keypoints(kps, prev_keypoints.get(0, {}))
                         prev_keypoints[0] = kps
-                        frame_persons_kps.append(kps)
+                        frame_persons_kps[0] = kps
+                        persons_detected.add(0)
                         
                         draw_skeleton_smooth(annotated_frame, kps, 0)
                     
                     elif 0 in prev_keypoints:
                         # Use previous keypoints
                         kps = prev_keypoints[0]
-                        frame_persons_kps.append(kps)
+                        frame_persons_kps[0] = kps
                         draw_skeleton_smooth(annotated_frame, kps, 0, faded=True)
                 
-                keypoints_list.append(frame_persons_kps)
+                # Convert dict to list format (sorted by track_id for consistent ordering)
+                sorted_track_ids = sorted(frame_persons_kps.keys())
+                sorted_kps = [frame_persons_kps[tid] for tid in sorted_track_ids]
+                if not sorted_kps:
+                    sorted_kps = [{}]
+                
+                keypoints_list.append(sorted_kps)
                 annotated_frames.append(annotated_frame)
                 
                 if i % 20 == 0:
