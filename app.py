@@ -488,20 +488,110 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type):
                 31: "left_toe", 32: "right_toe",
             }
             
-            # Initialize MediaPipe Pose
+            # Initialize MediaPipe Pose with better tracking
             mp_pose = mp.solutions.pose
             mp_drawing = mp.solutions.drawing_utils
             pose = mp_pose.Pose(
                 static_image_mode=False,
-                model_complexity=1,
-                min_detection_confidence=0.5,
-                min_tracking_confidence=0.5
+                model_complexity=2,  # Higher accuracy
+                min_detection_confidence=0.3,  # Lower threshold to detect more
+                min_tracking_confidence=0.3,
+                enable_segmentation=False
             )
             
             keypoints_list = []  # List of dicts for single person OR list of lists for multi
             annotated_frames = []
             frames_with_pose = 0
             persons_detected = set()
+            
+            # Smoothing buffer for each person (reduces flickering)
+            prev_keypoints = {}  # person_idx -> previous keypoints
+            SMOOTHING_FACTOR = 0.6  # 0 = no smoothing, 1 = full previous frame
+            
+            def smooth_keypoints(current_kps, prev_kps, factor=SMOOTHING_FACTOR):
+                """Smooth keypoints between frames to reduce flickering."""
+                if not prev_kps:
+                    return current_kps
+                smoothed = {}
+                for name, (cx, cy) in current_kps.items():
+                    if name in prev_kps:
+                        px, py = prev_kps[name]
+                        # Exponential moving average
+                        sx = px * factor + cx * (1 - factor)
+                        sy = py * factor + cy * (1 - factor)
+                        smoothed[name] = (sx, sy)
+                    else:
+                        smoothed[name] = (cx, cy)
+                return smoothed
+            
+            # Skeleton connections for drawing
+            SKELETON_CONNECTIONS = [
+                # Torso
+                ("left_shoulder", "right_shoulder"),
+                ("left_shoulder", "left_hip"),
+                ("right_shoulder", "right_hip"),
+                ("left_hip", "right_hip"),
+                # Left arm
+                ("left_shoulder", "left_elbow"),
+                ("left_elbow", "left_wrist"),
+                # Right arm
+                ("right_shoulder", "right_elbow"),
+                ("right_elbow", "right_wrist"),
+                # Left leg
+                ("left_hip", "left_knee"),
+                ("left_knee", "left_ankle"),
+                ("left_ankle", "left_heel"),
+                ("left_ankle", "left_toe"),
+                # Right leg
+                ("right_hip", "right_knee"),
+                ("right_knee", "right_ankle"),
+                ("right_ankle", "right_heel"),
+                ("right_ankle", "right_toe"),
+            ]
+            
+            # Colors for different runners
+            RUNNER_COLORS = [
+                (0, 255, 0),    # Green
+                (255, 165, 0),  # Orange
+                (255, 0, 255),  # Magenta
+                (0, 255, 255),  # Cyan
+                (255, 255, 0),  # Yellow
+            ]
+            
+            def draw_skeleton_smooth(frame, kps, person_idx=0, faded=False):
+                """Draw skeleton with smoothed keypoints."""
+                if not kps:
+                    return
+                
+                color = RUNNER_COLORS[person_idx % len(RUNNER_COLORS)]
+                if faded:
+                    # Reduce opacity for interpolated frames
+                    color = tuple(c // 2 for c in color)
+                
+                thickness = 2
+                radius = 4
+                
+                # Draw connections
+                for start_name, end_name in SKELETON_CONNECTIONS:
+                    if start_name in kps and end_name in kps:
+                        start_pt = (int(kps[start_name][0]), int(kps[start_name][1]))
+                        end_pt = (int(kps[end_name][0]), int(kps[end_name][1]))
+                        cv2.line(frame, start_pt, end_pt, color, thickness)
+                
+                # Draw keypoints
+                for name, (x, y) in kps.items():
+                    pt = (int(x), int(y))
+                    # Highlight important points
+                    if "ankle" in name or "knee" in name or "hip" in name:
+                        cv2.circle(frame, pt, radius + 2, (0, 0, 255), -1)  # Red for legs
+                    else:
+                        cv2.circle(frame, pt, radius, color, -1)
+                
+                # Draw runner label
+                if "nose" in kps:
+                    label_pt = (int(kps["nose"][0]) - 30, int(kps["nose"][1]) - 20)
+                    cv2.putText(frame, f"#{person_idx+1}", label_pt, 
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
             
             # Use YOLO detections for multi-person
             for i, frame_info in enumerate(frame_result["frames"]):
@@ -548,20 +638,20 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type):
                                 py = y1 + lm.y * crop_h
                                 kps[name] = (px, py)
                             
-                            # Draw skeleton on annotated frame
-                            mp_drawing.draw_landmarks(
-                                annotated_frame[max(0,y1):min(h,y2), max(0,x1):min(w,x2)],
-                                results.pose_landmarks,
-                                mp_pose.POSE_CONNECTIONS,
-                                mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=2, circle_radius=3),
-                                mp_drawing.DrawingSpec(color=(0, 255, 255), thickness=2)
-                            )
+                            # Apply smoothing to reduce flickering
+                            kps = smooth_keypoints(kps, prev_keypoints.get(person_idx, {}))
+                            prev_keypoints[person_idx] = kps
                             
-                            # Draw person ID
-                            cv2.putText(annotated_frame, f"Runner #{person_idx+1}", 
-                                       (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                            # Draw skeleton manually with smoothed keypoints
+                            draw_skeleton_smooth(annotated_frame, kps, person_idx)
                         
-                        frame_persons_kps.append(kps)
+                        elif person_idx in prev_keypoints:
+                            # Use previous keypoints if detection failed (interpolation)
+                            kps = prev_keypoints[person_idx]
+                            draw_skeleton_smooth(annotated_frame, kps, person_idx, faded=True)
+                        
+                        if kps:
+                            frame_persons_kps.append(kps)
                 
                 # If no YOLO detections, try full frame
                 if not frame_persons_kps:
@@ -574,13 +664,19 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type):
                         for idx, name in FULL_LANDMARK_MAP.items():
                             lm = results.pose_landmarks.landmark[idx]
                             kps[name] = (lm.x * w, lm.y * h)
+                        
+                        # Apply smoothing
+                        kps = smooth_keypoints(kps, prev_keypoints.get(0, {}))
+                        prev_keypoints[0] = kps
                         frame_persons_kps.append(kps)
                         
-                        mp_drawing.draw_landmarks(
-                            annotated_frame, results.pose_landmarks, mp_pose.POSE_CONNECTIONS,
-                            mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=2, circle_radius=3),
-                            mp_drawing.DrawingSpec(color=(0, 255, 255), thickness=2)
-                        )
+                        draw_skeleton_smooth(annotated_frame, kps, 0)
+                    
+                    elif 0 in prev_keypoints:
+                        # Use previous keypoints
+                        kps = prev_keypoints[0]
+                        frame_persons_kps.append(kps)
+                        draw_skeleton_smooth(annotated_frame, kps, 0, faded=True)
                 
                 keypoints_list.append(frame_persons_kps)
                 annotated_frames.append(annotated_frame)
