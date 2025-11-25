@@ -10,6 +10,7 @@ from pathlib import Path
 import json
 import sys
 import cv2
+from typing import Dict
 
 sys.path.insert(0, str(Path(__file__).parent))
 
