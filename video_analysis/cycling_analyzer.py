@@ -72,6 +72,35 @@ class CyclingAnalysis:
     # Position analysis
     saddle_height_score: float = 0  # Based on knee extension
     aero_score: float = 0  # Based on hip angle
+    
+    # NEW: Advanced metrics
+    # Ankle angle (ankling technique)
+    avg_ankle_angle_top: float = 0  # degrees at top
+    avg_ankle_angle_bottom: float = 0  # degrees at bottom
+    ankling_range: float = 0  # Total ankle ROM
+    ankling_score: float = 0  # 0-100
+    
+    # Dead spot analysis
+    dead_spot_top: float = 0  # time spent at 12 o'clock (ms)
+    dead_spot_bottom: float = 0  # time spent at 6 o'clock (ms)
+    dead_spot_score: float = 0  # 0-100, less = better
+    
+    # Pedal smoothness
+    pedal_smoothness: float = 0  # 0-100
+    torque_effectiveness: float = 0  # estimated 0-100
+    
+    # Body movement
+    lateral_sway: float = 0  # pixels
+    vertical_bounce: float = 0  # pixels
+    rock_detected: bool = False
+    
+    # Reach and stack
+    reach_angle: float = 0  # arm angle (degrees)
+    stack_score: float = 0  # handlebar height appropriateness
+    
+    # Overall
+    efficiency_score: float = 0  # 0-100
+    bike_fit_score: float = 0  # 0-100
 
 
 class CyclingAnalyzer:
@@ -98,6 +127,15 @@ class CyclingAnalyzer:
         self.fps = fps
         self.pedal_strokes: List[PedalStroke] = []
         self.phases: List[PedalPhase] = []
+        
+        # NEW: Advanced tracking
+        self.ankle_angles_top: List[float] = []
+        self.ankle_angles_bottom: List[float] = []
+        self.dead_spot_frames_top: List[int] = []
+        self.dead_spot_frames_bottom: List[int] = []
+        self.shoulder_x_positions: List[float] = []
+        self.shoulder_y_positions: List[float] = []
+        self.arm_angles: List[float] = []
         
     def analyze(self, keypoints_list: List[Dict], fps: float = None) -> CyclingAnalysis:
         """
@@ -232,6 +270,33 @@ class CyclingAnalyzer:
             # Detect pedal phase
             phase = self._detect_phase(kps)
             self.phases.append(phase)
+            
+            # NEW: Advanced metrics collection
+            # Ankle angle (ankling)
+            ankle_angle = self._analyze_ankle_angle(kps, phase)
+            if ankle_angle != 0:
+                if phase == PedalPhase.TRANSITION_TOP:
+                    self.ankle_angles_top.append(ankle_angle)
+                elif phase == PedalPhase.TRANSITION_BOTTOM:
+                    self.ankle_angles_bottom.append(ankle_angle)
+            
+            # Dead spot detection
+            if phase == PedalPhase.TRANSITION_TOP:
+                self.dead_spot_frames_top.append(frame_idx)
+            elif phase == PedalPhase.TRANSITION_BOTTOM:
+                self.dead_spot_frames_bottom.append(frame_idx)
+            
+            # Body sway tracking
+            if l_shoulder and r_shoulder:
+                center_x = (l_shoulder[0] + r_shoulder[0]) / 2
+                center_y = (l_shoulder[1] + r_shoulder[1]) / 2
+                self.shoulder_x_positions.append(center_x)
+                self.shoulder_y_positions.append(center_y)
+            
+            # Arm angle (reach)
+            arm_angle = self._analyze_arm_angle(kps)
+            if arm_angle != 0:
+                self.arm_angles.append(arm_angle)
         
         # Calculate final metrics
         return self._calculate_stats(
@@ -286,6 +351,58 @@ class CyclingAnalyzer:
             return PedalPhase.TRANSITION_BOTTOM
         else:
             return PedalPhase.TRANSITION_TOP
+    
+    # =========================================================================
+    # NEW: Advanced Analysis Methods
+    # =========================================================================
+    
+    def _analyze_ankle_angle(self, kps: Dict, phase: PedalPhase) -> float:
+        """
+        Analyze ankle angle for ankling technique.
+        Good ankling: toe down at top, heel down at bottom.
+        """
+        l_knee = self._get_point(kps, "left_knee")
+        l_ankle = self._get_point(kps, "left_ankle")
+        r_knee = self._get_point(kps, "right_knee")
+        r_ankle = self._get_point(kps, "right_ankle")
+        
+        angles = []
+        
+        # Left leg ankle angle (relative to lower leg)
+        if l_knee and l_ankle:
+            dx = l_ankle[0] - l_knee[0]
+            dy = l_ankle[1] - l_knee[1]
+            angle = math.degrees(math.atan2(dy, dx))
+            angles.append(angle)
+        
+        if r_knee and r_ankle:
+            dx = r_ankle[0] - r_knee[0]
+            dy = r_ankle[1] - r_knee[1]
+            angle = math.degrees(math.atan2(dy, dx))
+            angles.append(angle)
+        
+        return np.mean(angles) if angles else 0
+    
+    def _analyze_arm_angle(self, kps: Dict) -> float:
+        """Analyze arm angle for reach position."""
+        l_shoulder = self._get_point(kps, "left_shoulder")
+        l_elbow = self._get_point(kps, "left_elbow")
+        l_wrist = self._get_point(kps, "left_wrist")
+        r_shoulder = self._get_point(kps, "right_shoulder")
+        r_elbow = self._get_point(kps, "right_elbow")
+        r_wrist = self._get_point(kps, "right_wrist")
+        
+        angles = []
+        
+        if l_shoulder and l_elbow and l_wrist:
+            angle = self._calculate_angle(l_shoulder, l_elbow, l_wrist)
+            angles.append(angle)
+        
+        if r_shoulder and r_elbow and r_wrist:
+            angle = self._calculate_angle(r_shoulder, r_elbow, r_wrist)
+            angles.append(angle)
+        
+        return np.mean(angles) if angles else 0
     
     def _calculate_stats(self, knee_left, knee_right, hip_angles,
                         shoulder_positions, total_frames) -> CyclingAnalysis:
@@ -365,6 +482,80 @@ class CyclingAnalyzer:
         else:
             aero_score = 0
         
+        # =====================================================================
+        # NEW: Advanced metrics calculation
+        # =====================================================================
+        
+        # Ankling analysis
+        avg_ankle_top = np.mean(self.ankle_angles_top) if self.ankle_angles_top else 0
+        avg_ankle_bottom = np.mean(self.ankle_angles_bottom) if self.ankle_angles_bottom else 0
+        ankling_range = abs(avg_ankle_top - avg_ankle_bottom)
+        # Good ankling: 20-40 degree range
+        if 20 <= ankling_range <= 40:
+            ankling_score = 100
+        elif 10 <= ankling_range < 20 or 40 < ankling_range <= 50:
+            ankling_score = 80
+        else:
+            ankling_score = 60
+        
+        # Dead spot analysis
+        dead_spot_top_frames = len(self.dead_spot_frames_top)
+        dead_spot_bottom_frames = len(self.dead_spot_frames_bottom)
+        dead_spot_top_ms = (dead_spot_top_frames / self.fps) * 1000 if total_revs > 0 else 0
+        dead_spot_bottom_ms = (dead_spot_bottom_frames / self.fps) * 1000 if total_revs > 0 else 0
+        # Less dead spot time = better
+        total_dead_spot = dead_spot_top_ms + dead_spot_bottom_ms
+        dead_spot_score = max(0, 100 - total_dead_spot / 10)
+        
+        # Pedal smoothness (based on phase distribution evenness)
+        if phase_dist:
+            phase_values = list(phase_dist.values())
+            phase_std = np.std(phase_values) if phase_values else 0
+            pedal_smoothness = max(0, 100 - phase_std * 2)
+        else:
+            pedal_smoothness = 50
+        
+        # Torque effectiveness (estimated from power phase)
+        torque_effectiveness = min(100, power_phase_pct * 2.5)
+        
+        # Lateral sway
+        if self.shoulder_x_positions:
+            lateral_sway = max(self.shoulder_x_positions) - min(self.shoulder_x_positions)
+        else:
+            lateral_sway = 0
+        
+        # Vertical bounce
+        if self.shoulder_y_positions:
+            vertical_bounce = max(self.shoulder_y_positions) - min(self.shoulder_y_positions)
+        else:
+            vertical_bounce = 0
+        
+        # Rock detected if sway > 30 pixels
+        rock_detected = lateral_sway > 30 or vertical_bounce > 20
+        
+        # Reach angle
+        avg_arm_angle = np.mean(self.arm_angles) if self.arm_angles else 0
+        # Stack score (arm angle should be 140-160 for good position)
+        if 140 <= avg_arm_angle <= 160:
+            stack_score = 100
+        elif 120 <= avg_arm_angle < 140 or 160 < avg_arm_angle <= 170:
+            stack_score = 80
+        else:
+            stack_score = 60
+        
+        # Overall efficiency score
+        efficiency_score = (
+            saddle_score * 0.2 +
+            aero_score * 0.2 +
+            stability * 0.2 +
+            pedal_smoothness * 0.2 +
+            ankling_score * 0.1 +
+            dead_spot_score * 0.1
+        )
+        
+        # Bike fit score
+        bike_fit_score = (saddle_score + aero_score + stack_score) / 3
+        
         return CyclingAnalysis(
             total_revolutions=total_revs,
             left_revolutions=left_revs,
@@ -381,7 +572,24 @@ class CyclingAnalyzer:
             phase_distribution=phase_dist,
             duration_sec=round(duration, 1),
             saddle_height_score=round(saddle_score, 1),
-            aero_score=round(aero_score, 1)
+            aero_score=round(aero_score, 1),
+            # NEW metrics
+            avg_ankle_angle_top=round(avg_ankle_top, 1),
+            avg_ankle_angle_bottom=round(avg_ankle_bottom, 1),
+            ankling_range=round(ankling_range, 1),
+            ankling_score=round(ankling_score, 1),
+            dead_spot_top=round(dead_spot_top_ms, 1),
+            dead_spot_bottom=round(dead_spot_bottom_ms, 1),
+            dead_spot_score=round(dead_spot_score, 1),
+            pedal_smoothness=round(pedal_smoothness, 1),
+            torque_effectiveness=round(torque_effectiveness, 1),
+            lateral_sway=round(lateral_sway, 1),
+            vertical_bounce=round(vertical_bounce, 1),
+            rock_detected=rock_detected,
+            reach_angle=round(avg_arm_angle, 1),
+            stack_score=round(stack_score, 1),
+            efficiency_score=round(efficiency_score, 1),
+            bike_fit_score=round(bike_fit_score, 1),
         )
     
     def _empty_analysis(self) -> CyclingAnalysis:

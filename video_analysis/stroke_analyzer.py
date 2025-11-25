@@ -56,6 +56,30 @@ class StrokeAnalysis:
     strokes: List[StrokeData] = field(default_factory=list)
     frame_phases: List[str] = field(default_factory=list)  # phase per frame
     body_roll_history: List[float] = field(default_factory=list)
+    
+    # NEW: Advanced metrics
+    dps: float = 0.0  # Distance Per Stroke (meters)
+    swolf: float = 0.0  # SWOLF score (strokes + seconds per lap)
+    
+    # Hand/Arm technique
+    avg_hand_entry_angle: float = 0.0  # degrees, optimal ~40°
+    hand_entry_score: float = 0.0  # 0-100
+    avg_elbow_angle_catch: float = 0.0  # High elbow catch angle
+    high_elbow_score: float = 0.0  # 0-100
+    
+    # Head position
+    avg_head_position: float = 0.0  # relative to spine
+    head_stability_score: float = 0.0  # 0-100
+    
+    # Breathing
+    breathing_pattern: str = ""  # e.g., "bilateral/3", "right/2"
+    breathing_regularity: float = 0.0  # 0-100
+    breaths_detected: int = 0
+    
+    # Kick
+    kick_frequency: float = 0.0  # kicks per stroke
+    kick_amplitude: float = 0.0  # degrees
+    kick_symmetry: float = 0.0  # 0-100
 
 
 class StrokeAnalyzer:
@@ -71,8 +95,18 @@ class StrokeAnalyzer:
     LEFT_HIP = 23
     RIGHT_HIP = 24
     
-    def __init__(self, fps: float = 10.0):
+    # Additional keypoints for advanced analysis
+    LEFT_ANKLE = 27
+    RIGHT_ANKLE = 28
+    LEFT_KNEE = 25
+    RIGHT_KNEE = 26
+    NOSE = 0
+    LEFT_EAR = 7
+    RIGHT_EAR = 8
+    
+    def __init__(self, fps: float = 10.0, pool_length: float = 25.0):
         self.fps = fps
+        self.pool_length = pool_length  # meters
         self.strokes: List[StrokeData] = []
         self.frame_phases: List[str] = []
         self.body_roll_history: List[float] = []
@@ -87,6 +121,16 @@ class StrokeAnalyzer:
         # Smoothing
         self.left_wrist_history = deque(maxlen=10)
         self.right_wrist_history = deque(maxlen=10)
+        
+        # NEW: Advanced tracking
+        self.hand_entry_angles: List[float] = []
+        self.elbow_catch_angles: List[float] = []
+        self.head_positions: List[float] = []
+        self.breath_frames: List[int] = []  # frames where breathing detected
+        self.kick_amplitudes: List[float] = []
+        self.left_kick_count = 0
+        self.right_kick_count = 0
+        self.prev_head_roll = 0
     
     def analyze(self, keypoints_list: List[Dict], fps: float = None) -> StrokeAnalysis:
         """
@@ -122,6 +166,27 @@ class StrokeAnalyzer:
             
             # Track strokes
             self._track_strokes(kps, i)
+            
+            # NEW: Advanced metrics collection
+            # Hand entry angle (during Catch phase)
+            if phase == StrokePhase.CATCH:
+                entry_angle = self._calculate_hand_entry_angle(kps)
+                if entry_angle > 0:
+                    self.hand_entry_angles.append(entry_angle)
+                
+                elbow_angle = self._calculate_elbow_catch_angle(kps)
+                if elbow_angle > 0:
+                    self.elbow_catch_angles.append(elbow_angle)
+            
+            # Head position tracking
+            head_pos = self._calculate_head_position(kps)
+            self.head_positions.append(head_pos)
+            
+            # Breathing detection
+            self._detect_breathing(kps, i)
+            
+            # Kick analysis
+            self._analyze_kick(kps, i)
         
         # Calculate statistics
         return self._calculate_stats()
@@ -299,6 +364,164 @@ class StrokeAnalyzer:
         
         return None
     
+    # =========================================================================
+    # NEW: Advanced Analysis Methods
+    # =========================================================================
+    
+    def _calculate_hand_entry_angle(self, kps: Dict) -> float:
+        """
+        Calculate hand entry angle during catch phase.
+        Optimal angle is ~40° (fingers first, not flat).
+        """
+        left_wrist = self._get_point(kps, "left_wrist")
+        right_wrist = self._get_point(kps, "right_wrist")
+        left_elbow = self._get_point(kps, "left_elbow")
+        right_elbow = self._get_point(kps, "right_elbow")
+        left_shoulder = self._get_point(kps, "left_shoulder")
+        right_shoulder = self._get_point(kps, "right_shoulder")
+        
+        angles = []
+        
+        # Left arm entry
+        if left_wrist and left_elbow and left_shoulder:
+            # Angle of forearm relative to water surface (horizontal)
+            dx = left_wrist[0] - left_elbow[0]
+            dy = left_wrist[1] - left_elbow[1]
+            angle = abs(np.degrees(np.arctan2(dy, dx)))
+            if 10 < angle < 80:  # Valid range
+                angles.append(angle)
+        
+        # Right arm entry
+        if right_wrist and right_elbow and right_shoulder:
+            dx = right_wrist[0] - right_elbow[0]
+            dy = right_wrist[1] - right_elbow[1]
+            angle = abs(np.degrees(np.arctan2(dy, dx)))
+            if 10 < angle < 80:
+                angles.append(angle)
+        
+        return np.mean(angles) if angles else 0
+    
+    def _calculate_elbow_catch_angle(self, kps: Dict) -> float:
+        """
+        Calculate elbow angle during catch (high elbow technique).
+        Optimal: elbow stays high, angle 90-120°.
+        """
+        left_shoulder = self._get_point(kps, "left_shoulder")
+        left_elbow = self._get_point(kps, "left_elbow")
+        left_wrist = self._get_point(kps, "left_wrist")
+        right_shoulder = self._get_point(kps, "right_shoulder")
+        right_elbow = self._get_point(kps, "right_elbow")
+        right_wrist = self._get_point(kps, "right_wrist")
+        
+        angles = []
+        
+        # Left arm elbow angle
+        if left_shoulder and left_elbow and left_wrist:
+            angle = self._angle_between_points(left_shoulder, left_elbow, left_wrist)
+            if 60 < angle < 180:
+                angles.append(angle)
+        
+        # Right arm
+        if right_shoulder and right_elbow and right_wrist:
+            angle = self._angle_between_points(right_shoulder, right_elbow, right_wrist)
+            if 60 < angle < 180:
+                angles.append(angle)
+        
+        return np.mean(angles) if angles else 0
+    
+    def _angle_between_points(self, p1, p2, p3) -> float:
+        """Calculate angle at p2 between p1-p2-p3."""
+        v1 = (p1[0] - p2[0], p1[1] - p2[1])
+        v2 = (p3[0] - p2[0], p3[1] - p2[1])
+        
+        dot = v1[0] * v2[0] + v1[1] * v2[1]
+        mag1 = np.sqrt(v1[0]**2 + v1[1]**2)
+        mag2 = np.sqrt(v2[0]**2 + v2[1]**2)
+        
+        if mag1 * mag2 == 0:
+            return 0
+        
+        cos_angle = np.clip(dot / (mag1 * mag2), -1, 1)
+        return np.degrees(np.arccos(cos_angle))
+    
+    def _calculate_head_position(self, kps: Dict) -> float:
+        """
+        Calculate head position relative to spine.
+        Optimal: neutral, aligned with spine (0).
+        Positive = head up, Negative = head down.
+        """
+        nose = self._get_point(kps, "nose")
+        left_shoulder = self._get_point(kps, "left_shoulder")
+        right_shoulder = self._get_point(kps, "right_shoulder")
+        left_hip = self._get_point(kps, "left_hip")
+        right_hip = self._get_point(kps, "right_hip")
+        
+        if not all([nose, left_shoulder, right_shoulder]):
+            return 0
+        
+        # Shoulder center
+        shoulder_center = (
+            (left_shoulder[0] + right_shoulder[0]) / 2,
+            (left_shoulder[1] + right_shoulder[1]) / 2
+        )
+        
+        # Expected head position (inline with shoulders)
+        # Calculate deviation from expected line
+        head_offset = nose[1] - shoulder_center[1]
+        
+        return head_offset
+    
+    def _detect_breathing(self, kps: Dict, frame_idx: int) -> None:
+        """
+        Detect breathing based on head rotation.
+        Breathing = significant head turn to side.
+        """
+        nose = self._get_point(kps, "nose")
+        left_ear = self._get_point(kps, "left_ear")
+        right_ear = self._get_point(kps, "right_ear")
+        left_shoulder = self._get_point(kps, "left_shoulder")
+        right_shoulder = self._get_point(kps, "right_shoulder")
+        
+        if not nose or not (left_shoulder and right_shoulder):
+            return
+        
+        # Calculate head rotation based on nose position relative to shoulders
+        shoulder_center_x = (left_shoulder[0] + right_shoulder[0]) / 2
+        head_offset_x = nose[0] - shoulder_center_x
+        
+        # Also check Y position (head coming up)
+        shoulder_center_y = (left_shoulder[1] + right_shoulder[1]) / 2
+        head_up = nose[1] < shoulder_center_y - 20
+        
+        # Significant lateral offset + head up = breathing
+        threshold = 30  # pixels
+        
+        if abs(head_offset_x) > threshold and head_up:
+            # Check if this is a new breath (not continuation)
+            if not self.breath_frames or frame_idx - self.breath_frames[-1] > 5:
+                self.breath_frames.append(frame_idx)
+    
+    def _analyze_kick(self, kps: Dict, frame_idx: int) -> None:
+        """
+        Analyze kick pattern - amplitude and frequency.
+        """
+        left_ankle = self._get_point(kps, "left_ankle")
+        right_ankle = self._get_point(kps, "right_ankle")
+        left_hip = self._get_point(kps, "left_hip")
+        right_hip = self._get_point(kps, "right_hip")
+        
+        if not all([left_ankle, right_ankle, left_hip, right_hip]):
+            return
+        
+        # Calculate kick amplitude (vertical distance between ankles)
+        ankle_diff = abs(left_ankle[1] - right_ankle[1])
+        
+        # Normalize by hip width
+        hip_width = abs(left_hip[0] - right_hip[0])
+        if hip_width > 0:
+            normalized_amplitude = (ankle_diff / hip_width) * 45  # Scale to degrees
+            self.kick_amplitudes.append(normalized_amplitude)
+    
     def _calculate_stats(self) -> StrokeAnalysis:
         """Calculate final statistics."""
         if not self.strokes:
@@ -340,6 +563,80 @@ class StrokeAnalyzer:
         total_frames = len(self.frame_phases)
         phases_dist = {p: (c / total_frames * 100) for p, c in phase_counts.items()}
         
+        # =====================================================================
+        # NEW: Advanced metrics calculation
+        # =====================================================================
+        
+        # DPS (Distance Per Stroke) - estimated
+        # If we know pool length and can estimate laps
+        dps = self.pool_length / total if total > 0 else 0
+        
+        # SWOLF (strokes + seconds per lap)
+        swolf = total + total_duration if total_duration > 0 else 0
+        
+        # Hand entry angle
+        avg_hand_entry = np.mean(self.hand_entry_angles) if self.hand_entry_angles else 0
+        # Score: optimal is ~40°, score decreases as deviation increases
+        if avg_hand_entry > 0:
+            deviation = abs(avg_hand_entry - 40)
+            hand_entry_score = max(0, 100 - deviation * 2)
+        else:
+            hand_entry_score = 0
+        
+        # High elbow catch
+        avg_elbow_catch = np.mean(self.elbow_catch_angles) if self.elbow_catch_angles else 0
+        # Score: optimal is 90-120°
+        if avg_elbow_catch > 0:
+            if 90 <= avg_elbow_catch <= 120:
+                high_elbow_score = 100
+            elif 80 <= avg_elbow_catch < 90 or 120 < avg_elbow_catch <= 130:
+                high_elbow_score = 80
+            else:
+                high_elbow_score = max(0, 60 - abs(avg_elbow_catch - 105))
+        else:
+            high_elbow_score = 0
+        
+        # Head position
+        valid_head_pos = [h for h in self.head_positions if h != 0]
+        avg_head_pos = np.mean(valid_head_pos) if valid_head_pos else 0
+        head_stability = np.std(valid_head_pos) if len(valid_head_pos) > 1 else 0
+        # Score: less movement = better
+        head_stability_score = max(0, 100 - head_stability * 2)
+        
+        # Breathing pattern
+        breaths = len(self.breath_frames)
+        if breaths > 0 and total > 0:
+            strokes_per_breath = total / breaths
+            if strokes_per_breath <= 2.5:
+                breathing_pattern = f"кожні 2 гребки"
+            elif strokes_per_breath <= 3.5:
+                breathing_pattern = f"кожні 3 гребки (bilateral)"
+            elif strokes_per_breath <= 4.5:
+                breathing_pattern = f"кожні 4 гребки"
+            else:
+                breathing_pattern = f"кожні {strokes_per_breath:.0f} гребків"
+            
+            # Regularity: check consistency of breath intervals
+            if len(self.breath_frames) > 1:
+                intervals = np.diff(self.breath_frames)
+                interval_std = np.std(intervals)
+                breathing_regularity = max(0, 100 - interval_std * 2)
+            else:
+                breathing_regularity = 50
+        else:
+            breathing_pattern = "не виявлено"
+            breathing_regularity = 0
+        
+        # Kick analysis
+        avg_kick_amplitude = np.mean(self.kick_amplitudes) if self.kick_amplitudes else 0
+        kick_frequency = len(self.kick_amplitudes) / total if total > 0 else 0
+        # Kick symmetry (based on amplitude variance)
+        if len(self.kick_amplitudes) > 2:
+            kick_variance = np.std(self.kick_amplitudes)
+            kick_symmetry = max(0, 100 - kick_variance * 3)
+        else:
+            kick_symmetry = 50
+        
         return StrokeAnalysis(
             total_strokes=total,
             stroke_rate=round(stroke_rate, 1),
@@ -354,6 +651,21 @@ class StrokeAnalyzer:
             strokes=self.strokes,
             frame_phases=self.frame_phases,
             body_roll_history=self.body_roll_history,
+            # NEW metrics
+            dps=round(dps, 2),
+            swolf=round(swolf, 1),
+            avg_hand_entry_angle=round(avg_hand_entry, 1),
+            hand_entry_score=round(hand_entry_score, 1),
+            avg_elbow_angle_catch=round(avg_elbow_catch, 1),
+            high_elbow_score=round(high_elbow_score, 1),
+            avg_head_position=round(avg_head_pos, 1),
+            head_stability_score=round(head_stability_score, 1),
+            breathing_pattern=breathing_pattern,
+            breathing_regularity=round(breathing_regularity, 1),
+            breaths_detected=breaths,
+            kick_frequency=round(kick_frequency, 1),
+            kick_amplitude=round(avg_kick_amplitude, 1),
+            kick_symmetry=round(kick_symmetry, 1),
         )
     
     def _empty_analysis(self) -> StrokeAnalysis:

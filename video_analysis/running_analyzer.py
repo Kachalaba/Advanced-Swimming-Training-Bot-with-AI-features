@@ -66,6 +66,38 @@ class RunningAnalysis:
     phase_distribution: Dict[str, float] = field(default_factory=dict)
     
     duration_sec: float = 0
+    
+    # NEW: Advanced metrics
+    # Foot strike pattern
+    foot_strike_type: str = ""  # "heel", "midfoot", "forefoot"
+    foot_strike_angle: float = 0  # degrees
+    foot_strike_score: float = 0  # 0-100
+    
+    # Overstriding
+    overstriding_detected: bool = False
+    overstriding_score: float = 0  # 0-100, 100 = no overstriding
+    avg_foot_ahead_distance: float = 0  # pixels ahead of hip at contact
+    
+    # Hip drop (Trendelenburg)
+    hip_drop_left: float = 0  # degrees
+    hip_drop_right: float = 0  # degrees
+    hip_drop_score: float = 0  # 0-100, 100 = stable
+    
+    # Arm swing
+    arm_crossover_detected: bool = False
+    arm_swing_range: float = 0  # degrees
+    
+    # Ground contact
+    avg_contact_time_ms: float = 0  # milliseconds
+    contact_time_left: float = 0
+    contact_time_right: float = 0
+    
+    # Bounce (vertical oscillation efficiency)
+    bounce_score: float = 0  # 0-100, higher = less wasted energy
+    
+    # Overall scores
+    efficiency_score: float = 0  # 0-100
+    injury_risk_score: float = 0  # 0-100, lower = better
 
 
 class RunningAnalyzer:
@@ -97,6 +129,18 @@ class RunningAnalyzer:
         self.steps: List[StepData] = []
         self.phases: List[RunPhase] = []
         self.hip_heights: List[float] = []
+        
+        # NEW: Advanced tracking
+        self.foot_strike_angles: List[float] = []
+        self.foot_ahead_distances: List[float] = []
+        self.hip_drops_left: List[float] = []
+        self.hip_drops_right: List[float] = []
+        self.arm_crossovers: List[bool] = []
+        self.contact_times_left: List[float] = []
+        self.contact_times_right: List[float] = []
+        
+        self.left_contact_start = None
+        self.right_contact_start = None
         
     def analyze(self, keypoints_list: List[Dict], fps: float = None) -> RunningAnalysis:
         """
@@ -225,6 +269,33 @@ class RunningAnalyzer:
             # Detect phase
             phase = self._detect_phase(kps)
             self.phases.append(phase)
+            
+            # NEW: Advanced metrics collection
+            # Foot strike analysis (at initial contact)
+            if phase == RunPhase.LOADING or phase == RunPhase.STANCE:
+                foot_angle = self._analyze_foot_strike(kps)
+                if foot_angle != 0:
+                    self.foot_strike_angles.append(foot_angle)
+                
+                # Overstriding check
+                foot_ahead = self._check_overstriding(kps)
+                if foot_ahead != 0:
+                    self.foot_ahead_distances.append(foot_ahead)
+            
+            # Hip drop analysis
+            hip_drop = self._analyze_hip_drop(kps)
+            if hip_drop[0] != 0:
+                self.hip_drops_left.append(hip_drop[0])
+            if hip_drop[1] != 0:
+                self.hip_drops_right.append(hip_drop[1])
+            
+            # Arm crossover check
+            if l_elbow and r_elbow and l_shoulder and r_shoulder:
+                crossover = self._check_arm_crossover(kps)
+                self.arm_crossovers.append(crossover)
+            
+            # Contact time tracking
+            self._track_contact_time(kps, frame_idx)
         
         # Calculate final metrics
         return self._calculate_stats(
@@ -293,6 +364,144 @@ class RunningAnalyzer:
         else:
             return RunPhase.SWING
     
+    # =========================================================================
+    # NEW: Advanced Analysis Methods
+    # =========================================================================
+    
+    def _analyze_foot_strike(self, kps: Dict) -> float:
+        """
+        Analyze foot strike pattern.
+        Returns angle of foot at contact.
+        Positive = heel strike, ~0 = midfoot, Negative = forefoot
+        """
+        l_heel = self._get_point(kps, "left_heel")
+        l_toe = self._get_point(kps, "left_toe")
+        r_heel = self._get_point(kps, "right_heel")
+        r_toe = self._get_point(kps, "right_toe")
+        l_ankle = self._get_point(kps, "left_ankle")
+        r_ankle = self._get_point(kps, "right_ankle")
+        
+        angles = []
+        
+        # Left foot angle
+        if l_heel and l_toe:
+            dx = l_toe[0] - l_heel[0]
+            dy = l_toe[1] - l_heel[1]
+            angle = math.degrees(math.atan2(dy, dx))
+            angles.append(angle)
+        
+        # Right foot
+        if r_heel and r_toe:
+            dx = r_toe[0] - r_heel[0]
+            dy = r_toe[1] - r_heel[1]
+            angle = math.degrees(math.atan2(dy, dx))
+            angles.append(angle)
+        
+        return np.mean(angles) if angles else 0
+    
+    def _check_overstriding(self, kps: Dict) -> float:
+        """
+        Check for overstriding - foot landing ahead of hips.
+        Returns distance foot is ahead of hip (positive = overstriding).
+        """
+        l_ankle = self._get_point(kps, "left_ankle")
+        r_ankle = self._get_point(kps, "right_ankle")
+        l_hip = self._get_point(kps, "left_hip")
+        r_hip = self._get_point(kps, "right_hip")
+        
+        distances = []
+        
+        if l_ankle and l_hip:
+            # Positive = foot ahead of hip (overstriding)
+            dist = l_hip[0] - l_ankle[0]  # Assuming running left to right
+            distances.append(dist)
+        
+        if r_ankle and r_hip:
+            dist = r_hip[0] - r_ankle[0]
+            distances.append(dist)
+        
+        return np.mean(distances) if distances else 0
+    
+    def _analyze_hip_drop(self, kps: Dict) -> Tuple[float, float]:
+        """
+        Analyze hip drop (Trendelenburg sign).
+        Returns (left_drop, right_drop) in degrees.
+        """
+        l_hip = self._get_point(kps, "left_hip")
+        r_hip = self._get_point(kps, "right_hip")
+        
+        if not l_hip or not r_hip:
+            return (0, 0)
+        
+        # Calculate angle from horizontal
+        dx = r_hip[0] - l_hip[0]
+        dy = r_hip[1] - l_hip[1]
+        
+        angle = math.degrees(math.atan2(dy, dx))
+        
+        # Positive angle = left hip higher (right side drop)
+        # Negative angle = right hip higher (left side drop)
+        left_drop = max(0, -angle)
+        right_drop = max(0, angle)
+        
+        return (left_drop, right_drop)
+    
+    def _check_arm_crossover(self, kps: Dict) -> bool:
+        """
+        Check if arms cross the body midline.
+        Returns True if crossover detected.
+        """
+        l_elbow = self._get_point(kps, "left_elbow")
+        r_elbow = self._get_point(kps, "right_elbow")
+        l_wrist = self._get_point(kps, "left_wrist")
+        r_wrist = self._get_point(kps, "right_wrist")
+        l_shoulder = self._get_point(kps, "left_shoulder")
+        r_shoulder = self._get_point(kps, "right_shoulder")
+        
+        if not all([l_wrist, r_wrist, l_shoulder, r_shoulder]):
+            return False
+        
+        # Body midline
+        midline_x = (l_shoulder[0] + r_shoulder[0]) / 2
+        
+        # Check if wrists cross midline
+        left_crossed = l_wrist[0] > midline_x
+        right_crossed = r_wrist[0] < midline_x
+        
+        return left_crossed or right_crossed
+    
+    def _track_contact_time(self, kps: Dict, frame_idx: int) -> None:
+        """Track ground contact time for each foot."""
+        l_ankle = self._get_point(kps, "left_ankle")
+        r_ankle = self._get_point(kps, "right_ankle")
+        l_hip = self._get_point(kps, "left_hip")
+        r_hip = self._get_point(kps, "right_hip")
+        
+        if not all([l_ankle, r_ankle, l_hip, r_hip]):
+            return
+        
+        hip_y = (l_hip[1] + r_hip[1]) / 2
+        
+        # Left foot contact
+        left_on_ground = l_ankle[1] > hip_y + 50
+        if left_on_ground and self.left_contact_start is None:
+            self.left_contact_start = frame_idx
+        elif not left_on_ground and self.left_contact_start is not None:
+            contact_time = (frame_idx - self.left_contact_start) / self.fps * 1000
+            if 50 < contact_time < 500:  # Valid range
+                self.contact_times_left.append(contact_time)
+            self.left_contact_start = None
+        
+        # Right foot contact
+        right_on_ground = r_ankle[1] > hip_y + 50
+        if right_on_ground and self.right_contact_start is None:
+            self.right_contact_start = frame_idx
+        elif not right_on_ground and self.right_contact_start is not None:
+            contact_time = (frame_idx - self.right_contact_start) / self.fps * 1000
+            if 50 < contact_time < 500:
+                self.contact_times_right.append(contact_time)
+            self.right_contact_start = None
+    
     def _calculate_stats(self, knee_left, knee_right, forward_leans,
                         arm_left, arm_right, total_frames) -> RunningAnalysis:
         """Calculate final running statistics."""
@@ -343,6 +552,74 @@ class RunningAnalyzer:
         # Ground contact ratio
         stance_pct = phase_dist.get("Stance", 0) + phase_dist.get("Loading", 0) + phase_dist.get("Push-off", 0)
         
+        # =====================================================================
+        # NEW: Advanced metrics calculation
+        # =====================================================================
+        
+        # Foot strike analysis
+        avg_foot_angle = np.mean(self.foot_strike_angles) if self.foot_strike_angles else 0
+        if avg_foot_angle > 10:
+            foot_strike_type = "heel"
+            foot_strike_score = max(0, 100 - abs(avg_foot_angle) * 2)
+        elif avg_foot_angle < -5:
+            foot_strike_type = "forefoot"
+            foot_strike_score = 90  # Generally good
+        else:
+            foot_strike_type = "midfoot"
+            foot_strike_score = 100  # Optimal
+        
+        # Overstriding
+        avg_foot_ahead = np.mean(self.foot_ahead_distances) if self.foot_ahead_distances else 0
+        overstriding = avg_foot_ahead < -30  # Foot significantly ahead
+        overstriding_score = max(0, 100 + avg_foot_ahead) if avg_foot_ahead < 0 else 100
+        
+        # Hip drop
+        avg_hip_drop_left = np.mean(self.hip_drops_left) if self.hip_drops_left else 0
+        avg_hip_drop_right = np.mean(self.hip_drops_right) if self.hip_drops_right else 0
+        max_hip_drop = max(avg_hip_drop_left, avg_hip_drop_right)
+        hip_drop_score = max(0, 100 - max_hip_drop * 5)
+        
+        # Arm crossover
+        crossover_count = sum(1 for c in self.arm_crossovers if c)
+        crossover_pct = (crossover_count / len(self.arm_crossovers) * 100) if self.arm_crossovers else 0
+        arm_crossover_detected = crossover_pct > 30
+        
+        # Arm swing range
+        arm_range = 0
+        if arm_left and arm_right:
+            arm_range = (max(arm_left) - min(arm_left) + max(arm_right) - min(arm_right)) / 2
+        
+        # Contact time
+        all_contact = self.contact_times_left + self.contact_times_right
+        avg_contact_time = np.mean(all_contact) if all_contact else 0
+        left_contact = np.mean(self.contact_times_left) if self.contact_times_left else 0
+        right_contact = np.mean(self.contact_times_right) if self.contact_times_right else 0
+        
+        # Bounce score (less vertical oscillation = better efficiency)
+        bounce_score = max(0, 100 - vertical_osc * 0.5) if vertical_osc > 0 else 50
+        
+        # Overall efficiency score
+        efficiency_score = (
+            foot_strike_score * 0.2 +
+            overstriding_score * 0.2 +
+            hip_drop_score * 0.2 +
+            arm_symmetry * 0.2 +
+            bounce_score * 0.2
+        )
+        
+        # Injury risk score (lower = better)
+        injury_risk = 0
+        if overstriding:
+            injury_risk += 30
+        if max_hip_drop > 5:
+            injury_risk += 25
+        if avg_foot_angle > 15:  # Severe heel strike
+            injury_risk += 20
+        if avg_contact_time > 300:  # Long contact time
+            injury_risk += 15
+        if arm_crossover_detected:
+            injury_risk += 10
+        
         return RunningAnalysis(
             total_steps=total_steps,
             left_steps=left_steps,
@@ -356,7 +633,25 @@ class RunningAnalyzer:
             ground_contact_ratio=round(stance_pct, 1),
             steps=self.steps,
             phase_distribution=phase_dist,
-            duration_sec=round(duration, 1)
+            duration_sec=round(duration, 1),
+            # NEW metrics
+            foot_strike_type=foot_strike_type,
+            foot_strike_angle=round(avg_foot_angle, 1),
+            foot_strike_score=round(foot_strike_score, 1),
+            overstriding_detected=overstriding,
+            overstriding_score=round(overstriding_score, 1),
+            avg_foot_ahead_distance=round(avg_foot_ahead, 1),
+            hip_drop_left=round(avg_hip_drop_left, 1),
+            hip_drop_right=round(avg_hip_drop_right, 1),
+            hip_drop_score=round(hip_drop_score, 1),
+            arm_crossover_detected=arm_crossover_detected,
+            arm_swing_range=round(arm_range, 1),
+            avg_contact_time_ms=round(avg_contact_time, 1),
+            contact_time_left=round(left_contact, 1),
+            contact_time_right=round(right_contact, 1),
+            bounce_score=round(bounce_score, 1),
+            efficiency_score=round(efficiency_score, 1),
+            injury_risk_score=round(injury_risk, 1),
         )
     
     def _empty_analysis(self) -> RunningAnalysis:
