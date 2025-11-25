@@ -7,6 +7,7 @@ import streamlit as st
 import tempfile
 import shutil
 from pathlib import Path
+from datetime import datetime
 import json
 import sys
 import cv2
@@ -481,14 +482,17 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type):
                     h, w = frame.shape[:2]
                     landmarks = results.pose_landmarks.landmark
                     
+                    # All landmarks needed for running analysis including heel/toe
                     landmark_names = {
+                        0: "nose",
                         11: "left_shoulder", 12: "right_shoulder",
                         13: "left_elbow", 14: "right_elbow",
                         15: "left_wrist", 16: "right_wrist",
                         23: "left_hip", 24: "right_hip",
                         25: "left_knee", 26: "right_knee",
                         27: "left_ankle", 28: "right_ankle",
-                        0: "nose"
+                        29: "left_heel", 30: "right_heel",
+                        31: "left_toe", 32: "right_toe",
                     }
                     
                     for idx, name in landmark_names.items():
@@ -499,6 +503,10 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type):
             
             pose.close()
             progress_bar.progress(60)
+            
+            if not keypoints_list or all(not kps for kps in keypoints_list):
+                st.error("❌ Не вдалося виявити позу. Переконайтесь, що бігун добре видно на відео.")
+                return
             
             # Running analysis
             status_text.text("📊 Аналіз біомеханіки...")
@@ -554,7 +562,7 @@ def display_running_results(analysis: RunningAnalysis, ai_advice, chart_path, ru
     st.markdown("---")
     st.markdown('<div class="success-box" style="text-align: center;">🏃 Аналіз бігу завершено!</div>', unsafe_allow_html=True)
     
-    # Main metrics
+    # Main metrics row 1
     st.markdown("### 📊 Ключові метрики")
     col1, col2, col3, col4 = st.columns(4)
     
@@ -593,7 +601,90 @@ def display_running_results(analysis: RunningAnalysis, ai_advice, chart_path, ru
         </div>
         """, unsafe_allow_html=True)
     
+    # NEW: Foot Strike & Injury Prevention
+    st.markdown("### 🦶 Foot Strike & Травмопрофілактика")
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        # Foot strike type with color coding
+        fs_color = "#10b981" if analysis.foot_strike_type == "midfoot" else "#f59e0b" if analysis.foot_strike_type == "forefoot" else "#ef4444"
+        st.markdown(f"""
+        <div class="metric-item">
+            <div class="metric-value" style="color: {fs_color};">{analysis.foot_strike_type.upper()}</div>
+            <div class="metric-label">Foot Strike</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        over_color = "#10b981" if not analysis.overstriding_detected else "#ef4444"
+        over_text = "❌ ТАК" if analysis.overstriding_detected else "✅ НІ"
+        st.markdown(f"""
+        <div class="metric-item">
+            <div class="metric-value" style="color: {over_color};">{over_text}</div>
+            <div class="metric-label">Overstriding</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        hip_color = "#10b981" if analysis.hip_drop_score >= 80 else "#f59e0b" if analysis.hip_drop_score >= 60 else "#ef4444"
+        st.markdown(f"""
+        <div class="metric-item">
+            <div class="metric-value" style="color: {hip_color};">{analysis.hip_drop_score:.0f}</div>
+            <div class="metric-label">Hip Stability</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col4:
+        risk_color = "#10b981" if analysis.injury_risk_score < 30 else "#f59e0b" if analysis.injury_risk_score < 60 else "#ef4444"
+        st.markdown(f"""
+        <div class="metric-item">
+            <div class="metric-value" style="color: {risk_color};">{analysis.injury_risk_score:.0f}</div>
+            <div class="metric-label">Injury Risk</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Contact time & efficiency
+    st.markdown("### ⏱️ Contact Time & Efficiency")
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        ct_color = "#10b981" if analysis.avg_contact_time_ms < 250 else "#f59e0b"
+        st.markdown(f"""
+        <div class="metric-item">
+            <div class="metric-value" style="color: {ct_color};">{analysis.avg_contact_time_ms:.0f}</div>
+            <div class="metric-label">Contact Time (ms)</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown(f"""
+        <div class="metric-item">
+            <div class="metric-value" style="color: #8b5cf6;">{analysis.bounce_score:.0f}</div>
+            <div class="metric-label">Bounce Score</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        eff_color = "#10b981" if analysis.efficiency_score >= 80 else "#f59e0b"
+        st.markdown(f"""
+        <div class="metric-item">
+            <div class="metric-value" style="color: {eff_color};">{analysis.efficiency_score:.0f}</div>
+            <div class="metric-label">Efficiency</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col4:
+        cross_color = "#10b981" if not analysis.arm_crossover_detected else "#f59e0b"
+        cross_text = "❌ ТАК" if analysis.arm_crossover_detected else "✅ НІ"
+        st.markdown(f"""
+        <div class="metric-item">
+            <div class="metric-value" style="color: {cross_color};">{cross_text}</div>
+            <div class="metric-label">Arm Crossover</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
     # Steps
+    st.markdown("### 👟 Кроки")
     col1, col2, col3 = st.columns(3)
     with col1:
         st.metric("Всього кроків", analysis.total_steps)
