@@ -182,6 +182,9 @@ class SwimmerDetector:
             best_det["frame_path"] = frame_path
             best_det["timestamp"] = timestamp
             best_det["video_frame"] = video_frame
+            # Store all bboxes for multi-person analysis
+            best_det["all_boxes"] = [d["bbox"] for d in all_detections]
+            best_det["all_detections"] = all_detections
             results.append(best_det)
             
             # Update tracking state

@@ -9,6 +9,8 @@ Features:
 - Knee lift angle
 - Arm swing symmetry
 - Posture analysis (forward lean)
+- Multi-person support
+- Full 33-point MediaPipe skeleton
 """
 
 import cv2
@@ -16,9 +18,10 @@ import numpy as np
 import logging
 import math
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Optional, Tuple, Any, Union
 from dataclasses import dataclass, field
 from enum import Enum
+from copy import deepcopy
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +49,8 @@ class StepData:
 @dataclass 
 class RunningAnalysis:
     """Running analysis results."""
+    person_id: int = 0  # For multi-person tracking
+    
     total_steps: int = 0
     left_steps: int = 0
     right_steps: int = 0
@@ -100,18 +105,54 @@ class RunningAnalysis:
     injury_risk_score: float = 0  # 0-100, lower = better
 
 
-class RunningAnalyzer:
-    """Analyze running biomechanics from video."""
+@dataclass
+class MultiPersonRunningAnalysis:
+    """Running analysis for multiple people."""
+    person_count: int = 0
+    analyses: Dict[int, 'RunningAnalysis'] = field(default_factory=dict)  # person_id -> analysis
     
-    # MediaPipe landmark indices
+    def get_best_runner(self) -> Optional['RunningAnalysis']:
+        """Get analysis of person with most steps detected."""
+        if not self.analyses:
+            return None
+        return max(self.analyses.values(), key=lambda a: a.total_steps)
+    
+    def get_all(self) -> List['RunningAnalysis']:
+        """Get all analyses."""
+        return list(self.analyses.values())
+
+
+class RunningAnalyzer:
+    """Analyze running biomechanics from video. Supports multiple people."""
+    
+    # Full MediaPipe 33-point landmark indices
     LANDMARKS = {
+        # Face
         "nose": 0,
+        "left_eye_inner": 1,
+        "left_eye": 2,
+        "left_eye_outer": 3,
+        "right_eye_inner": 4,
+        "right_eye": 5,
+        "right_eye_outer": 6,
+        "left_ear": 7,
+        "right_ear": 8,
+        "mouth_left": 9,
+        "mouth_right": 10,
+        # Upper body
         "left_shoulder": 11,
         "right_shoulder": 12,
         "left_elbow": 13,
         "right_elbow": 14,
         "left_wrist": 15,
         "right_wrist": 16,
+        "left_pinky": 17,
+        "right_pinky": 18,
+        "left_index": 19,
+        "right_index": 20,
+        "left_thumb": 21,
+        "right_thumb": 22,
+        # Lower body
         "left_hip": 23,
         "right_hip": 24,
         "left_knee": 25,
@@ -120,17 +161,26 @@ class RunningAnalyzer:
         "right_ankle": 28,
         "left_heel": 29,
         "right_heel": 30,
-        "left_toe": 31,
-        "right_toe": 32,
+        "left_foot_index": 31,  # toe
+        "right_foot_index": 32,  # toe
     }
     
-    def __init__(self, fps: float = 30.0):
+    # Alias for compatibility
+    LANDMARKS["left_toe"] = 31
+    LANDMARKS["right_toe"] = 32
+    
+    def __init__(self, fps: float = 30.0, multi_person: bool = True):
         self.fps = fps
+        self.multi_person = multi_person
+        self._reset_tracking()
+    
+    def _reset_tracking(self):
+        """Reset all tracking variables."""
         self.steps: List[StepData] = []
         self.phases: List[RunPhase] = []
         self.hip_heights: List[float] = []
         
-        # NEW: Advanced tracking
+        # Advanced tracking
         self.foot_strike_angles: List[float] = []
         self.foot_ahead_distances: List[float] = []
         self.hip_drops_left: List[float] = []
@@ -142,16 +192,18 @@ class RunningAnalyzer:
         self.left_contact_start = None
         self.right_contact_start = None
         
-    def analyze(self, keypoints_list: List[Dict], fps: float = None) -> RunningAnalysis:
+    def analyze(self, keypoints_list: Union[List[Dict], List[List[Dict]]], fps: float = None) -> Union[RunningAnalysis, MultiPersonRunningAnalysis]:
         """
         Analyze running from keypoints sequence.
         
         Args:
-            keypoints_list: List of keypoints dicts per frame
+            keypoints_list: List of keypoints dicts per frame (single person)
+                           OR List of Lists of keypoints dicts per frame (multi-person)
             fps: Frames per second
             
         Returns:
-            RunningAnalysis with metrics
+            RunningAnalysis for single person
+            MultiPersonRunningAnalysis for multiple people
         """
         if fps:
             self.fps = fps
@@ -159,9 +211,43 @@ class RunningAnalyzer:
         if not keypoints_list or len(keypoints_list) < 10:
             return self._empty_analysis()
         
-        self.steps = []
-        self.phases = []
-        self.hip_heights = []
+        # Check if multi-person format (list of lists)
+        if keypoints_list and isinstance(keypoints_list[0], list):
+            return self._analyze_multi_person(keypoints_list)
+        
+        # Single person analysis
+        return self._analyze_single_person(keypoints_list)
+    
+    def _analyze_multi_person(self, keypoints_list: List[List[Dict]]) -> MultiPersonRunningAnalysis:
+        """Analyze multiple people running."""
+        # Reorganize data by person
+        # keypoints_list[frame_idx] = [person1_kps, person2_kps, ...]
+        
+        # Find max number of people detected in any frame
+        max_persons = max(len(frame_kps) for frame_kps in keypoints_list if frame_kps)
+        
+        result = MultiPersonRunningAnalysis(person_count=max_persons)
+        
+        for person_idx in range(max_persons):
+            # Extract keypoints for this person across all frames
+            person_keypoints = []
+            for frame_kps in keypoints_list:
+                if frame_kps and person_idx < len(frame_kps):
+                    person_keypoints.append(frame_kps[person_idx])
+                else:
+                    person_keypoints.append({})
+            
+            # Analyze this person
+            self._reset_tracking()
+            analysis = self._analyze_single_person(person_keypoints)
+            analysis.person_id = person_idx
+            result.analyses[person_idx] = analysis
+        
+        return result
+    
+    def _analyze_single_person(self, keypoints_list: List[Dict]) -> RunningAnalysis:
+        """Analyze single person running."""
+        self._reset_tracking()
         
         # Track metrics per frame
         knee_lifts_left = []

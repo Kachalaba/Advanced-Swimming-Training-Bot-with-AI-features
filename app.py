@@ -466,67 +466,152 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type):
             progress_bar.progress(30)
             st.markdown('<div class="status-success">✅ Детекція завершена</div>', unsafe_allow_html=True)
             
-            # Step 3: Biomechanics analysis with skeleton visualization
-            status_text.text("🦴 Аналіз біомеханіки...")
-            visualizer = BiomechanicsVisualizer(trajectory_length=30)
+            # Step 3: Multi-person pose detection with MediaPipe
+            status_text.text("🦴 Аналіз біомеханіки (multi-person)...")
+            import mediapipe as mp
             
             first_frame_info = frame_result["frames"][0]
             first_path = first_frame_info["path"] if isinstance(first_frame_info, dict) else first_frame_info
             first_frame = cv2.imread(first_path)
             h, w = first_frame.shape[:2]
             
-            keypoints_list = []
+            # Full 33-point landmark mapping
+            FULL_LANDMARK_MAP = {
+                0: "nose", 1: "left_eye_inner", 2: "left_eye", 3: "left_eye_outer",
+                4: "right_eye_inner", 5: "right_eye", 6: "right_eye_outer",
+                7: "left_ear", 8: "right_ear", 9: "mouth_left", 10: "mouth_right",
+                11: "left_shoulder", 12: "right_shoulder", 13: "left_elbow", 14: "right_elbow",
+                15: "left_wrist", 16: "right_wrist", 17: "left_pinky", 18: "right_pinky",
+                19: "left_index", 20: "right_index", 21: "left_thumb", 22: "right_thumb",
+                23: "left_hip", 24: "right_hip", 25: "left_knee", 26: "right_knee",
+                27: "left_ankle", 28: "right_ankle", 29: "left_heel", 30: "right_heel",
+                31: "left_toe", 32: "right_toe",
+            }
+            
+            # Initialize MediaPipe Pose
+            mp_pose = mp.solutions.pose
+            mp_drawing = mp.solutions.drawing_utils
+            pose = mp_pose.Pose(
+                static_image_mode=False,
+                model_complexity=1,
+                min_detection_confidence=0.5,
+                min_tracking_confidence=0.5
+            )
+            
+            keypoints_list = []  # List of dicts for single person OR list of lists for multi
             annotated_frames = []
             frames_with_pose = 0
+            persons_detected = set()
             
+            # Use YOLO detections for multi-person
             for i, frame_info in enumerate(frame_result["frames"]):
                 frame_path = frame_info["path"] if isinstance(frame_info, dict) else frame_info
                 frame = cv2.imread(frame_path)
                 
                 if frame is None:
-                    keypoints_list.append({})
+                    keypoints_list.append([])
                     annotated_frames.append(None)
                     continue
                 
-                bbox = None
+                annotated_frame = frame.copy()
+                frame_persons_kps = []
+                
+                # Get all person detections for this frame
                 if i < len(detection_result["detections"]):
-                    bbox = detection_result["detections"][i].get("bbox")
+                    det = detection_result["detections"][i]
+                    bboxes = det.get("all_boxes", [det.get("bbox")] if det.get("bbox") else [])
+                    
+                    for person_idx, bbox in enumerate(bboxes):
+                        if bbox is None:
+                            continue
+                        
+                        persons_detected.add(person_idx)
+                        x1, y1, x2, y2 = [int(c) for c in bbox[:4]]
+                        
+                        # Crop and analyze person
+                        person_crop = frame[max(0,y1):min(h,y2), max(0,x1):min(w,x2)]
+                        if person_crop.size == 0:
+                            continue
+                        
+                        rgb_crop = cv2.cvtColor(person_crop, cv2.COLOR_BGR2RGB)
+                        results = pose.process(rgb_crop)
+                        
+                        kps = {}
+                        if results.pose_landmarks:
+                            frames_with_pose += 1
+                            crop_h, crop_w = person_crop.shape[:2]
+                            
+                            for idx, name in FULL_LANDMARK_MAP.items():
+                                lm = results.pose_landmarks.landmark[idx]
+                                # Convert to full frame coordinates
+                                px = x1 + lm.x * crop_w
+                                py = y1 + lm.y * crop_h
+                                kps[name] = (px, py)
+                            
+                            # Draw skeleton on annotated frame
+                            mp_drawing.draw_landmarks(
+                                annotated_frame[max(0,y1):min(h,y2), max(0,x1):min(w,x2)],
+                                results.pose_landmarks,
+                                mp_pose.POSE_CONNECTIONS,
+                                mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=2, circle_radius=3),
+                                mp_drawing.DrawingSpec(color=(0, 255, 255), thickness=2)
+                            )
+                            
+                            # Draw person ID
+                            cv2.putText(annotated_frame, f"Runner #{person_idx+1}", 
+                                       (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                        
+                        frame_persons_kps.append(kps)
                 
-                # Get annotated frame with skeleton
-                annotated_frame, analysis_data = visualizer.process_frame(frame, i, bbox)
+                # If no YOLO detections, try full frame
+                if not frame_persons_kps:
+                    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    results = pose.process(rgb)
+                    
+                    if results.pose_landmarks:
+                        frames_with_pose += 1
+                        kps = {}
+                        for idx, name in FULL_LANDMARK_MAP.items():
+                            lm = results.pose_landmarks.landmark[idx]
+                            kps[name] = (lm.x * w, lm.y * h)
+                        frame_persons_kps.append(kps)
+                        
+                        mp_drawing.draw_landmarks(
+                            annotated_frame, results.pose_landmarks, mp_pose.POSE_CONNECTIONS,
+                            mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=2, circle_radius=3),
+                            mp_drawing.DrawingSpec(color=(0, 255, 255), thickness=2)
+                        )
+                
+                keypoints_list.append(frame_persons_kps)
                 annotated_frames.append(annotated_frame)
-                
-                # Extract keypoints for running analysis
-                kps = {}
-                if analysis_data.get("has_pose") and analysis_data.get("keypoints"):
-                    frames_with_pose += 1
-                    raw_kps = analysis_data.get("keypoints", {})
-                    # Convert keypoint format
-                    landmark_map = {
-                        "nose": 0, "left_shoulder": 11, "right_shoulder": 12,
-                        "left_elbow": 13, "right_elbow": 14, "left_wrist": 15, "right_wrist": 16,
-                        "left_hip": 23, "right_hip": 24, "left_knee": 25, "right_knee": 26,
-                        "left_ankle": 27, "right_ankle": 28, "left_heel": 29, "right_heel": 30,
-                        "left_toe": 31, "right_toe": 32,
-                    }
-                    for name, idx in landmark_map.items():
-                        if name in raw_kps:
-                            kps[name] = raw_kps[name]
-                        elif str(idx) in raw_kps:
-                            kps[name] = raw_kps[str(idx)]
-                
-                keypoints_list.append(kps)
                 
                 if i % 20 == 0:
                     progress_bar.progress(30 + int(25 * (i / len(frame_result["frames"]))))
             
+            pose.close()
             progress_bar.progress(55)
-            st.markdown(f'<div class="status-success">✅ Поза виявлена на {frames_with_pose}/{len(frame_result["frames"])} кадрах</div>', unsafe_allow_html=True)
             
-            # Step 4: Running-specific analysis
+            num_persons = len(persons_detected) if persons_detected else 1
+            st.markdown(f'<div class="status-success">✅ Виявлено {num_persons} бігун(ів) | Поза на {frames_with_pose} кадрах</div>', unsafe_allow_html=True)
+            
+            # Step 4: Running-specific analysis (multi-person)
             status_text.text("🏃 Аналіз техніки бігу...")
-            analyzer = RunningAnalyzer(fps=float(fps))
-            running_analysis = analyzer.analyze(keypoints_list, fps=float(fps))
+            from video_analysis.running_analyzer import RunningAnalyzer, MultiPersonRunningAnalysis
+            analyzer = RunningAnalyzer(fps=float(fps), multi_person=True)
+            
+            # Convert to format analyzer expects
+            if num_persons == 1:
+                # Single person - flatten to list of dicts
+                single_kps = [frame_kps[0] if frame_kps else {} for frame_kps in keypoints_list]
+                running_analysis = analyzer.analyze(single_kps, fps=float(fps))
+            else:
+                # Multi-person
+                running_analysis = analyzer.analyze(keypoints_list, fps=float(fps))
+                if isinstance(running_analysis, MultiPersonRunningAnalysis):
+                    # Use best runner for display, but save all
+                    main_analysis = running_analysis.get_best_runner()
+                    st.markdown(f'<div class="status-info">📊 Аналізуємо {running_analysis.person_count} бігунів</div>', unsafe_allow_html=True)
+                    running_analysis = main_analysis if main_analysis else analyzer._empty_analysis()
             
             st.markdown(f'<div class="status-success">🏃 Cadence: {running_analysis.cadence:.0f} spm | Foot Strike: {running_analysis.foot_strike_type}</div>', unsafe_allow_html=True)
             
