@@ -24,6 +24,7 @@ from video_analysis.video_overlay import VideoOverlayGenerator
 from video_analysis.swimming_pose_analyzer import SwimmingPoseAnalyzer, analyze_swimming_pose
 from video_analysis.ai_coach import AICoach, get_ai_coaching
 from video_analysis.biomechanics_visualizer import BiomechanicsVisualizer, visualize_biomechanics
+from video_analysis.exercise_analyzer import ExerciseAnalyzer, ExerciseStats, generate_exercise_chart
 
 # ============================================================================
 # PAGE CONFIG
@@ -494,6 +495,18 @@ def render_dryland_tab():
                 value=15,
                 key="gym_fps"
             )
+        
+        col4, col5 = st.columns(2)
+        with col4:
+            slow_motion = st.select_slider(
+                "🐢 Slow-motion",
+                options=[1.0, 0.75, 0.5, 0.25],
+                value=1.0,
+                format_func=lambda x: f"{x}x" if x == 1.0 else f"🐢 {x}x",
+                key="gym_slowmo"
+            )
+        with col5:
+            show_reps = st.checkbox("🔢 Показувати лічильник повторень", value=True, key="gym_reps")
     
     # Upload
     st.markdown("""
@@ -526,7 +539,7 @@ def render_dryland_tab():
         st.markdown("<br>", unsafe_allow_html=True)
         
         if st.button("🏋️ АНАЛІЗУВАТИ ВПРАВУ", type="primary", use_container_width=True, key="gym_analyze"):
-            analyze_dryland(uploaded_file, athlete_name, exercise_type, fps)
+            analyze_dryland(uploaded_file, athlete_name, exercise_type, fps, slow_motion, show_reps)
     
     # Features
     with st.expander("📊 Можливості аналізу"):
@@ -549,11 +562,11 @@ def render_dryland_tab():
             """)
 
 
-def analyze_dryland(uploaded_file, athlete_name, exercise_type, fps):
+def analyze_dryland(uploaded_file, athlete_name, exercise_type, fps, slow_motion=1.0, show_reps=True):
     """Analyze dryland/gym exercise video."""
     
     with st.spinner("🏋️ Аналізуємо вправу..."):
-        # Create persistent output directory (like swimming)
+        # Create persistent output directory
         output_dir = Path("streamlit_outputs") / f"dryland_{Path(uploaded_file.name).stem}"
         output_dir.mkdir(parents=True, exist_ok=True)
         
@@ -573,7 +586,7 @@ def analyze_dryland(uploaded_file, athlete_name, exercise_type, fps):
                 output_dir=str(output_dir / "frames"),
                 fps=float(fps),
             )
-            progress_bar.progress(20)
+            progress_bar.progress(15)
             st.markdown(f'<div class="status-success">✅ Витягнуто {frame_result["count"]} кадрів</div>', unsafe_allow_html=True)
             
             # Step 2: Detect person
@@ -584,67 +597,67 @@ def analyze_dryland(uploaded_file, athlete_name, exercise_type, fps):
                 draw_boxes=True,
                 enable_tracking=True,
             )
-            progress_bar.progress(40)
+            progress_bar.progress(30)
             st.markdown('<div class="status-success">✅ Детекція завершена</div>', unsafe_allow_html=True)
             
-            # Step 3: Generate annotated video with skeleton using BiomechanicsVisualizer
-            status_text.text("🦴 Створення відео з біомеханікою...")
-            
-            annotated_video_path = output_dir / "dryland_annotated.mp4"
+            # Step 3: First pass - collect angles for rep detection
+            status_text.text("🦴 Аналіз біомеханіки...")
             visualizer = BiomechanicsVisualizer(trajectory_length=30)
             
-            # Get first frame dimensions
             first_frame_info = frame_result["frames"][0]
             first_path = first_frame_info["path"] if isinstance(first_frame_info, dict) else first_frame_info
             first_frame = cv2.imread(first_path)
             h, w = first_frame.shape[:2]
             
-            # Create video writer with good codec
-            for codec in ["avc1", "mp4v"]:
-                fourcc = cv2.VideoWriter_fourcc(*codec)
-                video_writer = cv2.VideoWriter(str(annotated_video_path), fourcc, float(fps), (w, h))
-                if video_writer.isOpened():
-                    break
-            
             all_angles = []
             frames_with_pose = 0
             detected_movements = []
+            annotated_frames = []
             
             for i, frame_info in enumerate(frame_result["frames"]):
                 frame_path = frame_info["path"] if isinstance(frame_info, dict) else frame_info
                 frame = cv2.imread(frame_path)
                 
                 if frame is None:
+                    all_angles.append({})
+                    annotated_frames.append(None)
                     continue
                 
-                # Get bbox if available
                 bbox = None
                 if i < len(detection_result["detections"]):
                     bbox = detection_result["detections"][i].get("bbox")
                 
-                # Process frame with visualizer
                 annotated_frame, analysis = visualizer.process_frame(frame, i, bbox)
+                annotated_frames.append(annotated_frame)
                 
                 if analysis.get("has_pose"):
                     frames_with_pose += 1
-                    if analysis.get("angles"):
-                        all_angles.append(analysis["angles"])
-                        # Detect movement type based on angles
-                        movement = detect_movement_type(analysis["angles"])
-                        if movement:
-                            detected_movements.append(movement)
+                    angles = analysis.get("angles", {})
+                    all_angles.append(angles)
+                    movement = detect_movement_type(angles)
+                    if movement:
+                        detected_movements.append(movement)
+                else:
+                    all_angles.append({})
                 
-                # Write frame to video
-                video_writer.write(annotated_frame)
-                
-                # Update progress
-                if i % 10 == 0:
-                    progress = 40 + int(50 * (i / len(frame_result["frames"])))
-                    progress_bar.progress(min(90, progress))
+                if i % 20 == 0:
+                    progress_bar.progress(30 + int(25 * (i / len(frame_result["frames"]))))
             
-            video_writer.release()
+            progress_bar.progress(55)
             
-            # Determine most common movement
+            # Step 4: Analyze exercise (reps, tempo, etc.)
+            status_text.text("🔄 Підрахунок повторень...")
+            
+            exercise_analyzer = ExerciseAnalyzer(fps=float(fps))
+            exercise_stats = exercise_analyzer.analyze(all_angles, exercise_type)
+            
+            st.markdown(f'<div class="status-success">🔄 Знайдено <strong>{exercise_stats.total_reps}</strong> повторень</div>', unsafe_allow_html=True)
+            if exercise_stats.total_reps > 0:
+                st.markdown(f'<div class="status-info">⏱️ Темп: {exercise_stats.avg_tempo:.1f}с/повт | 📐 Амплітуда: {exercise_stats.avg_range_of_motion:.0f}° | 📊 Стабільність: {exercise_stats.stability_score:.0f}%</div>', unsafe_allow_html=True)
+            
+            progress_bar.progress(65)
+            
+            # Determine main movement
             if detected_movements:
                 from collections import Counter
                 movement_counts = Counter(detected_movements)
@@ -652,29 +665,63 @@ def analyze_dryland(uploaded_file, athlete_name, exercise_type, fps):
             else:
                 main_movement = exercise_type
             
-            st.markdown(f'<div class="status-success">🦴 Відео створено: {frames_with_pose}/{len(frame_result["frames"])} кадрів з позою</div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="status-info">🏋️ Визначений рух: <strong>{main_movement}</strong></div>', unsafe_allow_html=True)
+            # Step 5: Generate video with rep counter
+            status_text.text("🎬 Створення відео з ефектами...")
             
-            progress_bar.progress(95)
+            # Video FPS adjusted for slow-motion
+            video_fps = float(fps) * slow_motion
+            annotated_video_path = output_dir / "dryland_annotated.mp4"
             
-            # Step 4: AI Coach
+            for codec in ["avc1", "mp4v"]:
+                fourcc = cv2.VideoWriter_fourcc(*codec)
+                video_writer = cv2.VideoWriter(str(annotated_video_path), fourcc, video_fps, (w, h))
+                if video_writer.isOpened():
+                    break
+            
+            for i, annotated_frame in enumerate(annotated_frames):
+                if annotated_frame is None:
+                    continue
+                
+                # Draw rep counter if enabled
+                if show_reps and exercise_stats.total_reps > 0:
+                    annotated_frame = exercise_analyzer.draw_rep_counter(annotated_frame, i)
+                
+                video_writer.write(annotated_frame)
+                
+                if i % 20 == 0:
+                    progress_bar.progress(65 + int(20 * (i / len(annotated_frames))))
+            
+            video_writer.release()
+            
+            st.markdown(f'<div class="status-success">🎬 Відео створено ({slow_motion}x швидкість)</div>', unsafe_allow_html=True)
+            
+            progress_bar.progress(85)
+            
+            # Step 6: Generate chart
+            status_text.text("📊 Генерація графіків...")
+            chart_path = output_dir / "exercise_chart.png"
+            generate_exercise_chart(exercise_stats, str(chart_path))
+            
+            progress_bar.progress(90)
+            
+            # Step 7: AI Coach
             status_text.text("🤖 AI тренер аналізує...")
             
-            # Prepare pose result for AI
             pose_result = {
                 "detection_rate": frames_with_pose / len(frame_result["frames"]) if frame_result["frames"] else 0,
-                "avg_streamline": 70,  # Default
+                "avg_streamline": 70,
                 "avg_deviation": 5,
-                "frame_analyses": [{"has_pose": True, "angles": a} for a in all_angles],
+                "frame_analyses": [{"has_pose": True, "angles": a} for a in all_angles if a],
             }
             
-            # Calculate average angles
             if all_angles:
                 avg_angles = {}
-                for key in all_angles[0].keys():
-                    values = [a.get(key, 0) for a in all_angles if key in a]
-                    avg_angles[key] = sum(values) / len(values) if values else 0
-                pose_result["avg_angles"] = avg_angles
+                valid_angles = [a for a in all_angles if a]
+                if valid_angles:
+                    for key in valid_angles[0].keys():
+                        values = [a.get(key, 0) for a in valid_angles if key in a]
+                        avg_angles[key] = sum(values) / len(values) if values else 0
+                    pose_result["avg_angles"] = avg_angles
             
             ai_advice = get_ai_coaching(
                 biomechanics={"average_metrics": pose_result},
@@ -687,8 +734,8 @@ def analyze_dryland(uploaded_file, athlete_name, exercise_type, fps):
             # Display results
             display_dryland_results(
                 pose_result, detection_result, output_dir, 
-                {"main_movement": main_movement, "all_angles": all_angles},
-                annotated_video_path, ai_advice
+                {"main_movement": main_movement, "all_angles": all_angles, "exercise_stats": exercise_stats},
+                annotated_video_path, ai_advice, chart_path if chart_path.exists() else None
             )
             
         except Exception as e:
@@ -1296,10 +1343,54 @@ def display_downloads(output_dir):
     st.info(f"📁 Все файлы также сохранены в: `{output_dir}`")
 
 
-def display_dryland_results(pose_result, detection_result, output_dir, biomech_result=None, video_path=None, ai_advice=None):
+def display_dryland_results(pose_result, detection_result, output_dir, biomech_result=None, video_path=None, ai_advice=None, chart_path=None):
     """Display dryland exercise analysis results."""
     
     st.markdown('<div class="section-title">Результати аналізу</div>', unsafe_allow_html=True)
+    
+    # ========================================================================
+    # EXERCISE STATS (REPS, TEMPO, STABILITY)
+    # ========================================================================
+    exercise_stats = biomech_result.get("exercise_stats") if biomech_result else None
+    
+    if exercise_stats and exercise_stats.total_reps > 0:
+        st.markdown(f"""
+        <div style="background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
+                    border-radius: 16px; padding: 1.5rem; margin: 1rem 0;">
+            <div style="display: flex; justify-content: space-around; flex-wrap: wrap; gap: 1rem;">
+                <div style="text-align: center;">
+                    <div style="font-size: 3rem; font-weight: 800; color: #fff;">{exercise_stats.total_reps}</div>
+                    <div style="color: rgba(255,255,255,0.8); font-size: 0.9rem;">🔄 ПОВТОРЕНЬ</div>
+                </div>
+                <div style="text-align: center;">
+                    <div style="font-size: 2.5rem; font-weight: 700; color: #fbbf24;">{exercise_stats.avg_tempo:.1f}с</div>
+                    <div style="color: rgba(255,255,255,0.8); font-size: 0.9rem;">⏱️ ТЕМП</div>
+                </div>
+                <div style="text-align: center;">
+                    <div style="font-size: 2.5rem; font-weight: 700; color: #34d399;">{exercise_stats.avg_range_of_motion:.0f}°</div>
+                    <div style="color: rgba(255,255,255,0.8); font-size: 0.9rem;">📐 АМПЛІТУДА</div>
+                </div>
+                <div style="text-align: center;">
+                    <div style="font-size: 2.5rem; font-weight: 700; color: #60a5fa;">{exercise_stats.stability_score:.0f}%</div>
+                    <div style="color: rgba(255,255,255,0.8); font-size: 0.9rem;">📊 СТАБІЛЬНІСТЬ</div>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Rep details table
+        if exercise_stats.reps:
+            with st.expander("📋 Деталі по кожному повторенню"):
+                rep_data = []
+                for rep in exercise_stats.reps:
+                    rep_data.append({
+                        "№": rep.rep_number,
+                        "Тривалість (с)": f"{rep.duration_sec:.2f}",
+                        "Мін. кут (°)": f"{rep.min_angle:.0f}",
+                        "Макс. кут (°)": f"{rep.max_angle:.0f}",
+                        "Амплітуда (°)": f"{rep.range_of_motion:.0f}",
+                    })
+                st.table(rep_data)
     
     # ========================================================================
     # DETECTED MOVEMENT TYPE
@@ -1308,7 +1399,7 @@ def display_dryland_results(pose_result, detection_result, output_dir, biomech_r
         st.markdown(f"""
         <div style="background: linear-gradient(135deg, #059669 0%, #10b981 100%);
                     border-radius: 12px; padding: 1rem; margin: 1rem 0; text-align: center;">
-            <div style="font-size: 2rem;">{biomech_result["main_movement"]}</div>
+            <div style="font-size: 1.8rem;">{biomech_result["main_movement"]}</div>
             <div style="color: rgba(255,255,255,0.8); font-size: 0.9rem;">Автоматично визначений тип вправи</div>
         </div>
         """, unsafe_allow_html=True)
@@ -1329,6 +1420,13 @@ def display_dryland_results(pose_result, detection_result, output_dir, biomech_r
                 mime="video/mp4",
                 use_container_width=True,
             )
+    
+    # ========================================================================
+    # CHART
+    # ========================================================================
+    if chart_path and Path(chart_path).exists():
+        st.markdown('<div class="section-title">📊 Графіки аналізу</div>', unsafe_allow_html=True)
+        st.image(str(chart_path), use_container_width=True)
     
     # ========================================================================
     # AI COACH
