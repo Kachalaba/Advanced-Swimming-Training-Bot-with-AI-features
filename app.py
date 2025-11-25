@@ -586,7 +586,7 @@ def analyze_dryland(uploaded_file, athlete_name, exercise_type, fps):
             progress_bar.progress(50)
             st.markdown('<div class="status-success">✅ Детекція завершена</div>', unsafe_allow_html=True)
             
-            # Step 3: Swimming pose analysis (works for dryland too!)
+            # Step 3: Pose analysis
             status_text.text("🔬 Аналіз пози...")
             pose_dir = output_dir / "pose_analysis"
             pose_result = analyze_swimming_pose(
@@ -594,15 +594,48 @@ def analyze_dryland(uploaded_file, athlete_name, exercise_type, fps):
                 detection_result["detections"],
                 output_dir=str(pose_dir),
             )
-            progress_bar.progress(80)
-            st.markdown(f'<div class="status-success">✅ Поза: {pose_result["detection_rate"]*100:.0f}% кадрів, streamline {pose_result["avg_streamline"]:.0f}/100</div>', unsafe_allow_html=True)
+            progress_bar.progress(60)
+            st.markdown(f'<div class="status-success">✅ Поза: {pose_result["detection_rate"]*100:.0f}% кадрів</div>', unsafe_allow_html=True)
             
-            # Step 4: Done
+            # Step 4: Biomechanics visualization (skeleton + angles)
+            status_text.text("🦴 Візуалізація біомеханіки...")
+            biomech_dir = output_dir / "biomech_viz"
+            biomech_result = visualize_biomechanics(
+                frame_result["frames"],
+                detection_result["detections"],
+                output_dir=str(biomech_dir),
+            )
+            progress_bar.progress(75)
+            st.markdown(f'<div class="status-success">🦴 Скелет: {biomech_result["with_pose"]}/{biomech_result["total"]} кадрів</div>', unsafe_allow_html=True)
+            
+            # Step 5: Generate annotated video
+            status_text.text("🎬 Створення відео з ефектами...")
+            annotated_video_path = output_dir / "dryland_annotated.mp4"
+            
+            # Get annotated frames from biomech_viz
+            viz_frames = sorted(biomech_dir.glob("biomech_*.jpg"))
+            
+            if viz_frames:
+                # Create video from annotated frames
+                first_frame = cv2.imread(str(viz_frames[0]))
+                h, w = first_frame.shape[:2]
+                
+                fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+                video_writer = cv2.VideoWriter(str(annotated_video_path), fourcc, float(fps), (w, h))
+                
+                for frame_path in viz_frames:
+                    frame = cv2.imread(str(frame_path))
+                    if frame is not None:
+                        video_writer.write(frame)
+                
+                video_writer.release()
+                st.markdown('<div class="status-success">🎬 Відео з ефектами створено!</div>', unsafe_allow_html=True)
+            
             progress_bar.progress(100)
             status_text.text("✅ Аналіз завершено!")
             
             # Display results
-            display_dryland_results(pose_result, detection_result, output_dir)
+            display_dryland_results(pose_result, detection_result, output_dir, biomech_result, annotated_video_path)
             
         except Exception as e:
             st.error(f"❌ Помилка: {str(e)}")
@@ -1180,10 +1213,28 @@ def display_downloads(output_dir):
     st.info(f"📁 Все файлы также сохранены в: `{output_dir}`")
 
 
-def display_dryland_results(pose_result, detection_result, output_dir):
+def display_dryland_results(pose_result, detection_result, output_dir, biomech_result=None, video_path=None):
     """Display dryland exercise analysis results."""
     
     st.markdown('<div class="section-title">Результати аналізу</div>', unsafe_allow_html=True)
+    
+    # ========================================================================
+    # VIDEO WITH EFFECTS
+    # ========================================================================
+    if video_path and Path(video_path).exists():
+        st.markdown('<div class="section-title">🎬 Відео з ефектами</div>', unsafe_allow_html=True)
+        st.video(str(video_path))
+        
+        # Download button
+        with open(video_path, "rb") as f:
+            st.download_button(
+                "📥 Завантажити відео",
+                f,
+                file_name="dryland_biomechanics.mp4",
+                mime="video/mp4",
+                use_container_width=True,
+            )
+        st.markdown("---")
     
     # Main metrics
     col1, col2, col3, col4 = st.columns(4)
