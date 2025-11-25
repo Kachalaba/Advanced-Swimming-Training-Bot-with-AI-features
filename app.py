@@ -429,126 +429,184 @@ def render_running_tab():
 
 
 def analyze_running(uploaded_file, athlete_name, fps, run_type):
-    """Analyze running video."""
+    """Analyze running video - full pipeline like dryland."""
     
     with st.spinner("🏃 Аналізуємо біг..."):
-        output_dir = Path("streamlit_outputs") / f"running_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        # Create persistent output directory
+        output_dir = Path("streamlit_outputs") / f"running_{Path(uploaded_file.name).stem}"
         output_dir.mkdir(parents=True, exist_ok=True)
         
-        # Save video
-        video_path = output_dir / uploaded_file.name
-        with open(video_path, "wb") as f:
-            f.write(uploaded_file.read())
-        
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        
         try:
-            # Extract frames
-            status_text.text("📷 Витягуємо кадри...")
-            from video_analysis.frame_extractor import extract_frames_from_video
+            # Save uploaded file
+            video_path = output_dir / uploaded_file.name
+            with open(video_path, "wb") as f:
+                f.write(uploaded_file.read())
             
-            frames_dir = output_dir / "frames"
-            frame_result = extract_frames_from_video(str(video_path), str(frames_dir), fps=min(fps, 30))
-            progress_bar.progress(20)
+            progress_bar = st.progress(0)
+            status_text = st.empty()
             
-            # Pose detection
-            status_text.text("🦴 Аналіз пози...")
-            import mediapipe as mp
-            
-            mp_pose = mp.solutions.pose
-            pose = mp_pose.Pose(
-                static_image_mode=False,
-                model_complexity=1,
-                min_detection_confidence=0.5
+            # Step 1: Extract frames
+            status_text.text("🎬 Витягуємо кадри...")
+            frame_result = extract_frames_from_video(
+                str(video_path),
+                output_dir=str(output_dir / "frames"),
+                fps=float(fps),
             )
+            progress_bar.progress(15)
+            st.markdown(f'<div class="status-success">✅ Витягнуто {frame_result["count"]} кадрів</div>', unsafe_allow_html=True)
+            
+            # Step 2: Detect person
+            status_text.text("🎯 Детекція бігуна...")
+            detection_result = detect_swimmer_in_frames(
+                frame_result["frames"],
+                output_dir=str(output_dir / "detections"),
+                draw_boxes=True,
+                enable_tracking=True,
+            )
+            progress_bar.progress(30)
+            st.markdown('<div class="status-success">✅ Детекція завершена</div>', unsafe_allow_html=True)
+            
+            # Step 3: Biomechanics analysis with skeleton visualization
+            status_text.text("🦴 Аналіз біомеханіки...")
+            visualizer = BiomechanicsVisualizer(trajectory_length=30)
+            
+            first_frame_info = frame_result["frames"][0]
+            first_path = first_frame_info["path"] if isinstance(first_frame_info, dict) else first_frame_info
+            first_frame = cv2.imread(first_path)
+            h, w = first_frame.shape[:2]
             
             keypoints_list = []
-            for frame_info in frame_result["frames"]:
-                frame_path = frame_info.get("video_frame") or frame_info.get("path")
-                if not frame_path:
-                    continue
-                    
-                frame = cv2.imread(str(frame_path))
+            annotated_frames = []
+            frames_with_pose = 0
+            
+            for i, frame_info in enumerate(frame_result["frames"]):
+                frame_path = frame_info["path"] if isinstance(frame_info, dict) else frame_info
+                frame = cv2.imread(frame_path)
+                
                 if frame is None:
                     keypoints_list.append({})
+                    annotated_frames.append(None)
                     continue
                 
-                rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                results = pose.process(rgb)
+                bbox = None
+                if i < len(detection_result["detections"]):
+                    bbox = detection_result["detections"][i].get("bbox")
                 
+                # Get annotated frame with skeleton
+                annotated_frame, analysis_data = visualizer.process_frame(frame, i, bbox)
+                annotated_frames.append(annotated_frame)
+                
+                # Extract keypoints for running analysis
                 kps = {}
-                if results.pose_landmarks:
-                    h, w = frame.shape[:2]
-                    landmarks = results.pose_landmarks.landmark
-                    
-                    # All landmarks needed for running analysis including heel/toe
-                    landmark_names = {
-                        0: "nose",
-                        11: "left_shoulder", 12: "right_shoulder",
-                        13: "left_elbow", 14: "right_elbow",
-                        15: "left_wrist", 16: "right_wrist",
-                        23: "left_hip", 24: "right_hip",
-                        25: "left_knee", 26: "right_knee",
-                        27: "left_ankle", 28: "right_ankle",
-                        29: "left_heel", 30: "right_heel",
-                        31: "left_toe", 32: "right_toe",
+                if analysis_data.get("has_pose") and analysis_data.get("keypoints"):
+                    frames_with_pose += 1
+                    raw_kps = analysis_data.get("keypoints", {})
+                    # Convert keypoint format
+                    landmark_map = {
+                        "nose": 0, "left_shoulder": 11, "right_shoulder": 12,
+                        "left_elbow": 13, "right_elbow": 14, "left_wrist": 15, "right_wrist": 16,
+                        "left_hip": 23, "right_hip": 24, "left_knee": 25, "right_knee": 26,
+                        "left_ankle": 27, "right_ankle": 28, "left_heel": 29, "right_heel": 30,
+                        "left_toe": 31, "right_toe": 32,
                     }
-                    
-                    for idx, name in landmark_names.items():
-                        lm = landmarks[idx]
-                        kps[name] = (lm.x * w, lm.y * h)
+                    for name, idx in landmark_map.items():
+                        if name in raw_kps:
+                            kps[name] = raw_kps[name]
+                        elif str(idx) in raw_kps:
+                            kps[name] = raw_kps[str(idx)]
                 
                 keypoints_list.append(kps)
+                
+                if i % 20 == 0:
+                    progress_bar.progress(30 + int(25 * (i / len(frame_result["frames"]))))
             
-            pose.close()
-            progress_bar.progress(60)
+            progress_bar.progress(55)
+            st.markdown(f'<div class="status-success">✅ Поза виявлена на {frames_with_pose}/{len(frame_result["frames"])} кадрах</div>', unsafe_allow_html=True)
             
-            if not keypoints_list or all(not kps for kps in keypoints_list):
-                st.error("❌ Не вдалося виявити позу. Переконайтесь, що бігун добре видно на відео.")
-                return
-            
-            # Running analysis
-            status_text.text("📊 Аналіз біомеханіки...")
+            # Step 4: Running-specific analysis
+            status_text.text("🏃 Аналіз техніки бігу...")
             analyzer = RunningAnalyzer(fps=float(fps))
-            analysis = analyzer.analyze(keypoints_list, fps=float(fps))
+            running_analysis = analyzer.analyze(keypoints_list, fps=float(fps))
+            
+            st.markdown(f'<div class="status-success">🏃 Cadence: {running_analysis.cadence:.0f} spm | Foot Strike: {running_analysis.foot_strike_type}</div>', unsafe_allow_html=True)
+            
+            progress_bar.progress(65)
+            
+            # Step 5: Generate video with skeleton
+            status_text.text("🎬 Створення відео зі скелетом...")
+            
+            annotated_video_path = output_dir / "running_annotated.mp4"
+            
+            for codec in ["avc1", "mp4v"]:
+                fourcc = cv2.VideoWriter_fourcc(*codec)
+                video_writer = cv2.VideoWriter(str(annotated_video_path), fourcc, float(fps), (w, h))
+                if video_writer.isOpened():
+                    break
+            
+            for i, annotated_frame in enumerate(annotated_frames):
+                if annotated_frame is None:
+                    continue
+                
+                # Add running metrics overlay
+                cv2.putText(annotated_frame, f"Cadence: {running_analysis.cadence:.0f} spm", 
+                           (10, h - 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+                cv2.putText(annotated_frame, f"Foot Strike: {running_analysis.foot_strike_type}", 
+                           (10, h - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+                
+                video_writer.write(annotated_frame)
+                
+                if i % 20 == 0:
+                    progress_bar.progress(65 + int(15 * (i / len(annotated_frames))))
+            
+            video_writer.release()
+            st.markdown('<div class="status-success">🎬 Відео зі скелетом створено</div>', unsafe_allow_html=True)
+            
             progress_bar.progress(80)
             
-            # Generate chart
+            # Step 6: Generate chart
+            status_text.text("📊 Генерація графіків...")
             chart_path = output_dir / "running_chart.png"
-            generate_running_chart(analysis, str(chart_path))
+            generate_running_chart(running_analysis, str(chart_path))
+            
             progress_bar.progress(90)
             
-            # AI coaching
-            status_text.text("🤖 AI рекомендації...")
-            from video_analysis.ai_coach import get_ai_coaching
+            # Step 7: AI Coach
+            status_text.text("🤖 AI тренер аналізує...")
             ai_advice = get_ai_coaching(
                 biomechanics={"running": {
-                    "cadence": analysis.cadence,
-                    "knee_lift": analysis.avg_knee_lift,
-                    "forward_lean": analysis.forward_lean,
-                    "arm_symmetry": analysis.arm_symmetry
+                    "cadence": running_analysis.cadence,
+                    "knee_lift": running_analysis.avg_knee_lift,
+                    "forward_lean": running_analysis.forward_lean,
+                    "arm_symmetry": running_analysis.arm_symmetry,
+                    "foot_strike": running_analysis.foot_strike_type,
+                    "injury_risk": running_analysis.injury_risk_score
                 }},
-                athlete_name=athlete_name
+                athlete_name=athlete_name,
             )
             
             progress_bar.progress(100)
             status_text.text("✅ Аналіз завершено!")
             
             # Display results
-            display_running_results(analysis, ai_advice, chart_path, run_type)
+            display_running_results(running_analysis, ai_advice, chart_path, run_type, annotated_video_path)
             
-            # Save to DB
+            # Save to database
             try:
                 session_id = save_analysis_to_db(
                     athlete_name=athlete_name,
                     session_type="running",
-                    analysis={"cadence": analysis.cadence, "knee_lift": analysis.avg_knee_lift},
-                    ai_advice=ai_advice
+                    analysis={
+                        "cadence": running_analysis.cadence,
+                        "foot_strike": running_analysis.foot_strike_type,
+                        "efficiency": running_analysis.efficiency_score,
+                        "injury_risk": running_analysis.injury_risk_score
+                    },
+                    ai_advice=ai_advice,
+                    video_path=str(video_path)
                 )
-                st.success(f"💾 Збережено в БД (сесія #{session_id})")
-            except Exception as e:
-                st.warning(f"⚠️ Не вдалося зберегти: {e}")
+                st.success(f"💾 Результати збережено в базу даних (сесія #{session_id})")
+            except Exception as db_error:
+                st.warning(f"⚠️ Не вдалося зберегти в БД: {db_error}")
                 
         except Exception as e:
             st.error(f"❌ Помилка: {e}")
@@ -556,11 +614,16 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type):
             st.code(traceback.format_exc())
 
 
-def display_running_results(analysis: RunningAnalysis, ai_advice, chart_path, run_type):
+def display_running_results(analysis: RunningAnalysis, ai_advice, chart_path, run_type, annotated_video_path=None):
     """Display running analysis results."""
     
     st.markdown("---")
     st.markdown('<div class="success-box" style="text-align: center;">🏃 Аналіз бігу завершено!</div>', unsafe_allow_html=True)
+    
+    # Show annotated video with skeleton
+    if annotated_video_path and Path(annotated_video_path).exists():
+        st.markdown("### 🎬 Відео зі скелетом")
+        st.video(str(annotated_video_path))
     
     # Main metrics row 1
     st.markdown("### 📊 Ключові метрики")
@@ -753,117 +816,184 @@ def render_cycling_tab():
 
 
 def analyze_cycling(uploaded_file, athlete_name, fps, bike_type):
-    """Analyze cycling video."""
+    """Analyze cycling video - full pipeline like dryland."""
     
     with st.spinner("🚴 Аналізуємо велосипед..."):
-        output_dir = Path("streamlit_outputs") / f"cycling_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        # Create persistent output directory
+        output_dir = Path("streamlit_outputs") / f"cycling_{Path(uploaded_file.name).stem}"
         output_dir.mkdir(parents=True, exist_ok=True)
         
-        video_path = output_dir / uploaded_file.name
-        with open(video_path, "wb") as f:
-            f.write(uploaded_file.read())
-        
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        
         try:
-            # Extract frames
-            status_text.text("📷 Витягуємо кадри...")
-            from video_analysis.frame_extractor import extract_frames_from_video
+            # Save uploaded file
+            video_path = output_dir / uploaded_file.name
+            with open(video_path, "wb") as f:
+                f.write(uploaded_file.read())
             
-            frames_dir = output_dir / "frames"
-            frame_result = extract_frames_from_video(str(video_path), str(frames_dir), fps=min(fps, 30))
-            progress_bar.progress(20)
+            progress_bar = st.progress(0)
+            status_text = st.empty()
             
-            # Pose detection
-            status_text.text("🦴 Аналіз пози...")
-            import mediapipe as mp
-            
-            mp_pose = mp.solutions.pose
-            pose = mp_pose.Pose(
-                static_image_mode=False,
-                model_complexity=1,
-                min_detection_confidence=0.5
+            # Step 1: Extract frames
+            status_text.text("🎬 Витягуємо кадри...")
+            frame_result = extract_frames_from_video(
+                str(video_path),
+                output_dir=str(output_dir / "frames"),
+                fps=float(fps),
             )
+            progress_bar.progress(15)
+            st.markdown(f'<div class="status-success">✅ Витягнуто {frame_result["count"]} кадрів</div>', unsafe_allow_html=True)
+            
+            # Step 2: Detect person
+            status_text.text("🎯 Детекція велосипедиста...")
+            detection_result = detect_swimmer_in_frames(
+                frame_result["frames"],
+                output_dir=str(output_dir / "detections"),
+                draw_boxes=True,
+                enable_tracking=True,
+            )
+            progress_bar.progress(30)
+            st.markdown('<div class="status-success">✅ Детекція завершена</div>', unsafe_allow_html=True)
+            
+            # Step 3: Biomechanics analysis with skeleton visualization
+            status_text.text("🦴 Аналіз біомеханіки...")
+            visualizer = BiomechanicsVisualizer(trajectory_length=30)
+            
+            first_frame_info = frame_result["frames"][0]
+            first_path = first_frame_info["path"] if isinstance(first_frame_info, dict) else first_frame_info
+            first_frame = cv2.imread(first_path)
+            h, w = first_frame.shape[:2]
             
             keypoints_list = []
-            for frame_info in frame_result["frames"]:
-                frame_path = frame_info.get("video_frame") or frame_info.get("path")
-                if not frame_path:
-                    continue
-                    
-                frame = cv2.imread(str(frame_path))
+            annotated_frames = []
+            frames_with_pose = 0
+            
+            for i, frame_info in enumerate(frame_result["frames"]):
+                frame_path = frame_info["path"] if isinstance(frame_info, dict) else frame_info
+                frame = cv2.imread(frame_path)
+                
                 if frame is None:
                     keypoints_list.append({})
+                    annotated_frames.append(None)
                     continue
                 
-                rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                results = pose.process(rgb)
+                bbox = None
+                if i < len(detection_result["detections"]):
+                    bbox = detection_result["detections"][i].get("bbox")
                 
+                # Get annotated frame with skeleton
+                annotated_frame, analysis_data = visualizer.process_frame(frame, i, bbox)
+                annotated_frames.append(annotated_frame)
+                
+                # Extract keypoints for cycling analysis
                 kps = {}
-                if results.pose_landmarks:
-                    h, w = frame.shape[:2]
-                    landmarks = results.pose_landmarks.landmark
-                    
-                    landmark_names = {
-                        11: "left_shoulder", 12: "right_shoulder",
-                        13: "left_elbow", 14: "right_elbow",
-                        15: "left_wrist", 16: "right_wrist",
-                        23: "left_hip", 24: "right_hip",
-                        25: "left_knee", 26: "right_knee",
-                        27: "left_ankle", 28: "right_ankle",
+                if analysis_data.get("has_pose") and analysis_data.get("keypoints"):
+                    frames_with_pose += 1
+                    raw_kps = analysis_data.get("keypoints", {})
+                    landmark_map = {
+                        "nose": 0, "left_shoulder": 11, "right_shoulder": 12,
+                        "left_elbow": 13, "right_elbow": 14, "left_wrist": 15, "right_wrist": 16,
+                        "left_hip": 23, "right_hip": 24, "left_knee": 25, "right_knee": 26,
+                        "left_ankle": 27, "right_ankle": 28,
                     }
-                    
-                    for idx, name in landmark_names.items():
-                        lm = landmarks[idx]
-                        kps[name] = (lm.x * w, lm.y * h)
+                    for name, idx in landmark_map.items():
+                        if name in raw_kps:
+                            kps[name] = raw_kps[name]
+                        elif str(idx) in raw_kps:
+                            kps[name] = raw_kps[str(idx)]
                 
                 keypoints_list.append(kps)
+                
+                if i % 20 == 0:
+                    progress_bar.progress(30 + int(25 * (i / len(frame_result["frames"]))))
             
-            pose.close()
-            progress_bar.progress(60)
+            progress_bar.progress(55)
+            st.markdown(f'<div class="status-success">✅ Поза виявлена на {frames_with_pose}/{len(frame_result["frames"])} кадрах</div>', unsafe_allow_html=True)
             
-            # Cycling analysis
-            status_text.text("📊 Аналіз біомеханіки...")
+            # Step 4: Cycling-specific analysis
+            status_text.text("🚴 Аналіз техніки педалювання...")
             analyzer = CyclingAnalyzer(fps=float(fps))
-            analysis = analyzer.analyze(keypoints_list, fps=float(fps))
+            cycling_analysis = analyzer.analyze(keypoints_list, fps=float(fps))
+            
+            st.markdown(f'<div class="status-success">🚴 Cadence: {cycling_analysis.cadence:.0f} RPM | Bike Fit: {cycling_analysis.bike_fit_score:.0f}</div>', unsafe_allow_html=True)
+            
+            progress_bar.progress(65)
+            
+            # Step 5: Generate video with skeleton
+            status_text.text("🎬 Створення відео зі скелетом...")
+            
+            annotated_video_path = output_dir / "cycling_annotated.mp4"
+            
+            for codec in ["avc1", "mp4v"]:
+                fourcc = cv2.VideoWriter_fourcc(*codec)
+                video_writer = cv2.VideoWriter(str(annotated_video_path), fourcc, float(fps), (w, h))
+                if video_writer.isOpened():
+                    break
+            
+            for i, annotated_frame in enumerate(annotated_frames):
+                if annotated_frame is None:
+                    continue
+                
+                # Add cycling metrics overlay
+                cv2.putText(annotated_frame, f"Cadence: {cycling_analysis.cadence:.0f} RPM", 
+                           (10, h - 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 165, 0), 2)
+                cv2.putText(annotated_frame, f"Knee Range: {cycling_analysis.knee_range:.0f} deg", 
+                           (10, h - 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 165, 0), 2)
+                cv2.putText(annotated_frame, f"Bike Fit: {cycling_analysis.bike_fit_score:.0f}/100", 
+                           (10, h - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 165, 0), 2)
+                
+                video_writer.write(annotated_frame)
+                
+                if i % 20 == 0:
+                    progress_bar.progress(65 + int(15 * (i / len(annotated_frames))))
+            
+            video_writer.release()
+            st.markdown('<div class="status-success">🎬 Відео зі скелетом створено</div>', unsafe_allow_html=True)
+            
             progress_bar.progress(80)
             
-            # Generate chart
+            # Step 6: Generate chart
+            status_text.text("📊 Генерація графіків...")
             chart_path = output_dir / "cycling_chart.png"
-            generate_cycling_chart(analysis, str(chart_path))
+            generate_cycling_chart(cycling_analysis, str(chart_path))
+            
             progress_bar.progress(90)
             
-            # AI coaching
-            status_text.text("🤖 AI рекомендації...")
-            from video_analysis.ai_coach import get_ai_coaching
+            # Step 7: AI Coach
+            status_text.text("🤖 AI тренер аналізує...")
             ai_advice = get_ai_coaching(
                 biomechanics={"cycling": {
-                    "cadence": analysis.cadence,
-                    "knee_range": analysis.knee_range,
-                    "hip_angle": analysis.avg_hip_angle,
-                    "stability": analysis.upper_body_stability
+                    "cadence": cycling_analysis.cadence,
+                    "knee_range": cycling_analysis.knee_range,
+                    "hip_angle": cycling_analysis.avg_hip_angle,
+                    "stability": cycling_analysis.upper_body_stability,
+                    "bike_fit": cycling_analysis.bike_fit_score,
+                    "pedal_smoothness": cycling_analysis.pedal_smoothness
                 }},
-                athlete_name=athlete_name
+                athlete_name=athlete_name,
             )
             
             progress_bar.progress(100)
             status_text.text("✅ Аналіз завершено!")
             
             # Display results
-            display_cycling_results(analysis, ai_advice, chart_path, bike_type)
+            display_cycling_results(cycling_analysis, ai_advice, chart_path, bike_type, annotated_video_path)
             
-            # Save to DB
+            # Save to database
             try:
                 session_id = save_analysis_to_db(
                     athlete_name=athlete_name,
                     session_type="cycling",
-                    analysis={"cadence": analysis.cadence, "knee_range": analysis.knee_range},
-                    ai_advice=ai_advice
+                    analysis={
+                        "cadence": cycling_analysis.cadence,
+                        "knee_range": cycling_analysis.knee_range,
+                        "bike_fit": cycling_analysis.bike_fit_score,
+                        "efficiency": cycling_analysis.efficiency_score
+                    },
+                    ai_advice=ai_advice,
+                    video_path=str(video_path)
                 )
-                st.success(f"💾 Збережено в БД (сесія #{session_id})")
-            except Exception as e:
-                st.warning(f"⚠️ Не вдалося зберегти: {e}")
+                st.success(f"💾 Результати збережено в базу даних (сесія #{session_id})")
+            except Exception as db_error:
+                st.warning(f"⚠️ Не вдалося зберегти в БД: {db_error}")
                 
         except Exception as e:
             st.error(f"❌ Помилка: {e}")
@@ -871,11 +1001,16 @@ def analyze_cycling(uploaded_file, athlete_name, fps, bike_type):
             st.code(traceback.format_exc())
 
 
-def display_cycling_results(analysis: CyclingAnalysis, ai_advice, chart_path, bike_type):
+def display_cycling_results(analysis: CyclingAnalysis, ai_advice, chart_path, bike_type, annotated_video_path=None):
     """Display cycling analysis results."""
     
     st.markdown("---")
     st.markdown('<div class="success-box" style="text-align: center;">🚴 Аналіз велосипеда завершено!</div>', unsafe_allow_html=True)
+    
+    # Show annotated video with skeleton
+    if annotated_video_path and Path(annotated_video_path).exists():
+        st.markdown("### 🎬 Відео зі скелетом")
+        st.video(str(annotated_video_path))
     
     # Main metrics
     st.markdown("### 📊 Ключові метрики")
@@ -915,17 +1050,83 @@ def display_cycling_results(analysis: CyclingAnalysis, ai_advice, chart_path, bi
         </div>
         """, unsafe_allow_html=True)
     
+    # NEW: Advanced metrics
+    st.markdown("### ⚙️ Техніка педалювання")
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        ank_color = "#10b981" if analysis.ankling_score >= 80 else "#f59e0b"
+        st.markdown(f"""
+        <div class="metric-item">
+            <div class="metric-value" style="color: {ank_color};">{analysis.ankling_score:.0f}</div>
+            <div class="metric-label">Ankling Score</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        ds_color = "#10b981" if analysis.dead_spot_score >= 80 else "#f59e0b"
+        st.markdown(f"""
+        <div class="metric-item">
+            <div class="metric-value" style="color: {ds_color};">{analysis.dead_spot_score:.0f}</div>
+            <div class="metric-label">Dead Spot Score</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        smooth_color = "#10b981" if analysis.pedal_smoothness >= 80 else "#f59e0b"
+        st.markdown(f"""
+        <div class="metric-item">
+            <div class="metric-value" style="color: {smooth_color};">{analysis.pedal_smoothness:.0f}</div>
+            <div class="metric-label">Smoothness</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col4:
+        rock_color = "#10b981" if not analysis.rock_detected else "#ef4444"
+        rock_text = "❌ ТАК" if analysis.rock_detected else "✅ НІ"
+        st.markdown(f"""
+        <div class="metric-item">
+            <div class="metric-value" style="color: {rock_color};">{rock_text}</div>
+            <div class="metric-label">Rock/Sway</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
     # Bike fit scores
     st.markdown("### 🔧 Bike Fit")
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric("Saddle Score", f"{analysis.saddle_height_score:.0f}/100")
+        saddle_color = "#10b981" if analysis.saddle_height_score >= 80 else "#f59e0b"
+        st.markdown(f"""
+        <div class="metric-item">
+            <div class="metric-value" style="color: {saddle_color};">{analysis.saddle_height_score:.0f}</div>
+            <div class="metric-label">Saddle Height</div>
+        </div>
+        """, unsafe_allow_html=True)
     with col2:
-        st.metric("Aero Score", f"{analysis.aero_score:.0f}/100")
+        aero_color = "#10b981" if analysis.aero_score >= 80 else "#f59e0b"
+        st.markdown(f"""
+        <div class="metric-item">
+            <div class="metric-value" style="color: {aero_color};">{analysis.aero_score:.0f}</div>
+            <div class="metric-label">Aero Score</div>
+        </div>
+        """, unsafe_allow_html=True)
     with col3:
+        fit_color = "#10b981" if analysis.bike_fit_score >= 80 else "#f59e0b"
+        st.markdown(f"""
+        <div class="metric-item">
+            <div class="metric-value" style="color: {fit_color};">{analysis.bike_fit_score:.0f}</div>
+            <div class="metric-label">Overall Fit</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with col4:
         balance_delta = abs(analysis.left_right_balance - 50)
-        st.metric("L/R Balance", f"{analysis.left_right_balance:.0f}%", 
-                 delta=f"{balance_delta:.0f}% від ідеалу" if balance_delta > 5 else "Баланс ОК")
+        balance_color = "#10b981" if balance_delta < 5 else "#f59e0b"
+        st.markdown(f"""
+        <div class="metric-item">
+            <div class="metric-value" style="color: {balance_color};">{analysis.left_right_balance:.0f}%</div>
+            <div class="metric-label">L/R Balance</div>
+        </div>
+        """, unsafe_allow_html=True)
     
     # Chart
     if chart_path.exists():
