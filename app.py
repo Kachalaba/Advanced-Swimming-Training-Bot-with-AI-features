@@ -496,17 +496,13 @@ def render_dryland_tab():
                 key="gym_fps"
             )
         
-        col4, col5 = st.columns(2)
-        with col4:
-            slow_motion = st.select_slider(
-                "🐢 Slow-motion",
-                options=[1.0, 0.75, 0.5, 0.25],
-                value=1.0,
-                format_func=lambda x: f"{x}x" if x == 1.0 else f"🐢 {x}x",
-                key="gym_slowmo"
-            )
-        with col5:
-            show_reps = st.checkbox("🔢 Показувати лічильник повторень", value=True, key="gym_reps")
+        slow_motion = st.select_slider(
+            "🐢 Slow-motion",
+            options=[1.0, 0.75, 0.5, 0.25],
+            value=1.0,
+            format_func=lambda x: f"{x}x" if x == 1.0 else f"🐢 {x}x",
+            key="gym_slowmo"
+        )
     
     # Upload
     st.markdown("""
@@ -539,7 +535,7 @@ def render_dryland_tab():
         st.markdown("<br>", unsafe_allow_html=True)
         
         if st.button("🏋️ АНАЛІЗУВАТИ ВПРАВУ", type="primary", use_container_width=True, key="gym_analyze"):
-            analyze_dryland(uploaded_file, athlete_name, exercise_type, fps, slow_motion, show_reps)
+            analyze_dryland(uploaded_file, athlete_name, exercise_type, fps, slow_motion)
     
     # Features
     with st.expander("📊 Можливості аналізу"):
@@ -562,7 +558,7 @@ def render_dryland_tab():
             """)
 
 
-def analyze_dryland(uploaded_file, athlete_name, exercise_type, fps, slow_motion=1.0, show_reps=True):
+def analyze_dryland(uploaded_file, athlete_name, exercise_type, fps, slow_motion=1.0):
     """Analyze dryland/gym exercise video."""
     
     with st.spinner("🏋️ Аналізуємо вправу..."):
@@ -681,10 +677,6 @@ def analyze_dryland(uploaded_file, athlete_name, exercise_type, fps, slow_motion
             for i, annotated_frame in enumerate(annotated_frames):
                 if annotated_frame is None:
                     continue
-                
-                # Draw rep counter if enabled
-                if show_reps and exercise_stats.total_reps > 0:
-                    annotated_frame = exercise_analyzer.draw_rep_counter(annotated_frame, i)
                 
                 video_writer.write(annotated_frame)
                 
