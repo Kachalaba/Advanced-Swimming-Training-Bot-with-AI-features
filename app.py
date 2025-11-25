@@ -35,6 +35,8 @@ from video_analysis.video_tools import (
     create_side_by_side, extract_highlight, find_highlights,
     create_zoom_video, create_tracked_zoom, get_video_info
 )
+from video_analysis.running_analyzer import RunningAnalyzer, RunningAnalysis, generate_running_chart
+from video_analysis.cycling_analyzer import CyclingAnalyzer, CyclingAnalysis, generate_cycling_chart
 
 # ============================================================================
 # PAGE CONFIG
@@ -330,8 +332,10 @@ def main():
     # ========================================================================
     # MAIN TABS
     # ========================================================================
-    tab_swimming, tab_dryland, tab_history, tab_ai, tab_tools = st.tabs([
+    tab_swimming, tab_running, tab_cycling, tab_dryland, tab_history, tab_ai, tab_tools = st.tabs([
         "🏊 ПЛАВАННЯ",
+        "🏃 БІГ",
+        "🚴 ВЕЛОСИПЕД",
         "🏋️ СУХОДІЛ",
         "📊 ІСТОРІЯ",
         "🤖 AI АСИСТЕНТ",
@@ -345,28 +349,508 @@ def main():
         render_swimming_tab()
     
     # ========================================================================
-    # TAB 2: DRYLAND
+    # TAB 2: RUNNING
+    # ========================================================================
+    with tab_running:
+        render_running_tab()
+    
+    # ========================================================================
+    # TAB 3: CYCLING
+    # ========================================================================
+    with tab_cycling:
+        render_cycling_tab()
+    
+    # ========================================================================
+    # TAB 4: DRYLAND
     # ========================================================================
     with tab_dryland:
         render_dryland_tab()
     
     # ========================================================================
-    # TAB 3: HISTORY
+    # TAB 5: HISTORY
     # ========================================================================
     with tab_history:
         render_history_tab()
     
     # ========================================================================
-    # TAB 4: AI ASSISTANT
+    # TAB 6: AI ASSISTANT
     # ========================================================================
     with tab_ai:
         render_ai_tab()
     
     # ========================================================================
-    # TAB 5: VIDEO TOOLS
+    # TAB 7: VIDEO TOOLS
     # ========================================================================
     with tab_tools:
         render_tools_tab()
+
+
+def render_running_tab():
+    """Render running analysis tab."""
+    
+    st.markdown('<div class="section-title">🏃 Аналіз техніки бігу</div>', unsafe_allow_html=True)
+    
+    with st.expander("⚙️ Налаштування", expanded=True):
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            athlete_name = st.text_input("👤 Ім'я спортсмена", value="Спортсмен", key="run_athlete")
+        with col2:
+            fps = st.number_input("🎬 FPS відео", min_value=15, max_value=240, value=30, key="run_fps")
+        with col3:
+            run_type = st.selectbox("🏃 Тип бігу", 
+                ["Спринт", "Середня дистанція", "Марафон", "Трейл"],
+                key="run_type")
+    
+    uploaded_file = st.file_uploader(
+        "📹 Завантажте відео бігу (збоку)",
+        type=["mp4", "mov", "avi", "mkv"],
+        key="run_upload"
+    )
+    
+    if uploaded_file:
+        st.video(uploaded_file)
+        
+        if st.button("🏃 АНАЛІЗУВАТИ БІГ", type="primary", use_container_width=True, key="run_analyze"):
+            analyze_running(uploaded_file, athlete_name, fps, run_type)
+    
+    with st.expander("📊 Можливості аналізу"):
+        st.markdown("""
+        | Метрика | Опис |
+        |---------|------|
+        | **Cadence** | Кроків за хвилину (оптимум 170-190) |
+        | **Knee Lift** | Підйом коліна в градусах |
+        | **Forward Lean** | Нахил корпусу (оптимум 8-15°) |
+        | **Arm Symmetry** | Симетрія маху руками |
+        | **Vertical Oscillation** | Вертикальні коливання |
+        | **Ground Contact** | Час контакту з землею |
+        """)
+
+
+def analyze_running(uploaded_file, athlete_name, fps, run_type):
+    """Analyze running video."""
+    
+    with st.spinner("🏃 Аналізуємо біг..."):
+        output_dir = Path("streamlit_outputs") / f"running_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Save video
+        video_path = output_dir / uploaded_file.name
+        with open(video_path, "wb") as f:
+            f.write(uploaded_file.read())
+        
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
+        try:
+            # Extract frames
+            status_text.text("📷 Витягуємо кадри...")
+            from video_analysis.frame_extractor import extract_frames_from_video
+            
+            frames_dir = output_dir / "frames"
+            frame_result = extract_frames_from_video(str(video_path), str(frames_dir), fps=min(fps, 30))
+            progress_bar.progress(20)
+            
+            # Pose detection
+            status_text.text("🦴 Аналіз пози...")
+            import mediapipe as mp
+            
+            mp_pose = mp.solutions.pose
+            pose = mp_pose.Pose(
+                static_image_mode=False,
+                model_complexity=1,
+                min_detection_confidence=0.5
+            )
+            
+            keypoints_list = []
+            for frame_info in frame_result["frames"]:
+                frame_path = frame_info.get("video_frame") or frame_info.get("path")
+                if not frame_path:
+                    continue
+                    
+                frame = cv2.imread(str(frame_path))
+                if frame is None:
+                    keypoints_list.append({})
+                    continue
+                
+                rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                results = pose.process(rgb)
+                
+                kps = {}
+                if results.pose_landmarks:
+                    h, w = frame.shape[:2]
+                    landmarks = results.pose_landmarks.landmark
+                    
+                    landmark_names = {
+                        11: "left_shoulder", 12: "right_shoulder",
+                        13: "left_elbow", 14: "right_elbow",
+                        15: "left_wrist", 16: "right_wrist",
+                        23: "left_hip", 24: "right_hip",
+                        25: "left_knee", 26: "right_knee",
+                        27: "left_ankle", 28: "right_ankle",
+                        0: "nose"
+                    }
+                    
+                    for idx, name in landmark_names.items():
+                        lm = landmarks[idx]
+                        kps[name] = (lm.x * w, lm.y * h)
+                
+                keypoints_list.append(kps)
+            
+            pose.close()
+            progress_bar.progress(60)
+            
+            # Running analysis
+            status_text.text("📊 Аналіз біомеханіки...")
+            analyzer = RunningAnalyzer(fps=float(fps))
+            analysis = analyzer.analyze(keypoints_list, fps=float(fps))
+            progress_bar.progress(80)
+            
+            # Generate chart
+            chart_path = output_dir / "running_chart.png"
+            generate_running_chart(analysis, str(chart_path))
+            progress_bar.progress(90)
+            
+            # AI coaching
+            status_text.text("🤖 AI рекомендації...")
+            from video_analysis.ai_coach import get_ai_coaching
+            ai_advice = get_ai_coaching(
+                biomechanics={"running": {
+                    "cadence": analysis.cadence,
+                    "knee_lift": analysis.avg_knee_lift,
+                    "forward_lean": analysis.forward_lean,
+                    "arm_symmetry": analysis.arm_symmetry
+                }},
+                athlete_name=athlete_name
+            )
+            
+            progress_bar.progress(100)
+            status_text.text("✅ Аналіз завершено!")
+            
+            # Display results
+            display_running_results(analysis, ai_advice, chart_path, run_type)
+            
+            # Save to DB
+            try:
+                session_id = save_analysis_to_db(
+                    athlete_name=athlete_name,
+                    session_type="running",
+                    analysis={"cadence": analysis.cadence, "knee_lift": analysis.avg_knee_lift},
+                    ai_advice=ai_advice
+                )
+                st.success(f"💾 Збережено в БД (сесія #{session_id})")
+            except Exception as e:
+                st.warning(f"⚠️ Не вдалося зберегти: {e}")
+                
+        except Exception as e:
+            st.error(f"❌ Помилка: {e}")
+            import traceback
+            st.code(traceback.format_exc())
+
+
+def display_running_results(analysis: RunningAnalysis, ai_advice, chart_path, run_type):
+    """Display running analysis results."""
+    
+    st.markdown("---")
+    st.markdown('<div class="success-box" style="text-align: center;">🏃 Аналіз бігу завершено!</div>', unsafe_allow_html=True)
+    
+    # Main metrics
+    st.markdown("### 📊 Ключові метрики")
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        cadence_color = "#10b981" if 170 <= analysis.cadence <= 190 else "#f59e0b"
+        st.markdown(f"""
+        <div class="metric-item">
+            <div class="metric-value" style="color: {cadence_color};">{analysis.cadence:.0f}</div>
+            <div class="metric-label">Cadence (spm)</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown(f"""
+        <div class="metric-item">
+            <div class="metric-value" style="color: #3b82f6;">{analysis.avg_knee_lift:.0f}°</div>
+            <div class="metric-label">Knee Lift</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        lean_color = "#10b981" if 8 <= analysis.forward_lean <= 15 else "#f59e0b"
+        st.markdown(f"""
+        <div class="metric-item">
+            <div class="metric-value" style="color: {lean_color};">{analysis.forward_lean:.1f}°</div>
+            <div class="metric-label">Forward Lean</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col4:
+        sym_color = "#10b981" if analysis.arm_symmetry >= 80 else "#f59e0b"
+        st.markdown(f"""
+        <div class="metric-item">
+            <div class="metric-value" style="color: {sym_color};">{analysis.arm_symmetry:.0f}%</div>
+            <div class="metric-label">Arm Symmetry</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Steps
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Всього кроків", analysis.total_steps)
+    with col2:
+        st.metric("Ліва нога", analysis.left_steps)
+    with col3:
+        st.metric("Права нога", analysis.right_steps)
+    
+    # Chart
+    if chart_path.exists():
+        st.image(str(chart_path), use_container_width=True)
+    
+    # AI advice
+    if ai_advice:
+        st.markdown("### 🤖 AI Тренер")
+        score_color = "#10b981" if ai_advice.score >= 70 else "#f59e0b" if ai_advice.score >= 50 else "#ef4444"
+        st.markdown(f"""
+        <div style="background: linear-gradient(135deg, rgba(59,130,246,0.2), rgba(139,92,246,0.2));
+                    border-radius: 12px; padding: 1rem; border: 1px solid {score_color};">
+            <div style="font-size: 2rem; font-weight: bold; color: {score_color};">{ai_advice.score}/100</div>
+            <div>{ai_advice.summary}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+
+def render_cycling_tab():
+    """Render cycling analysis tab."""
+    
+    st.markdown('<div class="section-title">🚴 Аналіз техніки велосипеда</div>', unsafe_allow_html=True)
+    
+    with st.expander("⚙️ Налаштування", expanded=True):
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            athlete_name = st.text_input("👤 Ім'я спортсмена", value="Спортсмен", key="bike_athlete")
+        with col2:
+            fps = st.number_input("🎬 FPS відео", min_value=15, max_value=240, value=30, key="bike_fps")
+        with col3:
+            bike_type = st.selectbox("🚴 Тип їзди",
+                ["Шосе", "Триатлон TT", "MTB", "Трек"],
+                key="bike_type")
+    
+    uploaded_file = st.file_uploader(
+        "📹 Завантажте відео (вид збоку на тренажері або дорозі)",
+        type=["mp4", "mov", "avi", "mkv"],
+        key="bike_upload"
+    )
+    
+    if uploaded_file:
+        st.video(uploaded_file)
+        
+        if st.button("🚴 АНАЛІЗУВАТИ ВЕЛОСИПЕД", type="primary", use_container_width=True, key="bike_analyze"):
+            analyze_cycling(uploaded_file, athlete_name, fps, bike_type)
+    
+    with st.expander("📊 Можливості аналізу"):
+        st.markdown("""
+        | Метрика | Опис |
+        |---------|------|
+        | **Cadence** | Обертів на хвилину (оптимум 80-100) |
+        | **Knee Angle** | Кут коліна вгорі/внизу педалювання |
+        | **Hip Angle** | Кут нахилу корпусу (аеро позиція) |
+        | **Stability** | Стабільність верхньої частини тіла |
+        | **L/R Balance** | Баланс лівої/правої ноги |
+        | **Saddle Height** | Оцінка висоти сідла |
+        """)
+
+
+def analyze_cycling(uploaded_file, athlete_name, fps, bike_type):
+    """Analyze cycling video."""
+    
+    with st.spinner("🚴 Аналізуємо велосипед..."):
+        output_dir = Path("streamlit_outputs") / f"cycling_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        video_path = output_dir / uploaded_file.name
+        with open(video_path, "wb") as f:
+            f.write(uploaded_file.read())
+        
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
+        try:
+            # Extract frames
+            status_text.text("📷 Витягуємо кадри...")
+            from video_analysis.frame_extractor import extract_frames_from_video
+            
+            frames_dir = output_dir / "frames"
+            frame_result = extract_frames_from_video(str(video_path), str(frames_dir), fps=min(fps, 30))
+            progress_bar.progress(20)
+            
+            # Pose detection
+            status_text.text("🦴 Аналіз пози...")
+            import mediapipe as mp
+            
+            mp_pose = mp.solutions.pose
+            pose = mp_pose.Pose(
+                static_image_mode=False,
+                model_complexity=1,
+                min_detection_confidence=0.5
+            )
+            
+            keypoints_list = []
+            for frame_info in frame_result["frames"]:
+                frame_path = frame_info.get("video_frame") or frame_info.get("path")
+                if not frame_path:
+                    continue
+                    
+                frame = cv2.imread(str(frame_path))
+                if frame is None:
+                    keypoints_list.append({})
+                    continue
+                
+                rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                results = pose.process(rgb)
+                
+                kps = {}
+                if results.pose_landmarks:
+                    h, w = frame.shape[:2]
+                    landmarks = results.pose_landmarks.landmark
+                    
+                    landmark_names = {
+                        11: "left_shoulder", 12: "right_shoulder",
+                        13: "left_elbow", 14: "right_elbow",
+                        15: "left_wrist", 16: "right_wrist",
+                        23: "left_hip", 24: "right_hip",
+                        25: "left_knee", 26: "right_knee",
+                        27: "left_ankle", 28: "right_ankle",
+                    }
+                    
+                    for idx, name in landmark_names.items():
+                        lm = landmarks[idx]
+                        kps[name] = (lm.x * w, lm.y * h)
+                
+                keypoints_list.append(kps)
+            
+            pose.close()
+            progress_bar.progress(60)
+            
+            # Cycling analysis
+            status_text.text("📊 Аналіз біомеханіки...")
+            analyzer = CyclingAnalyzer(fps=float(fps))
+            analysis = analyzer.analyze(keypoints_list, fps=float(fps))
+            progress_bar.progress(80)
+            
+            # Generate chart
+            chart_path = output_dir / "cycling_chart.png"
+            generate_cycling_chart(analysis, str(chart_path))
+            progress_bar.progress(90)
+            
+            # AI coaching
+            status_text.text("🤖 AI рекомендації...")
+            from video_analysis.ai_coach import get_ai_coaching
+            ai_advice = get_ai_coaching(
+                biomechanics={"cycling": {
+                    "cadence": analysis.cadence,
+                    "knee_range": analysis.knee_range,
+                    "hip_angle": analysis.avg_hip_angle,
+                    "stability": analysis.upper_body_stability
+                }},
+                athlete_name=athlete_name
+            )
+            
+            progress_bar.progress(100)
+            status_text.text("✅ Аналіз завершено!")
+            
+            # Display results
+            display_cycling_results(analysis, ai_advice, chart_path, bike_type)
+            
+            # Save to DB
+            try:
+                session_id = save_analysis_to_db(
+                    athlete_name=athlete_name,
+                    session_type="cycling",
+                    analysis={"cadence": analysis.cadence, "knee_range": analysis.knee_range},
+                    ai_advice=ai_advice
+                )
+                st.success(f"💾 Збережено в БД (сесія #{session_id})")
+            except Exception as e:
+                st.warning(f"⚠️ Не вдалося зберегти: {e}")
+                
+        except Exception as e:
+            st.error(f"❌ Помилка: {e}")
+            import traceback
+            st.code(traceback.format_exc())
+
+
+def display_cycling_results(analysis: CyclingAnalysis, ai_advice, chart_path, bike_type):
+    """Display cycling analysis results."""
+    
+    st.markdown("---")
+    st.markdown('<div class="success-box" style="text-align: center;">🚴 Аналіз велосипеда завершено!</div>', unsafe_allow_html=True)
+    
+    # Main metrics
+    st.markdown("### 📊 Ключові метрики")
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        cadence_color = "#10b981" if 80 <= analysis.cadence <= 100 else "#f59e0b"
+        st.markdown(f"""
+        <div class="metric-item">
+            <div class="metric-value" style="color: {cadence_color};">{analysis.cadence:.0f}</div>
+            <div class="metric-label">Cadence (RPM)</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown(f"""
+        <div class="metric-item">
+            <div class="metric-value" style="color: #3b82f6;">{analysis.knee_range:.0f}°</div>
+            <div class="metric-label">Knee Range</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        st.markdown(f"""
+        <div class="metric-item">
+            <div class="metric-value" style="color: #8b5cf6;">{analysis.avg_hip_angle:.0f}°</div>
+            <div class="metric-label">Hip Angle</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col4:
+        stab_color = "#10b981" if analysis.upper_body_stability >= 70 else "#f59e0b"
+        st.markdown(f"""
+        <div class="metric-item">
+            <div class="metric-value" style="color: {stab_color};">{analysis.upper_body_stability:.0f}%</div>
+            <div class="metric-label">Stability</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Bike fit scores
+    st.markdown("### 🔧 Bike Fit")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Saddle Score", f"{analysis.saddle_height_score:.0f}/100")
+    with col2:
+        st.metric("Aero Score", f"{analysis.aero_score:.0f}/100")
+    with col3:
+        balance_delta = abs(analysis.left_right_balance - 50)
+        st.metric("L/R Balance", f"{analysis.left_right_balance:.0f}%", 
+                 delta=f"{balance_delta:.0f}% від ідеалу" if balance_delta > 5 else "Баланс ОК")
+    
+    # Chart
+    if chart_path.exists():
+        st.image(str(chart_path), use_container_width=True)
+    
+    # AI advice
+    if ai_advice:
+        st.markdown("### 🤖 AI Тренер")
+        score_color = "#10b981" if ai_advice.score >= 70 else "#f59e0b" if ai_advice.score >= 50 else "#ef4444"
+        st.markdown(f"""
+        <div style="background: linear-gradient(135deg, rgba(255,165,0,0.2), rgba(139,92,246,0.2));
+                    border-radius: 12px; padding: 1rem; border: 1px solid {score_color};">
+            <div style="font-size: 2rem; font-weight: bold; color: {score_color};">{ai_advice.score}/100</div>
+            <div>{ai_advice.summary}</div>
+        </div>
+        """, unsafe_allow_html=True)
 
 
 def render_tools_tab():
