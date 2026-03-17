@@ -16,8 +16,6 @@ import math
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
-import json
-
 import cv2
 import numpy as np
 import mediapipe as mp
@@ -113,7 +111,7 @@ class SwimmingPoseAnalyzer:
             min_detection_confidence=min_confidence,
             min_tracking_confidence=min_confidence,
         )
-        logger.info(f"SwimmingPoseAnalyzer initialized")
+        logger.info("SwimmingPoseAnalyzer initialized")
     
     def analyze_frame(
         self,
@@ -129,7 +127,6 @@ class SwimmingPoseAnalyzer:
         else:
             frame = frame_or_path.copy()
         
-        original_shape = frame.shape[:2]
         crop_offset = [0, 0]
         
         # Crop to swimmer
@@ -239,10 +236,10 @@ class SwimmingPoseAnalyzer:
         
         # CLAHE
         lab = cv2.cvtColor(balanced, cv2.COLOR_BGR2LAB)
-        l, a, b_ch = cv2.split(lab)
+        l_ch, a, b_ch = cv2.split(lab)
         clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8))
-        l = clahe.apply(l)
-        enhanced = cv2.cvtColor(cv2.merge([l, a, b_ch]), cv2.COLOR_LAB2BGR)
+        l_ch = clahe.apply(l_ch)
+        enhanced = cv2.cvtColor(cv2.merge([l_ch, a, b_ch]), cv2.COLOR_LAB2BGR)
         
         return enhanced
     

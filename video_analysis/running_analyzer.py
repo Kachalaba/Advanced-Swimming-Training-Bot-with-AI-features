@@ -485,8 +485,6 @@ class RunningAnalyzer:
         l_toe = self._get_point(kps, "left_toe")
         r_heel = self._get_point(kps, "right_heel")
         r_toe = self._get_point(kps, "right_toe")
-        l_ankle = self._get_point(kps, "left_ankle")
-        r_ankle = self._get_point(kps, "right_ankle")
         
         angles = []
         
@@ -558,8 +556,6 @@ class RunningAnalyzer:
         Check if arms cross the body midline.
         Returns True if crossover detected.
         """
-        l_elbow = self._get_point(kps, "left_elbow")
-        r_elbow = self._get_point(kps, "right_elbow")
         l_wrist = self._get_point(kps, "left_wrist")
         r_wrist = self._get_point(kps, "right_wrist")
         l_shoulder = self._get_point(kps, "left_shoulder")
@@ -840,7 +836,7 @@ def generate_running_chart(analysis: RunningAnalysis, output_path: str):
     metrics = ['Cadence\n(spm)', 'Knee Lift\n(°)', 'Arm Sym.\n(%)', 'Ground\n(%)']
     values = [analysis.cadence, analysis.avg_knee_lift, 
               analysis.arm_symmetry, analysis.ground_contact_ratio]
-    bars = ax2.bar(metrics, values, color=['#3b82f6', '#10b981', '#f59e0b', '#ef4444'])
+    ax2.bar(metrics, values, color=['#3b82f6', '#10b981', '#f59e0b', '#ef4444'])
     ax2.set_title('Ключові метрики')
     
     # 3. Phase distribution

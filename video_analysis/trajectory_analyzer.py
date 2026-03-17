@@ -10,10 +10,9 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Optional
 import math
 
-import cv2
 import numpy as np
 
 logger = logging.getLogger(__name__)
@@ -231,8 +230,6 @@ class TrajectoryAnalyzer:
                 "aspect_ratio": aspect_ratios[i],
                 "change": change,
             })
-        
-        changes = [r["change"] for r in rotation_changes]
         
         # Stability: lower variance = more stable
         stability = 100.0 - min(np.std(aspect_ratios) * 100, 100.0)

@@ -478,9 +478,7 @@ class StrokeAnalyzer:
         nose = self._get_point(kps, "nose")
         left_shoulder = self._get_point(kps, "left_shoulder")
         right_shoulder = self._get_point(kps, "right_shoulder")
-        left_hip = self._get_point(kps, "left_hip")
-        right_hip = self._get_point(kps, "right_hip")
-        
+
         if not all([nose, left_shoulder, right_shoulder]):
             return 0
         
@@ -502,11 +500,9 @@ class StrokeAnalyzer:
         Breathing = significant head turn to side.
         """
         nose = self._get_point(kps, "nose")
-        left_ear = self._get_point(kps, "left_ear")
-        right_ear = self._get_point(kps, "right_ear")
         left_shoulder = self._get_point(kps, "left_shoulder")
         right_shoulder = self._get_point(kps, "right_shoulder")
-        
+
         if not nose or not (left_shoulder and right_shoulder):
             return
         
@@ -632,11 +628,11 @@ class StrokeAnalyzer:
         if breaths > 0 and total > 0:
             strokes_per_breath = total / breaths
             if strokes_per_breath <= 2.5:
-                breathing_pattern = f"кожні 2 гребки"
+                breathing_pattern = "кожні 2 гребки"
             elif strokes_per_breath <= 3.5:
-                breathing_pattern = f"кожні 3 гребки (bilateral)"
+                breathing_pattern = "кожні 3 гребки (bilateral)"
             elif strokes_per_breath <= 4.5:
-                breathing_pattern = f"кожні 4 гребки"
+                breathing_pattern = "кожні 4 гребки"
             else:
                 breathing_pattern = f"кожні {strokes_per_breath:.0f} гребків"
             
