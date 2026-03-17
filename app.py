@@ -24,10 +24,12 @@ st.set_page_config(
 )
 
 # ============================================================================
-# THEME STATE
+# THEME & LANGUAGE STATE
 # ============================================================================
 if "theme" not in st.session_state:
     st.session_state["theme"] = "dark"
+if "lang" not in st.session_state:
+    st.session_state["lang"] = "uk"
 
 _theme = st.session_state["theme"]
 
@@ -311,20 +313,29 @@ st.markdown(f"""
 
 
 # ============================================================================
-# HEADER with theme toggle
+# HEADER with theme + language toggles
 # ============================================================================
-_col_header, _col_toggle = st.columns([14, 1])
+from i18n.translations import t  # noqa: E402
+
+_col_header, _col_lang, _col_toggle = st.columns([13, 1, 1])
 with _col_header:
-    st.markdown("""
+    st.markdown(f"""
     <div class="premium-header">
         <div class="logo-text">⚡ SPRINT AI</div>
-        <div class="tagline">Професійний аналіз спортсменів</div>
+        <div class="tagline">{t('tagline')}</div>
     </div>
     """, unsafe_allow_html=True)
+with _col_lang:
+    st.markdown("<div style='margin-top:1.8rem'></div>", unsafe_allow_html=True)
+    _lang = st.session_state["lang"]
+    _lang_icon = "🇬🇧" if _lang == "uk" else "🇺🇦"
+    if st.button(_lang_icon, key="lang_toggle", help="Switch language / Змінити мову", use_container_width=True):
+        st.session_state["lang"] = "en" if _lang == "uk" else "uk"
+        st.rerun()
 with _col_toggle:
     st.markdown("<div style='margin-top:1.8rem'></div>", unsafe_allow_html=True)
     _toggle_icon = "☀️" if _theme == "dark" else "🌙"
-    if st.button(_toggle_icon, key="theme_toggle", help="Переключити тему", use_container_width=True):
+    if st.button(_toggle_icon, key="theme_toggle", help="Переключити тему / Switch theme", use_container_width=True):
         st.session_state["theme"] = "light" if _theme == "dark" else "dark"
         st.rerun()
 
@@ -347,13 +358,13 @@ def main():
     # MAIN TABS
     # ========================================================================
     tab_swimming, tab_running, tab_cycling, tab_dryland, tab_history, tab_ai, tab_tools = st.tabs([
-        "🏊 ПЛАВАННЯ",
-        "🏃 БІГ",
-        "🚴 ВЕЛОСИПЕД",
-        "🏋️ СУХОДІЛ",
-        "📊 ІСТОРІЯ",
-        "🤖 AI АСИСТЕНТ",
-        "🎬 ІНСТРУМЕНТИ"
+        t("tab_swimming"),
+        t("tab_running"),
+        t("tab_cycling"),
+        t("tab_dryland"),
+        t("tab_history"),
+        t("tab_ai"),
+        t("tab_tools"),
     ])
 
     # ========================================================================
