@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Optional
 import math
 
 import cv2
@@ -48,18 +48,15 @@ class BiomechanicsAnalyzer:
         """
         # Проверяем что frame не пустой
         if frame is None or frame.size == 0:
-            logger.error(f"Empty frame in _preprocess_underwater_frame")
+            logger.error("Empty frame in _preprocess_underwater_frame")
             # Возвращаем dummy RGB frame
             return np.zeros((100, 100, 3), dtype=np.uint8)
         
-        # Convert to RGB
-        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        
         # Enhance contrast using CLAHE (Contrast Limited Adaptive Histogram Equalization)
         lab = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)
-        l, a, b = cv2.split(lab)
+        l_ch, a, b = cv2.split(lab)
         clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
-        l_enhanced = clahe.apply(l)
+        l_enhanced = clahe.apply(l_ch)
         enhanced = cv2.merge([l_enhanced, a, b])
         enhanced_bgr = cv2.cvtColor(enhanced, cv2.COLOR_LAB2BGR)
         enhanced_rgb = cv2.cvtColor(enhanced_bgr, cv2.COLOR_BGR2RGB)
@@ -618,7 +615,6 @@ class BiomechanicsAnalyzer:
             return frame_path
         
         keypoints = analysis["keypoints"]
-        angles = analysis["angles"]
         hydro = analysis["hydrodynamics"]
         
         # Draw skeleton with color coding
@@ -776,7 +772,7 @@ class BiomechanicsAnalyzer:
                     text_y = spine_points[mid_idx][1]
                     
                     # Фон для текста
-                    text_size = cv2.getTextSize(spine_text, font, 0.6, 2)[0]
+                    text_size = cv2.getTextSize(spine_text, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)[0]
                     cv2.rectangle(frame, 
                                 (text_x - 5, text_y - text_size[1] - 5),
                                 (text_x + text_size[0] + 5, text_y + 5),
@@ -784,8 +780,8 @@ class BiomechanicsAnalyzer:
                     
                     # Цвет текста в зависимости от отклонения
                     text_color = (0, 255, 0) if deviation < 10 else (0, 165, 255) if deviation < 20 else (0, 0, 255)
-                    cv2.putText(frame, spine_text, (text_x, text_y), 
-                              font, 0.6, text_color, 2)
+                    cv2.putText(frame, spine_text, (text_x, text_y),
+                              cv2.FONT_HERSHEY_SIMPLEX, 0.6, text_color, 2)
         
         # Draw metrics overlay
         y_offset = 30

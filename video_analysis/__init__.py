@@ -23,6 +23,9 @@ from .ai_coach import AICoach, get_ai_coaching
 __version__ = "2.3.0"
 
 __all__ = [
+    # AI Coach
+    "AICoach",
+    "get_ai_coaching",
     # Frame extraction
     "extract_frames_from_video",
     # Detection

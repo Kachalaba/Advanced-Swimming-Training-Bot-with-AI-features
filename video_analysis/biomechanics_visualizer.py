@@ -6,7 +6,7 @@ import numpy as np
 import math
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List
 from collections import deque
 import mediapipe as mp
 
@@ -172,7 +172,8 @@ class BiomechanicsVisualizer:
         colors = {"left_wrist": (255,100,100), "right_wrist": (100,100,255),
                   "left_ankle": (100,255,100), "right_ankle": (255,255,100)}
         for name, pts in self.trajectories.items():
-            if len(pts) < 2: continue
+            if len(pts) < 2:
+                continue
             pts_list = list(pts)
             for i in range(1, len(pts_list)):
                 alpha = i / len(pts_list)
@@ -203,7 +204,8 @@ def visualize_biomechanics(frames: List, detections: List = None, output_dir: st
     for i, f in enumerate(frames):
         path = f.get("path") if isinstance(f, dict) else f
         frame = cv2.imread(path)
-        if frame is None: continue
+        if frame is None:
+            continue
         bbox = detections[i].get("bbox") if detections and i < len(detections) else None
         annotated, data = viz.process_frame(frame, i, bbox)
         cv2.imwrite(str(out / f"biomech_{i:04d}.jpg"), annotated)

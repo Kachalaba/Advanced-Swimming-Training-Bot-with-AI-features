@@ -13,7 +13,6 @@ import cv2
 import logging
 from typing import Dict, List, Optional
 from dataclasses import dataclass, field
-from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -250,8 +249,7 @@ class ExerciseAnalyzer:
         h, w = frame.shape[:2]
         
         current_rep = self.get_rep_at_frame(frame_idx)
-        total_reps = len(self.reps)
-        
+
         # Background
         cv2.rectangle(frame, (w - 150, 10), (w - 10, 80), (0, 0, 0), -1)
         cv2.rectangle(frame, (w - 150, 10), (w - 10, 80), (0, 200, 255), 2)
@@ -304,7 +302,7 @@ def generate_exercise_chart(stats: ExerciseStats, output_path: str) -> Optional[
             roms = [r.range_of_motion for r in stats.reps]
             durations = [r.duration_sec for r in stats.reps]
             
-            bars = ax2.bar(x, roms, color='#00d9ff', alpha=0.8, label='Амплітуда (°)')
+            ax2.bar(x, roms, color='#00d9ff', alpha=0.8, label='Амплітуда (°)')
             
             ax2_twin = ax2.twinx()
             ax2_twin.plot(x, durations, color='#f59e0b', marker='o', 

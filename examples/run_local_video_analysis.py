@@ -195,7 +195,7 @@ def main() -> None:
     )
 
     generator = ReportGenerator(output_dir=str(reports_dir))
-    report_files = generator.generate_complete_report(
+    generator.generate_complete_report(
         analysis,
         athlete_name=args.athlete,
     )

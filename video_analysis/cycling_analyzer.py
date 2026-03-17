@@ -15,8 +15,7 @@ import cv2
 import numpy as np
 import logging
 import math
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
 

@@ -17,11 +17,9 @@ import cv2
 import numpy as np
 import logging
 import math
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any, Union
+from typing import Dict, List, Optional, Tuple, Union
 from dataclasses import dataclass, field
 from enum import Enum
-from copy import deepcopy
 
 from video_analysis.constants import (
     RUN_PHASE_THRESHOLD_PX,
@@ -43,7 +41,6 @@ from video_analysis.constants import (
     INJURY_RISK_HEEL_STRIKE,
     INJURY_RISK_LONG_CONTACT,
     INJURY_RISK_ARM_CROSSOVER,
-    SMOOTHING_WINDOW_SIZE,
 )
 
 logger = logging.getLogger(__name__)
@@ -300,7 +297,6 @@ class RunningAnalyzer:
             r_shoulder = self._get_point(kps, "right_shoulder")
             l_elbow = self._get_point(kps, "left_elbow")
             r_elbow = self._get_point(kps, "right_elbow")
-            nose = self._get_point(kps, "nose")
             
             # Calculate hip center height for vertical oscillation
             if l_hip and r_hip:
