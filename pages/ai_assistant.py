@@ -23,21 +23,22 @@ def render_ai_tab():
     # ========================================================================
     with ai_tab1:
         st.markdown("### 💬 Запитайте про техніку")
-        st.markdown("""
-        <div style="background: rgba(59,130,246,0.1); border-radius: 8px; padding: 1rem; margin-bottom: 1rem;">
-            Я можу відповісти на питання про:
-            <ul>
-                <li>🏊 Техніку плавання (catch, pull, push, recovery, body roll)</li>
-                <li>⚠️ Типові помилки та як їх виправити</li>
-                <li>🏋️ Суходільні вправи для плавців</li>
-                <li>💡 Рекомендації на основі вашого аналізу</li>
-            </ul>
-        </div>
-        """, unsafe_allow_html=True)
 
-        # Initialize chat in session state
-        if "ai_chat" not in st.session_state:
-            st.session_state.ai_chat = AIChat()
+        # Athlete name picker for context
+        import os
+        athlete_name_chat = st.text_input("👤 Ім'я спортсмена (для контексту)", value="Спортсмен", key="ai_athlete_name")
+
+        # LLM status indicator
+        if os.environ.get("ANTHROPIC_API_KEY"):
+            st.markdown('<div class="status-success">🤖 Claude AI активний — відповіді на базі LLM</div>', unsafe_allow_html=True)
+        else:
+            st.markdown('<div class="status-info">💡 Режим без API ключа — відповіді на базі бази знань. Додайте ANTHROPIC_API_KEY для Claude AI.</div>', unsafe_allow_html=True)
+
+        # Initialize chat in session state (reset if athlete changed)
+        if "ai_chat" not in st.session_state or st.session_state.get("ai_chat_athlete") != athlete_name_chat:
+            st.session_state.ai_chat = AIChat(athlete_name=athlete_name_chat)
+            st.session_state.ai_chat_athlete = athlete_name_chat
+            st.session_state.chat_history = []
         if "chat_history" not in st.session_state:
             st.session_state.chat_history = []
 

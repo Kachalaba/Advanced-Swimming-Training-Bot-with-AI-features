@@ -219,7 +219,7 @@ class AICoach:
         """Analyze using Anthropic Claude."""
         try:
             message = self.client.messages.create(
-                model="claude-3-haiku-20240307",  # Fast and cheap
+                model="claude-opus-4-6",
                 max_tokens=1024,
                 system=self.SYSTEM_PROMPT,
                 messages=[

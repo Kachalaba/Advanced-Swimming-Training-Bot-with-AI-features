@@ -2,12 +2,13 @@
 🤖 AI Chat & Training Plan Generator
 
 Features:
-- Interactive chat about swimming/dryland technique
+- Interactive chat about swimming/dryland technique (LLM-powered if ANTHROPIC_API_KEY set)
 - Text-to-Speech (TTS) for recommendations
 - Automatic training plan generation
 """
 
 import logging
+import os
 from typing import Dict, List, Optional
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -85,33 +86,50 @@ DRYLAND_KNOWLEDGE = {
 # AI CHAT
 # ============================================================================
 
+_SYSTEM_PROMPT = """Ти — експертний тренер з плавання та триатлону з 20+ роками досвіду.
+Відповідай ВИКЛЮЧНО українською мовою. Будь конкретним, практичним, доброзичливим.
+Давай чіткі технічні поради щодо техніки плавання (freestyle, backstroke, breaststroke, butterfly),
+суходільних тренувань, відновлення та планування. Відповідь — не більше 300 слів."""
+
+
 class AIChat:
-    """AI Chat for swimming and dryland questions."""
-    
-    def __init__(self, athlete_data: Dict = None):
+    """AI Chat for swimming and dryland questions.
+
+    Uses Anthropic Claude API when ANTHROPIC_API_KEY is set;
+    falls back to keyword-based responses otherwise.
+    """
+
+    def __init__(self, athlete_data: Dict = None, athlete_name: str = "Спортсмен"):
         self.athlete_data = athlete_data or {}
+        self.athlete_name = athlete_name
         self.history: List[ChatMessage] = []
         self.context = ""
-    
+        self._client = None
+        self._use_llm = False
+
+        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+        if api_key:
+            try:
+                import anthropic
+                self._client = anthropic.Anthropic(api_key=api_key)
+                self._use_llm = True
+            except ImportError:
+                logger.warning("anthropic package not installed, using keyword fallback")
+
     def set_context(self, analysis_results: Dict):
         """Set context from analysis results."""
         self.athlete_data = analysis_results
-        
-        # Build context string
         parts = []
-        
         if "stroke_analysis" in analysis_results:
             stroke = analysis_results["stroke_analysis"]
-            parts.append(f"Stroke rate: {getattr(stroke, 'stroke_rate', 'N/A')}/min")
-            parts.append(f"Symmetry: {getattr(stroke, 'symmetry_score', 'N/A')}%")
+            parts.append(f"Темп гребків: {getattr(stroke, 'stroke_rate', 'N/A')}/хв")
+            parts.append(f"Симетрія: {getattr(stroke, 'symmetry_score', 'N/A')}%")
             parts.append(f"Body roll: {getattr(stroke, 'avg_body_roll', 'N/A')}°")
-        
         if "swimming_pose" in analysis_results:
             pose = analysis_results["swimming_pose"]
-            parts.append(f"Streamline: {pose.get('avg_streamline', 'N/A')}/100")
-        
+            parts.append(f"Обтічність: {pose.get('avg_streamline', 'N/A')}/100")
         self.context = " | ".join(parts)
-    
+
     def chat(self, user_message: str) -> str:
         """Process user message and return response."""
         self.history.append(ChatMessage(
@@ -119,108 +137,101 @@ class AIChat:
             content=user_message,
             timestamp=datetime.now().isoformat()
         ))
-        
-        response = self._generate_response(user_message.lower())
-        
+        if self._use_llm:
+            response = self._llm_response(user_message)
+        else:
+            response = self._keyword_response(user_message.lower())
         self.history.append(ChatMessage(
             role="assistant",
             content=response,
             timestamp=datetime.now().isoformat()
         ))
-        
         return response
-    
-    def _generate_response(self, query: str) -> str:
-        """Generate response based on query."""
-        
-        # Check swimming technique questions
+
+    def _build_system(self) -> str:
+        """Build system prompt with optional athlete context."""
+        system = _SYSTEM_PROMPT
+        ctx_parts = []
+        if self.athlete_name and self.athlete_name != "Спортсмен":
+            ctx_parts.append(f"Спортсмен: {self.athlete_name}")
+        if self.context:
+            ctx_parts.append(f"Останній аналіз: {self.context}")
+        # Include last 5 sessions summary if available
+        sessions = self.athlete_data.get("recent_sessions", [])
+        if sessions:
+            recent = sessions[-5:]
+            summary = "; ".join(
+                f"[{s.get('date', '')[:10]} {s.get('type', '')} оцінка={s.get('ai_score', '')}]"
+                for s in recent
+            )
+            ctx_parts.append(f"Останні сесії: {summary}")
+        if ctx_parts:
+            system += "\n\nКонтекст спортсмена:\n" + "\n".join(ctx_parts)
+        return system
+
+    def _llm_response(self, user_message: str) -> str:
+        """Call Claude API and return response."""
+        try:
+            # Build conversation history (last 10 messages)
+            messages = []
+            for msg in self.history[-10:]:
+                messages.append({"role": msg.role, "content": msg.content})
+
+            result = self._client.messages.create(
+                model="claude-opus-4-6",
+                max_tokens=512,
+                system=self._build_system(),
+                messages=messages,
+            )
+            return result.content[0].text
+        except Exception:
+            logger.warning("LLM call failed, falling back to keyword mode", exc_info=True)
+            return self._keyword_response(user_message.lower())
+
+    def _keyword_response(self, query: str) -> str:
+        """Keyword-based fallback response."""
         for topic, info in SWIMMING_KNOWLEDGE["freestyle"].items():
             if topic in query:
                 return f"🏊 **{topic.upper()}**\n\n{info}"
-        
-        # Check drills
         for drill, info in SWIMMING_KNOWLEDGE["drills"].items():
             if drill.replace("_", " ") in query or drill in query:
                 return f"🏋️ **Вправа: {drill.replace('_', ' ').title()}**\n\n{info}"
-        
-        # Check errors
         for error, info in SWIMMING_KNOWLEDGE["common_errors"].items():
             if error.replace("_", " ") in query or error in query:
                 return f"⚠️ **Помилка: {error.replace('_', ' ').title()}**\n\n{info}"
-        
-        # Check dryland
         for ex, info in DRYLAND_KNOWLEDGE["exercises"].items():
             if ex.replace("_", " ") in query or ex in query:
                 return f"🏋️ **{ex.replace('_', ' ').title()}**\n\n{info}"
-        
-        # General questions
         if any(w in query for w in ["привіт", "привет", "hello", "hi"]):
-            return "👋 Привіт! Я AI тренер. Можу відповісти на питання про техніку плавання та суходільні вправи. Спитайте про catch, pull, push, recovery, body roll, або конкретні помилки!"
-        
+            return "👋 Привіт! Я AI тренер. Можу відповісти на питання про техніку плавання та суходільні вправи."
         if any(w in query for w in ["що покращити", "рекомендац", "порад"]):
             if self.context:
                 return f"📊 **На основі вашого аналізу** ({self.context}):\n\n" + self._get_recommendations()
             return "📊 Спочатку проведіть аналіз відео, щоб я міг дати персоналізовані рекомендації."
-        
         if "план" in query or "тренуван" in query:
-            return "📅 Для створення плану тренувань перейдіть в розділ **Автоплан** або запитайте конкретно: 'створи план на тиждень для початківця'"
-        
+            return "📅 Для плану тренувань перейдіть в розділ **Автоплан**."
         if any(w in query for w in ["фаз", "гребок", "stroke"]):
-            return """🏊 **Фази гребка (Freestyle)**:
-
-1. **Catch** - вхід руки у воду, високий лікоть
-2. **Pull** - тягнення води під тілом  
-3. **Push** - завершення біля стегна
-4. **Recovery** - рух над водою
-
-Запитайте про конкретну фазу для детальнішої інформації!"""
-        
+            return "🏊 **Фази гребка**: 1. Catch 2. Pull 3. Push 4. Recovery. Запитайте про конкретну фазу!"
         if any(w in query for w in ["помилк", "error", "проблем"]):
             errors = list(SWIMMING_KNOWLEDGE["common_errors"].keys())
-            return f"""⚠️ **Типові помилки**:
+            return "⚠️ **Типові помилки**:\n" + "\n".join(f"• {e.replace('_', ' ').title()}" for e in errors)
+        return "🤔 Спробуйте запитати про: catch, pull, body roll, dropped elbow, або напишіть вашу проблему!"
 
-{chr(10).join(f'• {e.replace("_", " ").title()}' for e in errors)}
-
-Запитайте про конкретну помилку для порад як виправити!"""
-        
-        # Default response
-        return """🤔 Не зовсім зрозумів питання. Спробуйте запитати про:
-
-• **Техніку**: catch, pull, push, recovery, body roll
-• **Помилки**: dropped elbow, crossover, flat body
-• **Вправи**: catch-up drill, fingertip drag, fist drill
-• **Рекомендації**: "що покращити", "дай поради"
-• **План тренувань**: "створи план"
-
-Або просто опишіть вашу проблему!"""
-    
     def _get_recommendations(self) -> str:
-        """Get recommendations based on athlete data."""
         recs = []
-        
         stroke = self.athlete_data.get("stroke_analysis")
         if stroke:
-            symmetry = getattr(stroke, 'symmetry_score', 100)
-            body_roll = getattr(stroke, 'avg_body_roll', 40)
-            
-            if symmetry < 80:
-                recs.append("• **Симетрія рук**: Працюйте над рівномірним гребком обома руками. Спробуйте single arm drill.")
-            
-            if body_roll < 30:
-                recs.append("• **Body roll**: Збільшіть обертання тіла до 30-50°. Це покращить потужність гребка.")
-            elif body_roll > 50:
-                recs.append("• **Body roll**: Зменшіть обертання тіла до 30-50°. Занадто великий roll неефективний.")
-        
+            if getattr(stroke, 'symmetry_score', 100) < 80:
+                recs.append("• **Симетрія**: single arm drill")
+            roll = getattr(stroke, 'avg_body_roll', 40)
+            if roll < 30:
+                recs.append("• **Body roll**: збільшіть до 30-50°")
+            elif roll > 50:
+                recs.append("• **Body roll**: зменшіть до 30-50°")
         pose = self.athlete_data.get("swimming_pose", {})
-        streamline = pose.get("avg_streamline", 70)
-        
-        if streamline < 70:
-            recs.append("• **Streamline**: Покращіть обтічність тіла. Витягуйтесь максимально під час recovery.")
-        
-        if not recs:
-            recs.append("• Загалом техніка гарна! Продовжуйте працювати над стабільністю.")
-        
-        return "\n".join(recs)
+        if pose.get("avg_streamline", 70) < 70:
+            recs.append("• **Streamline**: витягуйтесь максимально під час recovery")
+        return "\n".join(recs) if recs else "• Загалом техніка гарна! Продовжуйте в тому ж дусі."
 
 
 # ============================================================================
