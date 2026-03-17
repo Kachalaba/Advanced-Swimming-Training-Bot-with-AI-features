@@ -82,8 +82,6 @@ def render_history_tab():
     if sessions:
         for session in sessions:
             type_icon = "🏊" if session.session_type == "swimming" else "🏋️"
-            score_color = "#10b981" if session.ai_score >= 70 else "#f59e0b" if session.ai_score >= 50 else "#ef4444"
-
             with st.expander(f"{type_icon} {session.date[:10]} - Оцінка: {session.ai_score}/100"):
                 col1, col2 = st.columns(2)
 
@@ -104,7 +102,7 @@ def render_history_tab():
                     if session.ai_summary:
                         st.write(f"**AI резюме:** {session.ai_summary}")
 
-                if st.button(f"🗑️ Видалити", key=f"del_session_{session.id}"):
+                if st.button("🗑️ Видалити", key=f"del_session_{session.id}"):
                     db.delete_session(session.id)
                     st.rerun()
     else:

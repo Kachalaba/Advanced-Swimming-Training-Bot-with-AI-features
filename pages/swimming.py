@@ -15,10 +15,10 @@ from video_analysis.biomechanics_analyzer import analyze_biomechanics
 from video_analysis.trajectory_analyzer import analyze_trajectory
 from video_analysis.report_generator import ReportGenerator
 from video_analysis.video_overlay import VideoOverlayGenerator
-from video_analysis.swimming_pose_analyzer import SwimmingPoseAnalyzer, analyze_swimming_pose
-from video_analysis.ai_coach import AICoach, get_ai_coaching
-from video_analysis.biomechanics_visualizer import BiomechanicsVisualizer, visualize_biomechanics
-from video_analysis.stroke_analyzer import StrokeAnalyzer, StrokeAnalysis, generate_stroke_chart
+from video_analysis.swimming_pose_analyzer import analyze_swimming_pose
+from video_analysis.ai_coach import get_ai_coaching
+from video_analysis.biomechanics_visualizer import visualize_biomechanics
+from video_analysis.stroke_analyzer import StrokeAnalyzer, generate_stroke_chart
 from video_analysis.athlete_database import save_analysis_to_db
 
 logger = logging.getLogger(__name__)
@@ -80,6 +80,23 @@ def render_swimming_tab():
             else:
                 st.markdown('<div class="status-info">⏱️ Швидкий аналіз (1-3 хв)</div>', unsafe_allow_html=True)
 
+    with st.expander("🎯 Трекінг плавця", expanded=False):
+        st.markdown("Налаштування для стабільного відстеження потрібного плавця")
+        col_t1, col_t2 = st.columns(2)
+        with col_t1:
+            swim_target = st.selectbox(
+                "🎯 Кого аналізувати?",
+                ["Найбільший у кадрі (авто)", "Найближчий до центру", "Вибрати за номером"],
+                key="swim_target_person"
+            )
+            if swim_target == "Вибрати за номером":
+                swim_person_num = st.number_input("Номер (зліва направо)", min_value=1, max_value=10, value=1, key="swim_person_num")
+            else:
+                swim_person_num = 1
+        with col_t2:
+            swim_max_lost = st.slider("Макс. кадрів без детекції", min_value=1, max_value=60, value=15, key="swim_max_lost")
+            st.caption("При втраті плавця (під водою) використовуватимуться дані попереднього кадру")
+
     # Upload area
     st.markdown("""
     <div class="section-title">Завантаження відео</div>
@@ -120,7 +137,12 @@ def render_swimming_tab():
         st.markdown("<br>", unsafe_allow_html=True)
 
         if st.button("🏊 АНАЛІЗУВАТИ ПЛАВАННЯ", type="primary", use_container_width=True, key="swim_analyze"):
-            analyze_video(uploaded_file, athlete_name, pool_length, fps, analysis_method)
+            analyze_video(
+                uploaded_file, athlete_name, pool_length, fps, analysis_method,
+                target_person=swim_target,
+                person_number=swim_person_num,
+                max_lost_frames=swim_max_lost,
+            )
 
     # Features list
     with st.expander("📊 Можливості аналізу"):
@@ -143,7 +165,105 @@ def render_swimming_tab():
             """)
 
 
-def analyze_video(uploaded_file, athlete_name, pool_length, fps, analysis_method):
+
+def _select_target_swimmer(detections, target_person="Найбільший у кадрі (авто)", person_number=1, max_lost_frames=15):
+    """Filter detections to keep only the target swimmer across all frames using IoU tracking."""
+    if not detections:
+        return detections
+
+    def _iou(a, b):
+        if not a or not b:
+            return 0.0
+        ix1, iy1 = max(a[0], b[0]), max(a[1], b[1])
+        ix2, iy2 = min(a[2], b[2]), min(a[3], b[3])
+        if ix2 <= ix1 or iy2 <= iy1:
+            return 0.0
+        inter = (ix2 - ix1) * (iy2 - iy1)
+        area_a = (a[2] - a[0]) * (a[3] - a[1])
+        area_b = (b[2] - b[0]) * (b[3] - b[1])
+        return inter / (area_a + area_b - inter + 1e-6)
+
+    def _centroid_dist(a, b):
+        if not a or not b:
+            return float("inf")
+        ca = ((a[0] + a[2]) / 2, (a[1] + a[3]) / 2)
+        cb = ((b[0] + b[2]) / 2, (b[1] + b[3]) / 2)
+        return ((ca[0] - cb[0]) ** 2 + (ca[1] - cb[1]) ** 2) ** 0.5
+
+    def _pick_initial(all_dets, strategy, num):
+        if not all_dets:
+            return None
+        sorted_dets = sorted(all_dets, key=lambda d: (
+            (d["bbox"][2] - d["bbox"][0]) * (d["bbox"][3] - d["bbox"][1])
+        ), reverse=True)
+        if strategy == "Вибрати за номером":
+            idx = min(num - 1, len(sorted_dets) - 1)
+            return sorted_dets[idx]["bbox"]
+        if strategy == "Найближчий до центру":
+            # pick the one with bbox center closest to frame center
+            # use confidence-based sort as proxy when no frame size available
+            best = min(all_dets, key=lambda d: (
+                ((d["bbox"][0] + d["bbox"][2]) / 2 - 320) ** 2 +
+                ((d["bbox"][1] + d["bbox"][3]) / 2 - 240) ** 2
+            ))
+            return best["bbox"]
+        # Default: largest
+        return sorted_dets[0]["bbox"]
+
+    result = []
+    target_bbox = None
+    lost_count = 0
+
+    for det in detections:
+        all_dets = det.get("all_detections") or []
+        # Filter out entries with None bbox
+        all_dets = [d for d in all_dets if d.get("bbox")]
+
+        if not all_dets:
+            if target_bbox and lost_count < max_lost_frames:
+                lost_count += 1
+                result.append(det)  # keep as-is (no bbox update)
+            else:
+                target_bbox = None
+                result.append(det)
+            continue
+
+        if target_bbox is None:
+            # First valid frame — pick initial target
+            target_bbox = _pick_initial(all_dets, target_person, person_number)
+            lost_count = 0
+        else:
+            # Match by IoU then centroid
+            best_match = max(all_dets, key=lambda d: _iou(target_bbox, d["bbox"]))
+            if _iou(target_bbox, best_match["bbox"]) > 0:
+                target_bbox = best_match["bbox"]
+                lost_count = 0
+            else:
+                # IoU = 0, fall back to centroid distance
+                best_match = min(all_dets, key=lambda d: _centroid_dist(target_bbox, d["bbox"]))
+                dist = _centroid_dist(target_bbox, best_match["bbox"])
+                if dist < 200:  # pixels threshold
+                    target_bbox = best_match["bbox"]
+                    lost_count = 0
+                else:
+                    lost_count += 1
+
+        if target_bbox and lost_count == 0:
+            # Update detection to use target swimmer's bbox
+            cx = (target_bbox[0] + target_bbox[2]) // 2
+            cy = (target_bbox[1] + target_bbox[3]) // 2
+            new_det = dict(det)
+            new_det["bbox"] = target_bbox
+            new_det["center"] = (cx, cy)
+            result.append(new_det)
+        else:
+            result.append(det)
+
+    return result
+
+
+def analyze_video(uploaded_file, athlete_name, pool_length, fps, analysis_method,
+                  target_person="Найбільший у кадрі (авто)", person_number=1, max_lost_frames=15):
     """Run video analysis pipeline."""
 
     # Create temp directory
@@ -190,6 +310,16 @@ def analyze_video(uploaded_file, athlete_name, pool_length, fps, analysis_method
             )
 
             st.markdown('<div class="success-box">✅ Детекція завершена (Velocity Tracking + 🌊 підводна детекція)</div>', unsafe_allow_html=True)
+
+            # Filter to target swimmer if not default auto-tracking
+            if target_person != "Найбільший у кадрі (авто)" or person_number != 1:
+                detection_result["detections"] = _select_target_swimmer(
+                    detection_result["detections"],
+                    target_person=target_person,
+                    person_number=person_number,
+                    max_lost_frames=max_lost_frames,
+                )
+
             progress_bar.progress(40)
 
             # Step 3: Biomechanics/Trajectory
@@ -281,7 +411,7 @@ def analyze_video(uploaded_file, athlete_name, pool_length, fps, analysis_method
 
             reports_dir = output_dir / "reports"
             generator = ReportGenerator(output_dir=str(reports_dir))
-            report_files = generator.generate_complete_report(
+            generator.generate_complete_report(
                 analysis,
                 athlete_name=athlete_name,
             )
@@ -296,7 +426,7 @@ def analyze_video(uploaded_file, athlete_name, pool_length, fps, analysis_method
                 output_dir=str(output_dir),
                 fps=video_fps,
             )
-            annotated_video_path = overlay_generator.generate_annotated_video(
+            overlay_generator.generate_annotated_video(
                 frame_result["frames"],
                 detection_result["detections"],
                 analysis=analysis,

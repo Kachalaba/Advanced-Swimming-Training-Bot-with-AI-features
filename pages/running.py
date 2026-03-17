@@ -12,7 +12,7 @@ from video_analysis.frame_extractor import extract_frames_from_video
 from video_analysis.swimmer_detector import detect_swimmer_in_frames
 from video_analysis.ai_coach import get_ai_coaching
 from video_analysis.athlete_database import save_analysis_to_db
-from video_analysis.running_analyzer import RunningAnalyzer, RunningAnalysis, generate_running_chart
+from video_analysis.running_analyzer import RunningAnalysis, generate_running_chart
 
 logger = logging.getLogger(__name__)
 
@@ -605,7 +605,7 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type,
         except (ValueError, AttributeError, TypeError) as e:
             logger.warning("Running analysis error", exc_info=True)
             st.error(f"❌ Помилка аналізу: {e}")
-        except Exception as e:
+        except Exception:
             logger.exception("Unexpected error in running analysis")
             st.error("❌ Непередбачена помилка. Перевірте логи.")
             import traceback

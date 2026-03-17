@@ -6,8 +6,7 @@ import streamlit as st
 from pathlib import Path
 
 from video_analysis.video_tools import (
-    create_side_by_side, extract_highlight, find_highlights,
-    create_zoom_video, create_tracked_zoom, get_video_info
+    create_side_by_side, extract_highlight, create_zoom_video, create_tracked_zoom, get_video_info
 )
 
 
