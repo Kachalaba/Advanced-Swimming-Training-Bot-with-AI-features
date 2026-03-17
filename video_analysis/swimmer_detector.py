@@ -13,6 +13,17 @@ from ultralytics import YOLO
 
 logger = logging.getLogger(__name__)
 
+# Module-level YOLO model cache — avoids re-loading on every analysis call
+_yolo_model_cache: Dict[str, "YOLO"] = {}
+
+
+def _get_yolo_model(model_name: str) -> "YOLO":
+    """Return a cached YOLO model, loading it only on first call."""
+    if model_name not in _yolo_model_cache:
+        logger.info(f"Loading YOLO model: {model_name}")
+        _yolo_model_cache[model_name] = YOLO(model_name)
+    return _yolo_model_cache[model_name]
+
 
 class SwimmerDetector:
     """Detect swimmer position in swimming pool frames."""
@@ -23,7 +34,7 @@ class SwimmerDetector:
         Args:
             model_name: YOLO model name (n/s/m/l/x)
         """
-        self.model = YOLO(model_name)
+        self.model = _get_yolo_model(model_name)
         # Person class ID in COCO dataset
         self.person_class_id = 0
 

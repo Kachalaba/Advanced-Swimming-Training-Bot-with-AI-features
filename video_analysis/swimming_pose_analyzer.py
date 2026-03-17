@@ -676,7 +676,7 @@ def analyze_swimming_pose(
     
     results = []
     for i, frame_info in enumerate(frame_paths):
-        path = frame_info["path"] if isinstance(frame_info, dict) else frame_info
+        path = str(Path(frame_info["path"] if isinstance(frame_info, dict) else frame_info))
         bbox = detections[i].get("bbox") if detections and i < len(detections) else None
         
         analysis = analyzer.analyze_frame(path, bbox)

@@ -23,6 +23,29 @@ from dataclasses import dataclass, field
 from enum import Enum
 from copy import deepcopy
 
+from video_analysis.constants import (
+    RUN_PHASE_THRESHOLD_PX,
+    GROUND_CONTACT_THRESHOLD_PX,
+    GROUND_CONTACT_MIN_MS,
+    GROUND_CONTACT_MAX_MS,
+    HEEL_STRIKE_ANGLE_THRESHOLD,
+    SEVERE_HEEL_STRIKE_THRESHOLD,
+    FOREFOOT_STRIKE_ANGLE_THRESHOLD,
+    OVERSTRIDING_THRESHOLD_PX,
+    LONG_CONTACT_TIME_MS,
+    ARM_CROSSOVER_PCT_THRESHOLD,
+    HIP_DROP_HIGH_THRESHOLD,
+    HIP_DROP_MULTIPLIER,
+    BOUNCE_MULTIPLIER,
+    EFFICIENCY_COMPONENT_WEIGHT,
+    INJURY_RISK_OVERSTRIDING,
+    INJURY_RISK_HIP_DROP,
+    INJURY_RISK_HEEL_STRIKE,
+    INJURY_RISK_LONG_CONTACT,
+    INJURY_RISK_ARM_CROSSOVER,
+    SMOOTHING_WINDOW_SIZE,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -441,11 +464,9 @@ class RunningAnalyzer:
         l_rel = l_ankle[1] - hip_y
         r_rel = r_ankle[1] - hip_y
         
-        threshold = 50  # pixels
-        
-        if l_rel > threshold and r_rel > threshold:
+        if l_rel > RUN_PHASE_THRESHOLD_PX and r_rel > RUN_PHASE_THRESHOLD_PX:
             return RunPhase.STANCE
-        elif l_rel < -threshold and r_rel < -threshold:
+        elif l_rel < -RUN_PHASE_THRESHOLD_PX and r_rel < -RUN_PHASE_THRESHOLD_PX:
             return RunPhase.FLIGHT
         else:
             return RunPhase.SWING
@@ -569,22 +590,22 @@ class RunningAnalyzer:
         hip_y = (l_hip[1] + r_hip[1]) / 2
         
         # Left foot contact
-        left_on_ground = l_ankle[1] > hip_y + 50
+        left_on_ground = l_ankle[1] > hip_y + GROUND_CONTACT_THRESHOLD_PX
         if left_on_ground and self.left_contact_start is None:
             self.left_contact_start = frame_idx
         elif not left_on_ground and self.left_contact_start is not None:
             contact_time = (frame_idx - self.left_contact_start) / self.fps * 1000
-            if 50 < contact_time < 500:  # Valid range
+            if GROUND_CONTACT_MIN_MS < contact_time < GROUND_CONTACT_MAX_MS:
                 self.contact_times_left.append(contact_time)
             self.left_contact_start = None
-        
+
         # Right foot contact
-        right_on_ground = r_ankle[1] > hip_y + 50
+        right_on_ground = r_ankle[1] > hip_y + GROUND_CONTACT_THRESHOLD_PX
         if right_on_ground and self.right_contact_start is None:
             self.right_contact_start = frame_idx
         elif not right_on_ground and self.right_contact_start is not None:
             contact_time = (frame_idx - self.right_contact_start) / self.fps * 1000
-            if 50 < contact_time < 500:
+            if GROUND_CONTACT_MIN_MS < contact_time < GROUND_CONTACT_MAX_MS:
                 self.contact_times_right.append(contact_time)
             self.right_contact_start = None
     
@@ -644,10 +665,10 @@ class RunningAnalyzer:
         
         # Foot strike analysis
         avg_foot_angle = np.mean(self.foot_strike_angles) if self.foot_strike_angles else 0
-        if avg_foot_angle > 10:
+        if avg_foot_angle > HEEL_STRIKE_ANGLE_THRESHOLD:
             foot_strike_type = "heel"
             foot_strike_score = max(0, 100 - abs(avg_foot_angle) * 2)
-        elif avg_foot_angle < -5:
+        elif avg_foot_angle < FOREFOOT_STRIKE_ANGLE_THRESHOLD:
             foot_strike_type = "forefoot"
             foot_strike_score = 90  # Generally good
         else:
@@ -656,19 +677,19 @@ class RunningAnalyzer:
         
         # Overstriding
         avg_foot_ahead = np.mean(self.foot_ahead_distances) if self.foot_ahead_distances else 0
-        overstriding = avg_foot_ahead < -30  # Foot significantly ahead
+        overstriding = avg_foot_ahead < OVERSTRIDING_THRESHOLD_PX  # Foot significantly ahead
         overstriding_score = max(0, 100 + avg_foot_ahead) if avg_foot_ahead < 0 else 100
         
         # Hip drop
         avg_hip_drop_left = np.mean(self.hip_drops_left) if self.hip_drops_left else 0
         avg_hip_drop_right = np.mean(self.hip_drops_right) if self.hip_drops_right else 0
         max_hip_drop = max(avg_hip_drop_left, avg_hip_drop_right)
-        hip_drop_score = max(0, 100 - max_hip_drop * 5)
+        hip_drop_score = max(0, 100 - max_hip_drop * HIP_DROP_MULTIPLIER)
         
         # Arm crossover
         crossover_count = sum(1 for c in self.arm_crossovers if c)
         crossover_pct = (crossover_count / len(self.arm_crossovers) * 100) if self.arm_crossovers else 0
-        arm_crossover_detected = crossover_pct > 30
+        arm_crossover_detected = crossover_pct > ARM_CROSSOVER_PCT_THRESHOLD
         
         # Arm swing range
         arm_range = 0
@@ -682,29 +703,29 @@ class RunningAnalyzer:
         right_contact = np.mean(self.contact_times_right) if self.contact_times_right else 0
         
         # Bounce score (less vertical oscillation = better efficiency)
-        bounce_score = max(0, 100 - vertical_osc * 0.5) if vertical_osc > 0 else 50
+        bounce_score = max(0, 100 - vertical_osc * BOUNCE_MULTIPLIER) if vertical_osc > 0 else 50
         
         # Overall efficiency score
         efficiency_score = (
-            foot_strike_score * 0.2 +
-            overstriding_score * 0.2 +
-            hip_drop_score * 0.2 +
-            arm_symmetry * 0.2 +
-            bounce_score * 0.2
+            foot_strike_score * EFFICIENCY_COMPONENT_WEIGHT +
+            overstriding_score * EFFICIENCY_COMPONENT_WEIGHT +
+            hip_drop_score * EFFICIENCY_COMPONENT_WEIGHT +
+            arm_symmetry * EFFICIENCY_COMPONENT_WEIGHT +
+            bounce_score * EFFICIENCY_COMPONENT_WEIGHT
         )
         
         # Injury risk score (lower = better)
         injury_risk = 0
         if overstriding:
-            injury_risk += 30
-        if max_hip_drop > 5:
-            injury_risk += 25
-        if avg_foot_angle > 15:  # Severe heel strike
-            injury_risk += 20
-        if avg_contact_time > 300:  # Long contact time
-            injury_risk += 15
+            injury_risk += INJURY_RISK_OVERSTRIDING
+        if max_hip_drop > HIP_DROP_HIGH_THRESHOLD:
+            injury_risk += INJURY_RISK_HIP_DROP
+        if avg_foot_angle > SEVERE_HEEL_STRIKE_THRESHOLD:
+            injury_risk += INJURY_RISK_HEEL_STRIKE
+        if avg_contact_time > LONG_CONTACT_TIME_MS:
+            injury_risk += INJURY_RISK_LONG_CONTACT
         if arm_crossover_detected:
-            injury_risk += 10
+            injury_risk += INJURY_RISK_ARM_CROSSOVER
         
         return RunningAnalysis(
             total_steps=total_steps,

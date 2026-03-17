@@ -17,6 +17,31 @@ from dataclasses import dataclass, field
 from collections import deque
 from enum import Enum
 
+from video_analysis.constants import (
+    POOL_LENGTH_METERS,
+    STROKE_MIN_DURATION_SEC,
+    STROKE_MAX_DURATION_SEC,
+    HAND_ENTRY_ANGLE_MIN,
+    HAND_ENTRY_ANGLE_MAX,
+    OPTIMAL_HAND_ENTRY_ANGLE,
+    ELBOW_ANGLE_MIN,
+    ELBOW_ANGLE_MAX,
+    ELBOW_SCORE_OPTIMAL_MIN,
+    ELBOW_SCORE_OPTIMAL_MAX,
+    ELBOW_SCORE_GOOD_MIN,
+    ELBOW_SCORE_GOOD_MAX,
+    ELBOW_SCORE_GOOD_PCT,
+    ELBOW_SCORE_REFERENCE,
+    BREATHING_THRESHOLD_PX,
+    BODY_ROLL_MAX_VALID,
+    KICK_AMPLITUDE_SCALE,
+    HAND_ENTRY_SCORE_MULTIPLIER,
+    HEAD_STABILITY_MULTIPLIER,
+    BREATHING_REGULARITY_MULTIPLIER,
+    KICK_SYMMETRY_MULTIPLIER,
+    SMOOTHING_WINDOW_SIZE,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -104,7 +129,7 @@ class StrokeAnalyzer:
     LEFT_EAR = 7
     RIGHT_EAR = 8
     
-    def __init__(self, fps: float = 10.0, pool_length: float = 25.0):
+    def __init__(self, fps: float = 10.0, pool_length: float = POOL_LENGTH_METERS):
         self.fps = fps
         self.pool_length = pool_length  # meters
         self.strokes: List[StrokeData] = []
@@ -119,8 +144,8 @@ class StrokeAnalyzer:
         self.stroke_count = 0
         
         # Smoothing
-        self.left_wrist_history = deque(maxlen=10)
-        self.right_wrist_history = deque(maxlen=10)
+        self.left_wrist_history = deque(maxlen=SMOOTHING_WINDOW_SIZE)
+        self.right_wrist_history = deque(maxlen=SMOOTHING_WINDOW_SIZE)
         
         # NEW: Advanced tracking
         self.hand_entry_angles: List[float] = []
@@ -325,7 +350,7 @@ class StrokeAnalyzer:
         self.stroke_count += 1
         duration = (end_frame - start_frame) / self.fps
         
-        if duration < 0.3 or duration > 5.0:  # Filter invalid strokes
+        if duration < STROKE_MIN_DURATION_SEC or duration > STROKE_MAX_DURATION_SEC:  # Filter invalid strokes
             return
         
         self.strokes.append(StrokeData(
@@ -388,15 +413,15 @@ class StrokeAnalyzer:
             dx = left_wrist[0] - left_elbow[0]
             dy = left_wrist[1] - left_elbow[1]
             angle = abs(np.degrees(np.arctan2(dy, dx)))
-            if 10 < angle < 80:  # Valid range
+            if HAND_ENTRY_ANGLE_MIN < angle < HAND_ENTRY_ANGLE_MAX:  # Valid range
                 angles.append(angle)
-        
+
         # Right arm entry
         if right_wrist and right_elbow and right_shoulder:
             dx = right_wrist[0] - right_elbow[0]
             dy = right_wrist[1] - right_elbow[1]
             angle = abs(np.degrees(np.arctan2(dy, dx)))
-            if 10 < angle < 80:
+            if HAND_ENTRY_ANGLE_MIN < angle < HAND_ENTRY_ANGLE_MAX:
                 angles.append(angle)
         
         return np.mean(angles) if angles else 0
@@ -418,13 +443,13 @@ class StrokeAnalyzer:
         # Left arm elbow angle
         if left_shoulder and left_elbow and left_wrist:
             angle = self._angle_between_points(left_shoulder, left_elbow, left_wrist)
-            if 60 < angle < 180:
+            if ELBOW_ANGLE_MIN < angle < ELBOW_ANGLE_MAX:
                 angles.append(angle)
-        
+
         # Right arm
         if right_shoulder and right_elbow and right_wrist:
             angle = self._angle_between_points(right_shoulder, right_elbow, right_wrist)
-            if 60 < angle < 180:
+            if ELBOW_ANGLE_MIN < angle < ELBOW_ANGLE_MAX:
                 angles.append(angle)
         
         return np.mean(angles) if angles else 0
@@ -494,9 +519,7 @@ class StrokeAnalyzer:
         head_up = nose[1] < shoulder_center_y - 20
         
         # Significant lateral offset + head up = breathing
-        threshold = 30  # pixels
-        
-        if abs(head_offset_x) > threshold and head_up:
+        if abs(head_offset_x) > BREATHING_THRESHOLD_PX and head_up:
             # Check if this is a new breath (not continuation)
             if not self.breath_frames or frame_idx - self.breath_frames[-1] > 5:
                 self.breath_frames.append(frame_idx)
@@ -519,7 +542,7 @@ class StrokeAnalyzer:
         # Normalize by hip width
         hip_width = abs(left_hip[0] - right_hip[0])
         if hip_width > 0:
-            normalized_amplitude = (ankle_diff / hip_width) * 45  # Scale to degrees
+            normalized_amplitude = (ankle_diff / hip_width) * KICK_AMPLITUDE_SCALE  # Scale to degrees
             self.kick_amplitudes.append(normalized_amplitude)
     
     def _calculate_stats(self) -> StrokeAnalysis:
@@ -546,7 +569,7 @@ class StrokeAnalyzer:
             symmetry = 100
         
         # Body roll
-        valid_rolls = [r for r in self.body_roll_history if abs(r) < 90]
+        valid_rolls = [r for r in self.body_roll_history if abs(r) < BODY_ROLL_MAX_VALID]
         if valid_rolls:
             avg_roll = np.mean([abs(r) for r in valid_rolls])
             left_rolls = [r for r in valid_rolls if r < 0]
@@ -561,7 +584,7 @@ class StrokeAnalyzer:
         for phase in self.frame_phases:
             phase_counts[phase] = phase_counts.get(phase, 0) + 1
         total_frames = len(self.frame_phases)
-        phases_dist = {p: (c / total_frames * 100) for p, c in phase_counts.items()}
+        phases_dist = {p: (c / total_frames * 100 if total_frames > 0 else 0) for p, c in phase_counts.items()}
         
         # =====================================================================
         # NEW: Advanced metrics calculation
@@ -578,21 +601,22 @@ class StrokeAnalyzer:
         avg_hand_entry = np.mean(self.hand_entry_angles) if self.hand_entry_angles else 0
         # Score: optimal is ~40°, score decreases as deviation increases
         if avg_hand_entry > 0:
-            deviation = abs(avg_hand_entry - 40)
-            hand_entry_score = max(0, 100 - deviation * 2)
+            deviation = abs(avg_hand_entry - OPTIMAL_HAND_ENTRY_ANGLE)
+            hand_entry_score = max(0, 100 - deviation * HAND_ENTRY_SCORE_MULTIPLIER)
         else:
             hand_entry_score = 0
         
         # High elbow catch
         avg_elbow_catch = np.mean(self.elbow_catch_angles) if self.elbow_catch_angles else 0
-        # Score: optimal is 90-120°
+        # Score: optimal is ELBOW_SCORE_OPTIMAL_MIN..ELBOW_SCORE_OPTIMAL_MAX
         if avg_elbow_catch > 0:
-            if 90 <= avg_elbow_catch <= 120:
+            if ELBOW_SCORE_OPTIMAL_MIN <= avg_elbow_catch <= ELBOW_SCORE_OPTIMAL_MAX:
                 high_elbow_score = 100
-            elif 80 <= avg_elbow_catch < 90 or 120 < avg_elbow_catch <= 130:
-                high_elbow_score = 80
+            elif (ELBOW_SCORE_GOOD_MIN <= avg_elbow_catch < ELBOW_SCORE_OPTIMAL_MIN
+                  or ELBOW_SCORE_OPTIMAL_MAX < avg_elbow_catch <= ELBOW_SCORE_GOOD_MAX):
+                high_elbow_score = ELBOW_SCORE_GOOD_PCT
             else:
-                high_elbow_score = max(0, 60 - abs(avg_elbow_catch - 105))
+                high_elbow_score = max(0, 60 - abs(avg_elbow_catch - ELBOW_SCORE_REFERENCE))
         else:
             high_elbow_score = 0
         
@@ -601,7 +625,7 @@ class StrokeAnalyzer:
         avg_head_pos = np.mean(valid_head_pos) if valid_head_pos else 0
         head_stability = np.std(valid_head_pos) if len(valid_head_pos) > 1 else 0
         # Score: less movement = better
-        head_stability_score = max(0, 100 - head_stability * 2)
+        head_stability_score = max(0, 100 - head_stability * HEAD_STABILITY_MULTIPLIER)
         
         # Breathing pattern
         breaths = len(self.breath_frames)
@@ -620,7 +644,7 @@ class StrokeAnalyzer:
             if len(self.breath_frames) > 1:
                 intervals = np.diff(self.breath_frames)
                 interval_std = np.std(intervals)
-                breathing_regularity = max(0, 100 - interval_std * 2)
+                breathing_regularity = max(0, 100 - interval_std * BREATHING_REGULARITY_MULTIPLIER)
             else:
                 breathing_regularity = 50
         else:
@@ -633,7 +657,7 @@ class StrokeAnalyzer:
         # Kick symmetry (based on amplitude variance)
         if len(self.kick_amplitudes) > 2:
             kick_variance = np.std(self.kick_amplitudes)
-            kick_symmetry = max(0, 100 - kick_variance * 3)
+            kick_symmetry = max(0, 100 - kick_variance * KICK_SYMMETRY_MULTIPLIER)
         else:
             kick_symmetry = 50
         
