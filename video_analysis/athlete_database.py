@@ -323,26 +323,28 @@ class AthleteDatabase:
     })
 
     def get_progress(self, athlete_id: int, metric: str = "ai_score",
-                     session_type: str = None, limit: int = 20) -> List[Dict]:
+                     session_type: str = None, limit: int = 20,
+                     days: int = None) -> List[Dict]:
         """Get progress data for a metric over time."""
         if metric not in self._ALLOWED_METRICS:
             raise ValueError(f"Invalid metric '{metric}'. Allowed: {sorted(self._ALLOWED_METRICS)}")
 
         with self._get_connection() as conn:
             cursor = conn.cursor()
+            params: list = [athlete_id]
+            where = "WHERE athlete_id = ?"
+            if session_type and session_type != "all":
+                where += " AND session_type = ?"
+                params.append(session_type)
+            if days:
+                where += " AND date >= datetime('now', ?)"
+                params.append(f"-{days} days")
+            params.append(limit)
             # metric is whitelisted above, safe to interpolate
-            if session_type:
-                cursor.execute(f"""
-                    SELECT date, {metric} FROM sessions
-                    WHERE athlete_id = ? AND session_type = ?
-                    ORDER BY date ASC LIMIT ?
-                """, (athlete_id, session_type, limit))
-            else:
-                cursor.execute(f"""
-                    SELECT date, {metric} FROM sessions
-                    WHERE athlete_id = ?
-                    ORDER BY date ASC LIMIT ?
-                """, (athlete_id, limit))
+            cursor.execute(
+                f"SELECT date, {metric} FROM sessions {where} ORDER BY date ASC LIMIT ?",
+                params,
+            )
             rows = cursor.fetchall()
 
         return [{"date": r[0], "value": r[1]} for r in rows]

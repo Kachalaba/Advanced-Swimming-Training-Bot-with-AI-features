@@ -63,23 +63,101 @@ def render_history_tab():
             </div>
             """, unsafe_allow_html=True)
 
-    # Progress chart
-    st.markdown("### 📈 Прогрес AI оцінки")
-    progress_data = db.get_progress(athlete.id, "ai_score")
+    # Multi-metric progress chart
+    st.markdown("### 📈 Динаміка метрик")
+
+    import pandas as pd
+
+    _METRIC_LABELS = {
+        "ai_score": "AI Score",
+        "avg_speed": "Швидкість (м/с)",
+        "stroke_rate": "Темп гребків/хв",
+        "symmetry_score": "Симетрія (%)",
+        "streamline_score": "Обтічність",
+        "stability_score": "Стабільність (%)",
+        "duration_sec": "Тривалість (с)",
+    }
+    _PERIOD_DAYS = {"7 днів": 7, "30 днів": 30, "90 днів": 90, "Весь час": None}
+    _SESSION_TYPES = {"Всі": "all", "Swimming": "swimming", "Running": "running",
+                      "Cycling": "cycling", "Dryland": "dryland"}
+
+    _mcol1, _mcol2, _mcol3 = st.columns(3)
+    with _mcol1:
+        selected_metric = st.selectbox("📊 Метрика", list(_METRIC_LABELS.keys()),
+                                       format_func=lambda k: _METRIC_LABELS[k],
+                                       key="hist_metric")
+    with _mcol2:
+        selected_period_label = st.radio("📅 Період", list(_PERIOD_DAYS.keys()),
+                                         horizontal=True, key="hist_period")
+    with _mcol3:
+        selected_type_label = st.selectbox("🏊 Тип", list(_SESSION_TYPES.keys()),
+                                           key="hist_stype")
+
+    progress_data = db.get_progress(
+        athlete.id,
+        metric=selected_metric,
+        session_type=_SESSION_TYPES[selected_type_label],
+        limit=200,
+        days=_PERIOD_DAYS[selected_period_label],
+    )
 
     if progress_data:
-        import pandas as pd
-        df = pd.DataFrame(progress_data)
-        df['date'] = pd.to_datetime(df['date'])
-        st.line_chart(df.set_index('date')['value'])
+        df_prog = pd.DataFrame(progress_data)
+        df_prog['date'] = pd.to_datetime(df_prog['date'])
+        df_prog = df_prog.dropna(subset=['value'])
+        if not df_prog.empty:
+            try:
+                import plotly.express as px
+                fig = px.line(
+                    df_prog, x='date', y='value',
+                    title=f"{_METRIC_LABELS[selected_metric]} — {athlete.name}",
+                    markers=True,
+                    color_discrete_sequence=["#3b82f6"],
+                )
+                fig.update_layout(
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    font_color="#94a3b8",
+                    xaxis_title="Дата",
+                    yaxis_title=_METRIC_LABELS[selected_metric],
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            except ImportError:
+                st.line_chart(df_prog.set_index('date')['value'])
+        else:
+            st.info("Немає даних для вибраної метрики/фільтрів")
     else:
         st.info("Недостатньо даних для графіка прогресу")
 
     # Session history
     st.markdown("### 📋 Історія сесій")
-    sessions = db.get_sessions(athlete.id, limit=20)
+    sessions = db.get_sessions(athlete.id, limit=100)
 
     if sessions:
+        # CSV export
+        import pandas as pd
+        _csv_rows = []
+        for s in sessions:
+            _csv_rows.append({
+                "date": s.date[:10],
+                "type": s.session_type,
+                "ai_score": s.ai_score,
+                "distance_m": s.distance_m,
+                "duration_sec": s.duration_sec,
+                "avg_speed": s.avg_speed,
+                "stroke_rate": s.stroke_rate,
+                "symmetry_score": s.symmetry_score,
+                "ai_summary": s.ai_summary or "",
+            })
+        _csv_bytes = pd.DataFrame(_csv_rows).to_csv(index=False).encode("utf-8")
+        st.download_button(
+            "⬇️ Завантажити CSV",
+            _csv_bytes,
+            f"{selected_name}_history.csv",
+            "text/csv",
+            key="csv_export",
+        )
+
         for session in sessions:
             type_icon = "🏊" if session.session_type == "swimming" else "🏋️"
             with st.expander(f"{type_icon} {session.date[:10]} - Оцінка: {session.ai_score}/100"):
