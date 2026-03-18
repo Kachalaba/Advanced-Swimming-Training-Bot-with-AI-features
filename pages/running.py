@@ -160,35 +160,28 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type,
             # Minimum landmark confidence to accept a detection
             MIN_LANDMARK_VISIBILITY = 0.5
 
-            # Use cached MediaPipe Pose (loaded once per session)
-            pose = _load_mediapipe_pose()
-
             keypoints_list = []
             annotated_frames = []
             frames_with_pose = 0
             persons_detected = set()
 
-            # Smoothing buffer for each person
-            prev_keypoints = {}  # track_id -> previous keypoints
-            SMOOTHING_FACTOR = 0.5
+            import numpy as np
+            from collections import deque
 
-            # Track how many frames each person has been lost
-            lost_frame_count = {}  # track_id -> count of consecutive lost frames
+            # Per-keypoint history buffer for median smoothing (rejects outlier frames)
+            MEDIAN_WIN = 5           # frames in median window
+            kp_history = {}          # name -> deque[(x, y)]
 
-            def smooth_keypoints(current_kps, prev_kps, factor=SMOOTHING_FACTOR):
-                """Smooth keypoints between frames to reduce flickering."""
-                if not prev_kps:
-                    return current_kps
-                smoothed = {}
-                for name, (cx, cy) in current_kps.items():
-                    if name in prev_kps:
-                        px, py = prev_kps[name]
-                        sx = px * factor + cx * (1 - factor)
-                        sy = py * factor + cy * (1 - factor)
-                        smoothed[name] = (sx, sy)
-                    else:
-                        smoothed[name] = (cx, cy)
-                return smoothed
+            prev_keypoints   = {}    # track_id -> last good kps
+            lost_frame_count = {}    # track_id -> consecutive lost frames
+
+            def median_smooth(name, x, y):
+                """Push (x, y) into rolling window and return median position."""
+                if name not in kp_history:
+                    kp_history[name] = deque(maxlen=MEDIAN_WIN)
+                kp_history[name].append((x, y))
+                arr = np.array(kp_history[name])
+                return float(np.median(arr[:, 0])), float(np.median(arr[:, 1]))
 
             def pad_bbox(bbox, pad_pct, img_w, img_h):
                 """Add padding around bbox for better MediaPipe detection."""
@@ -359,169 +352,143 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type,
 
                 return matches
 
+            # ----------------------------------------------------------------
+            # HIGH-QUALITY POSE DETECTION
+            # Strategy:
+            #   • Run MediaPipe on the FULL FRAME every frame (not crops)
+            #     → landmark coords are always in absolute frame space,
+            #       completely independent of YOLO bbox jitter
+            #   • MediaPipe video-mode (static_image_mode=False) + smooth_landmarks=True
+            #     → built-in Kalman stabilisation between sequential frames
+            #   • YOLO bbox tracked with IoU → used ONLY to verify the detected
+            #     pose belongs to the target person (not to crop or rescale)
+            #   • Median filter over a rolling window of MEDIAN_WIN frames
+            #     → rejects any single-frame outlier/misdetection
+            #   • Fresh Pose instance per analysis → no state bleeding between
+            #     different video uploads in the same session
+            # ----------------------------------------------------------------
+            import mediapipe as _mp
+            pose_hq = _mp.solutions.pose.Pose(
+                static_image_mode=False,
+                model_complexity=2,          # most accurate model
+                smooth_landmarks=True,       # MediaPipe built-in Kalman
+                enable_segmentation=False,
+                min_detection_confidence=0.5,
+                min_tracking_confidence=0.7,
+            )
+
+            # YOLO-based target bbox tracking (IoU + centroid)
+            target_bbox   = None   # current frame's confirmed YOLO bbox
+
             # ---- Main frame processing loop ----
             for i, frame_info in enumerate(frame_result["frames"]):
                 frame_path = str(Path(frame_info["path"] if isinstance(frame_info, dict) else frame_info))
                 frame = cv2.imread(frame_path)
 
                 if frame is None:
-                    keypoints_list.append([])
+                    keypoints_list.append([{}])
                     annotated_frames.append(None)
                     continue
 
                 annotated_frame = frame.copy()
-                frame_persons_kps = {}
                 current_bboxes = []
 
-                # Get all person detections for this frame
+                # ---- Step A: update YOLO target bbox ----
                 if i < len(detection_result["detections"]):
                     det = detection_result["detections"][i]
                     bboxes = det.get("all_boxes", [det.get("bbox")] if det.get("bbox") else [])
-                    current_bboxes = [b for b in bboxes if b is not None]
+                    current_bboxes = sorted([b for b in bboxes if b], key=lambda b: (b[0] + b[2]) / 2)
 
-                current_bboxes = sorted(current_bboxes, key=lambda b: (b[0] + b[2]) / 2)
-
-                # Match to previous tracks
-                if prev_bboxes:
-                    matches = match_tracks(current_bboxes, prev_bboxes)
-                else:
-                    matches = {idx: idx for idx in range(len(current_bboxes))}
-                    track_id_counter = len(current_bboxes)
-
-                # Select target person on first frame
-                if i == 0 and current_bboxes and target_track_id is None:
-                    if target_person == "Найбільший у кадрі (авто)":
-                        # Pick the largest bbox
-                        target_track_id = max(
-                            range(len(current_bboxes)),
-                            key=lambda idx: bbox_area(current_bboxes[idx])
-                        )
-                    elif target_person == "Найближчий до центру":
-                        target_track_id = min(
-                            range(len(current_bboxes)),
-                            key=lambda idx: bbox_center_dist_to_frame_center(
-                                current_bboxes[idx], w, h
-                            )
-                        )
-                    elif target_person == "Вибрати за номером":
-                        target_track_id = min(person_number - 1, len(current_bboxes) - 1)
+                if current_bboxes:
+                    if prev_bboxes:
+                        matches = match_tracks(current_bboxes, prev_bboxes)
                     else:
-                        target_track_id = 0
+                        matches = {idx: idx for idx in range(len(current_bboxes))}
+                        track_id_counter = len(current_bboxes)
 
-                # Process each detection
-                new_prev_bboxes = {}
-                for curr_idx, bbox in enumerate(current_bboxes):
-                    if curr_idx in matches:
-                        track_id = matches[curr_idx]
-                    else:
-                        track_id = track_id_counter
-                        track_id_counter += 1
+                    # First frame: choose which track is the target
+                    if i == 0 and target_track_id is None:
+                        if target_person == "Найбільший у кадрі (авто)":
+                            target_track_id = max(range(len(current_bboxes)),
+                                                  key=lambda k: bbox_area(current_bboxes[k]))
+                        elif target_person == "Найближчий до центру":
+                            target_track_id = min(range(len(current_bboxes)),
+                                                  key=lambda k: bbox_center_dist_to_frame_center(
+                                                      current_bboxes[k], w, h))
+                        elif target_person == "Вибрати за номером":
+                            target_track_id = min(person_number - 1, len(current_bboxes) - 1)
+                        else:
+                            target_track_id = 0
 
-                    persons_detected.add(track_id)
+                    new_prev_bboxes = {}
+                    for curr_idx, bbox in enumerate(current_bboxes):
+                        track_id = matches.get(curr_idx, track_id_counter)
+                        if track_id not in [m for m in matches.values()]:
+                            track_id_counter += 1
+                        persons_detected.add(track_id)
+                        new_prev_bboxes[track_id] = bbox
+                        if track_id == target_track_id:
+                            target_bbox = bbox
 
-                    # Add padding around bbox for better pose detection
-                    padded_bbox = pad_bbox(bbox, bbox_padding_pct, w, h)
-                    new_prev_bboxes[track_id] = bbox  # store original for IoU
+                    prev_bboxes = new_prev_bboxes
 
-                    x1, y1, x2, y2 = [int(c) for c in padded_bbox]
+                # ---- Step B: full-frame MediaPipe ----
+                rgb_full = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                mp_result = pose_hq.process(rgb_full)
 
-                    # Use clamped origin for correct landmark back-projection
-                    actual_x1 = max(0, x1)
-                    actual_y1 = max(0, y1)
-                    person_crop = frame[actual_y1:min(h, y2), actual_x1:min(w, x2)]
-                    if person_crop.size == 0:
-                        continue
+                kps = {}
+                if mp_result.pose_landmarks:
+                    raw_kps = {}
+                    for idx, name in FULL_LANDMARK_MAP.items():
+                        lm = mp_result.pose_landmarks.landmark[idx]
+                        if lm.visibility >= MIN_LANDMARK_VISIBILITY:
+                            raw_kps[name] = (lm.x * w, lm.y * h)
 
-                    rgb_crop = cv2.cvtColor(person_crop, cv2.COLOR_BGR2RGB)
-                    results = pose.process(rgb_crop)
+                    # ---- Step C: verify pose belongs to TARGET person ----
+                    # Check if torso centroid is inside (or near) the YOLO target bbox
+                    pose_ok = True
+                    if target_bbox and raw_kps:
+                        torso = [raw_kps[n] for n in
+                                 ("left_hip", "right_hip", "left_shoulder", "right_shoulder")
+                                 if n in raw_kps]
+                        if torso:
+                            cx = sum(p[0] for p in torso) / len(torso)
+                            cy = sum(p[1] for p in torso) / len(torso)
+                            tx1, ty1, tx2, ty2 = target_bbox
+                            margin = max(tx2 - tx1, ty2 - ty1) * 0.6  # generous tolerance
+                            if not (tx1 - margin <= cx <= tx2 + margin and
+                                    ty1 - margin <= cy <= ty2 + margin):
+                                pose_ok = False  # MediaPipe detected a different person
 
-                    kps = {}
-                    if results.pose_landmarks:
+                    # ---- Step D: median-smooth keypoints ----
+                    if pose_ok and raw_kps:
+                        for name, (x, y) in raw_kps.items():
+                            kps[name] = median_smooth(name, x, y)
                         frames_with_pose += 1
-                        crop_h, crop_w = person_crop.shape[:2]
 
-                        # Filter by landmark confidence
-                        # NOTE: use actual_x1/actual_y1 (clamped) so coords map correctly
-                        for idx, name in FULL_LANDMARK_MAP.items():
-                            lm = results.pose_landmarks.landmark[idx]
-                            if lm.visibility >= MIN_LANDMARK_VISIBILITY:
-                                px = actual_x1 + lm.x * crop_w
-                                py = actual_y1 + lm.y * crop_h
-                                kps[name] = (px, py)
-                            elif track_id in prev_keypoints and name in prev_keypoints[track_id]:
-                                # Use previous position for low-confidence landmarks
-                                kps[name] = prev_keypoints[track_id][name]
-
-                        kps = smooth_keypoints(kps, prev_keypoints.get(track_id, {}))
-                        prev_keypoints[track_id] = kps
-                        lost_frame_count[track_id] = 0
-
-                        is_target = (track_id == target_track_id)
-                        draw_skeleton_smooth(annotated_frame, kps, track_id, is_target=is_target)
-
-                    elif track_id in prev_keypoints:
-                        # Interpolation: use previous keypoints for up to max_lost_frames
-                        lost_count = lost_frame_count.get(track_id, 0) + 1
-                        lost_frame_count[track_id] = lost_count
-
-                        if lost_count <= max_lost_frames:
-                            kps = prev_keypoints[track_id]
-                            is_target = (track_id == target_track_id)
-                            draw_skeleton_smooth(annotated_frame, kps, track_id,
-                                                 faded=True, is_target=is_target)
-
-                    if kps:
-                        frame_persons_kps[track_id] = kps
-
-                prev_bboxes = new_prev_bboxes
-
-                # Fallback: if target person not found via YOLO, try full frame
-                if target_track_id is not None and target_track_id not in frame_persons_kps:
-                    lost_count = lost_frame_count.get(target_track_id, 0)
+                # ---- Step E: fallback to previous if detection lost ----
+                tid = target_track_id if target_track_id is not None else 0
+                is_faded = False
+                if kps:
+                    prev_keypoints[tid] = kps
+                    lost_frame_count[tid] = 0
+                elif tid in prev_keypoints:
+                    lost_count = lost_frame_count.get(tid, 0) + 1
+                    lost_frame_count[tid] = lost_count
                     if lost_count <= max_lost_frames:
-                        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                        results = pose.process(rgb)
+                        kps = prev_keypoints[tid]
+                        is_faded = True
 
-                        if results.pose_landmarks:
-                            frames_with_pose += 1
-                            kps = {}
-                            for idx, name in FULL_LANDMARK_MAP.items():
-                                lm = results.pose_landmarks.landmark[idx]
-                                if lm.visibility >= MIN_LANDMARK_VISIBILITY:
-                                    kps[name] = (lm.x * w, lm.y * h)
-                                elif target_track_id in prev_keypoints and name in prev_keypoints[target_track_id]:
-                                    kps[name] = prev_keypoints[target_track_id][name]
+                if kps:
+                    draw_skeleton_smooth(annotated_frame, kps, 0, faded=is_faded, is_target=True)
 
-                            kps = smooth_keypoints(kps, prev_keypoints.get(target_track_id, {}))
-                            prev_keypoints[target_track_id] = kps
-                            frame_persons_kps[target_track_id] = kps
-                            lost_frame_count[target_track_id] = 0
-                            draw_skeleton_smooth(annotated_frame, kps, target_track_id, is_target=True)
-
-                # If still nothing found (no detections at all), use full frame for person 0
-                if not frame_persons_kps:
-                    fallback_id = target_track_id if target_track_id is not None else 0
-                    if fallback_id in prev_keypoints:
-                        lost_count = lost_frame_count.get(fallback_id, 0) + 1
-                        lost_frame_count[fallback_id] = lost_count
-                        if lost_count <= max_lost_frames:
-                            kps = prev_keypoints[fallback_id]
-                            frame_persons_kps[fallback_id] = kps
-                            draw_skeleton_smooth(annotated_frame, kps, fallback_id, faded=True, is_target=True)
-
-                # Convert to list format for analyzer
-                sorted_track_ids = sorted(frame_persons_kps.keys())
-                sorted_kps = [frame_persons_kps[tid] for tid in sorted_track_ids]
-                if not sorted_kps:
-                    sorted_kps = [{}]
-
-                keypoints_list.append(sorted_kps)
+                keypoints_list.append([kps] if kps else [{}])
                 annotated_frames.append(annotated_frame)
 
                 if i % 20 == 0:
                     progress_bar.progress(30 + int(25 * (i / len(frame_result["frames"]))))
 
-            # NOTE: do NOT call pose.close() — model is cached via @st.cache_resource
+            pose_hq.close()   # release fresh instance
             progress_bar.progress(55)
 
             num_persons = len(persons_detected) if persons_detected else 1
