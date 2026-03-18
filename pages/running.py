@@ -159,6 +159,8 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type,
 
             # Minimum landmark confidence to accept a detection
             MIN_LANDMARK_VISIBILITY = 0.5
+            # Minimum crop dimension fed to MediaPipe (upscale smaller crops)
+            MIN_CROP_SIZE = 256
 
             keypoints_list = []
             annotated_frames = []
@@ -432,39 +434,76 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type,
 
                     prev_bboxes = new_prev_bboxes
 
-                # ---- Step B: full-frame MediaPipe ----
-                rgb_full = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                mp_result = pose_hq.process(rgb_full)
-
+                # ---- Step B: YOLO-crop → MediaPipe (crop+upscale for small subjects) ----
+                # Crop to the YOLO target bbox so MediaPipe only sees the runner,
+                # not background.  If the crop is tiny (runner is far away) we upscale
+                # it to MIN_CROP_SIZE before feeding to MediaPipe, then project
+                # landmarks back to full-frame coordinates with the inverse scale.
                 kps = {}
-                if mp_result.pose_landmarks:
-                    raw_kps = {}
-                    for idx, name in FULL_LANDMARK_MAP.items():
-                        lm = mp_result.pose_landmarks.landmark[idx]
-                        if lm.visibility >= MIN_LANDMARK_VISIBILITY:
-                            raw_kps[name] = (lm.x * w, lm.y * h)
 
-                    # ---- Step C: verify pose belongs to TARGET person ----
-                    # Check if torso centroid is inside (or near) the YOLO target bbox
-                    pose_ok = True
-                    if target_bbox and raw_kps:
-                        torso = [raw_kps[n] for n in
-                                 ("left_hip", "right_hip", "left_shoulder", "right_shoulder")
-                                 if n in raw_kps]
-                        if torso:
-                            cx = sum(p[0] for p in torso) / len(torso)
-                            cy = sum(p[1] for p in torso) / len(torso)
-                            tx1, ty1, tx2, ty2 = target_bbox
-                            margin = max(tx2 - tx1, ty2 - ty1) * 0.6  # generous tolerance
-                            if not (tx1 - margin <= cx <= tx2 + margin and
-                                    ty1 - margin <= cy <= ty2 + margin):
-                                pose_ok = False  # MediaPipe detected a different person
+                if target_bbox:
+                    tx1, ty1, tx2, ty2 = [int(c) for c in target_bbox[:4]]
+                    bw = max(1, tx2 - tx1)
+                    bh = max(1, ty2 - ty1)
+                    pad_x = int(bw * bbox_padding_pct / 100)
+                    pad_y = int(bh * bbox_padding_pct / 100)
+                    cx1 = max(0, tx1 - pad_x)
+                    cy1 = max(0, ty1 - pad_y)
+                    cx2 = min(w, tx2 + pad_x)
+                    cy2 = min(h, ty2 + pad_y)
+                    crop = frame[cy1:cy2, cx1:cx2]
+                    crop_h, crop_w = crop.shape[:2]
 
-                    # ---- Step D: median-smooth keypoints ----
-                    if pose_ok and raw_kps:
-                        for name, (x, y) in raw_kps.items():
-                            kps[name] = median_smooth(name, x, y)
-                        frames_with_pose += 1
+                    if crop_w >= 4 and crop_h >= 4:
+                        # Upscale to MIN_CROP_SIZE so MediaPipe sees enough detail
+                        scale = 1.0
+                        min_dim = min(crop_w, crop_h)
+                        if min_dim < MIN_CROP_SIZE:
+                            scale = MIN_CROP_SIZE / min_dim
+                            crop = cv2.resize(
+                                crop,
+                                (int(crop_w * scale), int(crop_h * scale)),
+                                interpolation=cv2.INTER_LANCZOS4,
+                            )
+                            crop_h, crop_w = crop.shape[:2]
+
+                        rgb_crop = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
+                        mp_result = pose_hq.process(rgb_crop)
+
+                        if mp_result.pose_landmarks:
+                            raw_kps = {}
+                            for idx, name in FULL_LANDMARK_MAP.items():
+                                lm = mp_result.pose_landmarks.landmark[idx]
+                                if lm.visibility >= MIN_LANDMARK_VISIBILITY:
+                                    # Project back: undo upscale, add crop origin
+                                    abs_x = cx1 + (lm.x * crop_w) / scale
+                                    abs_y = cy1 + (lm.y * crop_h) / scale
+                                    raw_kps[name] = (abs_x, abs_y)
+
+                            if raw_kps:
+                                # ---- Step C: displacement guard ----
+                                # Reject frames where skeleton jumps > 1.5× person diagonal
+                                # (catches wild outlier detections)
+                                pose_ok = True
+                                tid = target_track_id if target_track_id is not None else 0
+                                if tid in prev_keypoints:
+                                    person_diag = (bw ** 2 + bh ** 2) ** 0.5
+                                    max_jump = person_diag * 1.5
+                                    for anchor in ("left_hip", "right_hip"):
+                                        if anchor in raw_kps and anchor in prev_keypoints[tid]:
+                                            dx = (raw_kps[anchor][0]
+                                                  - prev_keypoints[tid][anchor][0])
+                                            dy = (raw_kps[anchor][1]
+                                                  - prev_keypoints[tid][anchor][1])
+                                            if (dx ** 2 + dy ** 2) ** 0.5 > max_jump:
+                                                pose_ok = False
+                                                break
+
+                                # ---- Step D: median smooth ----
+                                if pose_ok:
+                                    for name, (x, y) in raw_kps.items():
+                                        kps[name] = median_smooth(name, x, y)
+                                    frames_with_pose += 1
 
                 # ---- Step E: fallback to previous if detection lost ----
                 tid = target_track_id if target_track_id is not None else 0
