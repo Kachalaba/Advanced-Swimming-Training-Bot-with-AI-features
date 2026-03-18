@@ -167,23 +167,25 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type,
             frames_with_pose = 0
             persons_detected = set()
 
-            import numpy as np
-            from collections import deque
-
-            # Per-keypoint history buffer for median smoothing (rejects outlier frames)
-            MEDIAN_WIN = 5           # frames in median window
-            kp_history = {}          # name -> deque[(x, y)]
+            # EMA smoothing — responds instantly, no frame-lag.
+            # alpha=0.72: 72% current frame, 28% history → snappy + no jitter.
+            EMA_ALPHA  = 0.72
+            ema_state  = {}   # name -> (x, y) running EMA
 
             prev_keypoints   = {}    # track_id -> last good kps
             lost_frame_count = {}    # track_id -> consecutive lost frames
 
-            def median_smooth(name, x, y):
-                """Push (x, y) into rolling window and return median position."""
-                if name not in kp_history:
-                    kp_history[name] = deque(maxlen=MEDIAN_WIN)
-                kp_history[name].append((x, y))
-                arr = np.array(kp_history[name])
-                return float(np.median(arr[:, 0])), float(np.median(arr[:, 1]))
+            def ema_smooth(name, x, y):
+                """Exponential moving average — low latency landmark smoothing."""
+                if name not in ema_state:
+                    ema_state[name] = (x, y)
+                else:
+                    px, py = ema_state[name]
+                    ema_state[name] = (
+                        EMA_ALPHA * x + (1.0 - EMA_ALPHA) * px,
+                        EMA_ALPHA * y + (1.0 - EMA_ALPHA) * py,
+                    )
+                return ema_state[name]
 
             def pad_bbox(bbox, pad_pct, img_w, img_h):
                 """Add padding around bbox for better MediaPipe detection."""
@@ -261,7 +263,7 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type,
                 # Non-target persons drawn very faint
                 alpha   = 0.85 if is_target else 0.25
                 thick   = 2    if is_target else 1
-                j_r     = 3    if is_target else 2   # joint radius
+                j_r     = 2    if is_target else 1   # joint radius — small, precise
 
                 groups = [
                     (_LEFT_CONN,  _dim(_C_LEFT,  alpha)),
@@ -525,7 +527,7 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type,
                                 # ---- Step D: median smooth ----
                                 if pose_ok:
                                     for name, (x, y) in raw_kps.items():
-                                        kps[name] = median_smooth(name, x, y)
+                                        kps[name] = ema_smooth(name, x, y)
                                     frames_with_pose += 1
 
                 # ---- Step E: fallback to previous if detection lost ----
