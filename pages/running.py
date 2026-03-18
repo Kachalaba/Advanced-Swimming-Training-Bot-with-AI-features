@@ -224,58 +224,82 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type,
                 return kps
 
             # Skeleton connections for drawing
-            SKELETON_CONNECTIONS = [
-                ("left_shoulder", "right_shoulder"),
-                ("left_shoulder", "left_hip"),
-                ("right_shoulder", "right_hip"),
-                ("left_hip", "right_hip"),
+            # ---- Premium minimal skeleton drawing ----
+            # Left limbs: cool cyan (BGR)
+            _C_LEFT   = (220, 180, 40)   # warm gold-cyan
+            # Right limbs: coral (BGR)
+            _C_RIGHT  = (80,  80, 220)   # coral/red
+            # Torso: silver
+            _C_TORSO  = (210, 210, 210)
+
+            _LEFT_CONN = [
                 ("left_shoulder", "left_elbow"),
-                ("left_elbow", "left_wrist"),
+                ("left_elbow",    "left_wrist"),
+                ("left_hip",      "left_knee"),
+                ("left_knee",     "left_ankle"),
+                ("left_ankle",    "left_heel"),
+                ("left_ankle",    "left_toe"),
+            ]
+            _RIGHT_CONN = [
                 ("right_shoulder", "right_elbow"),
-                ("right_elbow", "right_wrist"),
-                ("left_hip", "left_knee"),
-                ("left_knee", "left_ankle"),
-                ("left_ankle", "left_heel"),
-                ("left_ankle", "left_toe"),
-                ("right_hip", "right_knee"),
-                ("right_knee", "right_ankle"),
-                ("right_ankle", "right_heel"),
-                ("right_ankle", "right_toe"),
+                ("right_elbow",    "right_wrist"),
+                ("right_hip",      "right_knee"),
+                ("right_knee",     "right_ankle"),
+                ("right_ankle",    "right_heel"),
+                ("right_ankle",    "right_toe"),
+            ]
+            _TORSO_CONN = [
+                ("left_shoulder",  "right_shoulder"),
+                ("left_shoulder",  "left_hip"),
+                ("right_shoulder", "right_hip"),
+                ("left_hip",       "right_hip"),
             ]
 
-            RUNNER_COLORS = [
-                (0, 255, 0), (255, 165, 0), (255, 0, 255),
-                (0, 255, 255), (255, 255, 0),
-            ]
+            def _dim(color, alpha):
+                return tuple(max(0, int(c * alpha)) for c in color)
 
             def draw_skeleton_smooth(frame, kps, person_idx=0, faded=False, is_target=False):
-                """Draw skeleton with smoothed keypoints."""
+                """Draw premium minimal skeleton — thin AA lines, left/right colour coding."""
                 if not kps:
                     return
-                color = RUNNER_COLORS[person_idx % len(RUNNER_COLORS)]
-                if faded:
-                    color = tuple(c // 2 for c in color)
-                thickness = 3 if is_target else 2
-                radius = 5 if is_target else 4
 
-                for start_name, end_name in SKELETON_CONNECTIONS:
-                    if start_name in kps and end_name in kps:
-                        start_pt = (int(kps[start_name][0]), int(kps[start_name][1]))
-                        end_pt = (int(kps[end_name][0]), int(kps[end_name][1]))
-                        cv2.line(frame, start_pt, end_pt, color, thickness)
+                # Non-target persons drawn very faint
+                alpha   = 0.85 if is_target else 0.25
+                thick   = 2    if is_target else 1
+                j_r     = 3    if is_target else 2   # joint radius
 
+                groups = [
+                    (_LEFT_CONN,  _dim(_C_LEFT,  alpha)),
+                    (_RIGHT_CONN, _dim(_C_RIGHT, alpha)),
+                    (_TORSO_CONN, _dim(_C_TORSO, alpha)),
+                ]
+
+                for connections, color in groups:
+                    for a_name, b_name in connections:
+                        if a_name in kps and b_name in kps:
+                            pa = (int(kps[a_name][0]), int(kps[a_name][1]))
+                            pb = (int(kps[b_name][0]), int(kps[b_name][1]))
+                            cv2.line(frame, pa, pb, color, thick, cv2.LINE_AA)
+
+                # Joints — small filled circles
                 for name, (x, y) in kps.items():
                     pt = (int(x), int(y))
-                    if "ankle" in name or "knee" in name or "hip" in name:
-                        cv2.circle(frame, pt, radius + 2, (0, 0, 255), -1)
+                    if "left" in name:
+                        jc = _dim(_C_LEFT, alpha)
+                    elif "right" in name:
+                        jc = _dim(_C_RIGHT, alpha)
                     else:
-                        cv2.circle(frame, pt, radius, color, -1)
+                        jc = _dim(_C_TORSO, alpha)
+                    cv2.circle(frame, pt, j_r, jc, -1, cv2.LINE_AA)
+                    if is_target:
+                        # Thin bright rim for clarity
+                        rim = tuple(min(c + 60, 255) for c in jc)
+                        cv2.circle(frame, pt, j_r + 1, rim, 1, cv2.LINE_AA)
 
-                if "nose" in kps:
-                    label = f"#{person_idx+1}" + (" [TARGET]" if is_target else "")
-                    label_pt = (int(kps["nose"][0]) - 30, int(kps["nose"][1]) - 20)
-                    cv2.putText(frame, label, label_pt,
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+                # Head dot only (no text labels)
+                if "nose" in kps and is_target:
+                    np_ = (int(kps["nose"][0]), int(kps["nose"][1]))
+                    cv2.circle(frame, np_, 4, (240, 240, 240), -1, cv2.LINE_AA)
 
             # ---- Stable tracking with IoU + centroid fallback ----
             prev_bboxes = {}
@@ -401,7 +425,10 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type,
 
                     x1, y1, x2, y2 = [int(c) for c in padded_bbox]
 
-                    person_crop = frame[max(0, y1):min(h, y2), max(0, x1):min(w, x2)]
+                    # Use clamped origin for correct landmark back-projection
+                    actual_x1 = max(0, x1)
+                    actual_y1 = max(0, y1)
+                    person_crop = frame[actual_y1:min(h, y2), actual_x1:min(w, x2)]
                     if person_crop.size == 0:
                         continue
 
@@ -414,11 +441,12 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type,
                         crop_h, crop_w = person_crop.shape[:2]
 
                         # Filter by landmark confidence
+                        # NOTE: use actual_x1/actual_y1 (clamped) so coords map correctly
                         for idx, name in FULL_LANDMARK_MAP.items():
                             lm = results.pose_landmarks.landmark[idx]
                             if lm.visibility >= MIN_LANDMARK_VISIBILITY:
-                                px = x1 + lm.x * crop_w
-                                py = y1 + lm.y * crop_h
+                                px = actual_x1 + lm.x * crop_w
+                                py = actual_y1 + lm.y * crop_h
                                 kps[name] = (px, py)
                             elif track_id in prev_keypoints and name in prev_keypoints[track_id]:
                                 # Use previous position for low-confidence landmarks
