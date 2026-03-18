@@ -481,14 +481,37 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type,
                                     raw_kps[name] = (abs_x, abs_y)
 
                             if raw_kps:
-                                # ---- Step C: displacement guard ----
-                                # Reject frames where skeleton jumps > 1.5× person diagonal
-                                # (catches wild outlier detections)
                                 pose_ok = True
+
+                                # ---- Step C-1: spatial containment guard ----
+                                # All projected keypoints must stay within the
+                                # padded crop region (± 30% bbox tolerance).
+                                # Catches shadow/background limbs that MediaPipe
+                                # mistakes for the runner's legs on sunny days.
+                                tol_x = (cx2 - cx1) * 0.3
+                                tol_y = (cy2 - cy1) * 0.3
+                                for _ax, _ay in raw_kps.values():
+                                    if not (cx1 - tol_x <= _ax <= cx2 + tol_x and
+                                            cy1 - tol_y <= _ay <= cy2 + tol_y):
+                                        pose_ok = False
+                                        break
+
+                                # ---- Step C-2: skeleton size guard ----
+                                # Skeleton bounding box must not exceed
+                                # 1.5× padded crop height / 2× padded crop width.
+                                if pose_ok:
+                                    _pts = list(raw_kps.values())
+                                    _sx = max(p[0] for p in _pts) - min(p[0] for p in _pts)
+                                    _sy = max(p[1] for p in _pts) - min(p[1] for p in _pts)
+                                    if _sy > (cy2 - cy1) * 1.5 or _sx > (cx2 - cx1) * 2.0:
+                                        pose_ok = False
+
+                                # ---- Step C-3: displacement guard ----
+                                # Hip centroid must not jump > 1× person diagonal.
                                 tid = target_track_id if target_track_id is not None else 0
-                                if tid in prev_keypoints:
+                                if pose_ok and tid in prev_keypoints:
                                     person_diag = (bw ** 2 + bh ** 2) ** 0.5
-                                    max_jump = person_diag * 1.5
+                                    max_jump = person_diag * 1.0
                                     for anchor in ("left_hip", "right_hip"):
                                         if anchor in raw_kps and anchor in prev_keypoints[tid]:
                                             dx = (raw_kps[anchor][0]
