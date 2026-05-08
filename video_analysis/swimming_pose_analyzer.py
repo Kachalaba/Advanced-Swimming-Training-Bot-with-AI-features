@@ -20,6 +20,12 @@ import cv2
 import numpy as np
 import mediapipe as mp
 
+from video_analysis.constants import (
+    MIN_DETECTION_CONFIDENCE,
+    CLAHE_CLIP_LIMIT_POSE,
+    CLAHE_TILE_GRID_SIZE,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -102,7 +108,7 @@ class SwimmingPoseAnalyzer:
         "spine": (0, 200, 255),
     }
     
-    def __init__(self, model_complexity: int = 2, min_confidence: float = 0.3):
+    def __init__(self, model_complexity: int = 2, min_confidence: float = MIN_DETECTION_CONFIDENCE):
         self.mp_pose = mp.solutions.pose
         self.pose = self.mp_pose.Pose(
             static_image_mode=True,
@@ -237,7 +243,7 @@ class SwimmingPoseAnalyzer:
         # CLAHE
         lab = cv2.cvtColor(balanced, cv2.COLOR_BGR2LAB)
         l_ch, a, b_ch = cv2.split(lab)
-        clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8))
+        clahe = cv2.createCLAHE(clipLimit=CLAHE_CLIP_LIMIT_POSE, tileGridSize=CLAHE_TILE_GRID_SIZE)
         l_ch = clahe.apply(l_ch)
         enhanced = cv2.cvtColor(cv2.merge([l_ch, a, b_ch]), cv2.COLOR_LAB2BGR)
         

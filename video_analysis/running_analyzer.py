@@ -21,6 +21,7 @@ from typing import Dict, List, Optional, Tuple, Union
 from dataclasses import dataclass, field
 from enum import Enum
 
+from video_analysis.base_analyzer import BaseAnalyzer
 from video_analysis.constants import (
     RUN_PHASE_THRESHOLD_PX,
     GROUND_CONTACT_THRESHOLD_PX,
@@ -142,7 +143,7 @@ class MultiPersonRunningAnalysis:
         return list(self.analyses.values())
 
 
-class RunningAnalyzer:
+class RunningAnalyzer(BaseAnalyzer):
     """Analyze running biomechanics from video. Supports multiple people."""
     
     # Full MediaPipe 33-point landmark indices
@@ -190,6 +191,7 @@ class RunningAnalyzer:
     LANDMARKS["right_toe"] = 32
     
     def __init__(self, fps: float = 30.0, multi_person: bool = True):
+        super().__init__()
         self.fps = fps
         self.multi_person = multi_person
         self._reset_tracking()
@@ -409,30 +411,7 @@ class RunningAnalyzer:
             len(keypoints_list)
         )
     
-    def _get_point(self, kps: Dict, name: str) -> Optional[Tuple[float, float]]:
-        """Get point coordinates from keypoints dict."""
-        if name in kps:
-            pt = kps[name]
-            if isinstance(pt, (list, tuple)) and len(pt) >= 2:
-                return (pt[0], pt[1])
-            elif hasattr(pt, 'x') and hasattr(pt, 'y'):
-                return (pt.x, pt.y)
-        return None
-    
-    def _calculate_angle(self, p1, p2, p3) -> float:
-        """Calculate angle at p2 between p1-p2-p3."""
-        v1 = (p1[0] - p2[0], p1[1] - p2[1])
-        v2 = (p3[0] - p2[0], p3[1] - p2[1])
-        
-        dot = v1[0] * v2[0] + v1[1] * v2[1]
-        mag1 = math.sqrt(v1[0]**2 + v1[1]**2)
-        mag2 = math.sqrt(v2[0]**2 + v2[1]**2)
-        
-        if mag1 * mag2 == 0:
-            return 0
-        
-        cos_angle = max(-1, min(1, dot / (mag1 * mag2)))
-        return math.degrees(math.acos(cos_angle))
+    # _get_point and _calculate_angle are inherited from BaseAnalyzer
     
     def _calculate_arm_angle(self, shoulder, elbow, hip) -> float:
         """Calculate arm swing angle relative to torso."""

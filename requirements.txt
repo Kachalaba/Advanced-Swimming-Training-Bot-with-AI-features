@@ -7,30 +7,31 @@ aiohttp==3.9.1
 aiogram==3.4.1
 
 # === VIDEO ANALYSIS (CORE) ===
-opencv-python>=4.8.0
-opencv-contrib-python>=4.8.0
-ultralytics>=8.0.0          # YOLOv8 detection
-mediapipe>=0.10.0           # Pose estimation (33 keypoints)
+# Pinned to avoid silent breaking changes in patch/minor versions
+opencv-python==4.8.1.78
+opencv-contrib-python==4.8.1.78
+ultralytics==8.0.235           # YOLOv8 detection
+mediapipe==0.10.9              # Pose estimation (33 keypoints)
 
 # === ML / DEEP LEARNING ===
-torch>=2.0.0
-torchvision>=0.15.0
+torch==2.1.2
+torchvision==0.16.2
 
 # === DATA PROCESSING ===
 numpy==1.26.4
-pandas>=2.0.0
+pandas==2.1.4
 
 # === VISUALIZATION ===
 matplotlib==3.8.2
-seaborn>=0.12.0
-Pillow>=10.0.0
+seaborn==0.13.2
+Pillow==10.2.0
 
 # === WEB UI ===
-streamlit>=1.28.0
+streamlit==1.31.1
 
 # === REPORT GENERATION ===
-reportlab>=4.0.0
-fpdf2>=2.7.0
+reportlab==4.1.0
+fpdf2==2.7.9
 
 # === DATABASE ===
 SQLAlchemy==2.0.29
@@ -48,10 +49,14 @@ botocore==1.34.106
 # === UTILITIES ===
 python-dotenv==1.0.1
 openpyxl==3.1.2
-aiofiles>=23.0.0
+aiofiles==23.2.1
 
 # === MONITORING ===
 sentry-sdk==1.40.6
+
+# === TEXT TO SPEECH ===
+pyttsx3==2.90
+gTTS==2.5.1
 
 # === DEV / TESTING ===
 pytest==8.2.2

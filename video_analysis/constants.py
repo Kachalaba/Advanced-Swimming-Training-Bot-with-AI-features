@@ -94,3 +94,58 @@ DEFAULT_CONFIDENCE_THRESHOLD = 0.5
 MIN_DETECTION_CONFIDENCE = 0.3
 MIN_TRACKING_CONFIDENCE = 0.3
 SMOOTHING_WINDOW_SIZE = 10
+
+# ---------------------------------------------------------------------------
+# MediaPipe Pose configuration (shared across all analyzers)
+# ---------------------------------------------------------------------------
+MEDIAPIPE_POSE_CONFIG = {
+    "static_image_mode": True,
+    "model_complexity": 2,
+    "enable_segmentation": True,
+    "min_detection_confidence": MIN_DETECTION_CONFIDENCE,
+    "min_tracking_confidence": MIN_TRACKING_CONFIDENCE,
+}
+
+MEDIAPIPE_POSE_VIDEO_CONFIG = {
+    **MEDIAPIPE_POSE_CONFIG,
+    "static_image_mode": False,
+}
+
+# ---------------------------------------------------------------------------
+# Image preprocessing (CLAHE)
+# ---------------------------------------------------------------------------
+CLAHE_CLIP_LIMIT = 3.0
+CLAHE_TILE_GRID_SIZE = (8, 8)
+CLAHE_CLIP_LIMIT_POSE = 2.5
+
+DENOISE_H = 10
+DENOISE_H_COLOR = 10
+DENOISE_TEMPLATE_WINDOW = 7
+DENOISE_SEARCH_WINDOW = 21
+
+# ---------------------------------------------------------------------------
+# EMA smoothing for skeleton tracking
+# ---------------------------------------------------------------------------
+EMA_ALPHA = 0.72
+SKELETON_DISPLACEMENT_MAX_PX = 80
+SKELETON_JOINT_RADIUS_PX = 2
+
+# ---------------------------------------------------------------------------
+# Hydrodynamics
+# ---------------------------------------------------------------------------
+WATER_DENSITY_KG_M3 = 1000
+BASE_DRAG_COEFFICIENT = 0.4
+
+# ---------------------------------------------------------------------------
+# Cycling thresholds
+# ---------------------------------------------------------------------------
+PEDAL_PHASE_KNEE_DOWN_PX = 50
+PEDAL_PHASE_KNEE_UP_PX = -30
+OPTIMAL_CADENCE_RPM_MIN = 80
+OPTIMAL_CADENCE_RPM_MAX = 100
+
+# ---------------------------------------------------------------------------
+# Running thresholds (additional)
+# ---------------------------------------------------------------------------
+OPTIMAL_CADENCE_SPM_MIN = 170
+OPTIMAL_CADENCE_SPM_MAX = 190

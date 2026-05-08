@@ -12,7 +12,8 @@ from video_analysis.frame_extractor import extract_frames_from_video
 from video_analysis.swimmer_detector import detect_swimmer_in_frames
 from video_analysis.ai_coach import get_ai_coaching
 from video_analysis.athlete_database import save_analysis_to_db
-from video_analysis.cycling_analyzer import CyclingAnalyzer, CyclingAnalysis, generate_cycling_chart
+from video_analysis.cycling_analyzer import CyclingAnalysis, generate_cycling_chart
+from video_analysis.analyzer_factory import get_cycling_analyzer
 
 logger = logging.getLogger(__name__)
 
@@ -357,7 +358,7 @@ def analyze_cycling(uploaded_file, athlete_name, fps, bike_type,
 
             # Step 4: Cycling-specific analysis
             status_text.text("🚴 Аналіз техніки педалювання...")
-            analyzer = CyclingAnalyzer(fps=float(fps))
+            analyzer = get_cycling_analyzer(fps=float(fps))
             cycling_analysis = analyzer.analyze(keypoints_list, fps=float(fps))
 
             st.markdown(f'<div class="status-success">🚴 Cadence: {cycling_analysis.cadence:.0f} RPM | Bike Fit: {cycling_analysis.bike_fit_score:.0f}</div>', unsafe_allow_html=True)

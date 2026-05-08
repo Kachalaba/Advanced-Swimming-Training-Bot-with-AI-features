@@ -18,7 +18,8 @@ from video_analysis.video_overlay import VideoOverlayGenerator
 from video_analysis.swimming_pose_analyzer import analyze_swimming_pose
 from video_analysis.ai_coach import get_ai_coaching
 from video_analysis.biomechanics_visualizer import visualize_biomechanics
-from video_analysis.stroke_analyzer import StrokeAnalyzer, generate_stroke_chart
+from video_analysis.stroke_analyzer import generate_stroke_chart
+from video_analysis.analyzer_factory import get_stroke_analyzer
 from video_analysis.athlete_database import save_analysis_to_db
 
 logger = logging.getLogger(__name__)
@@ -349,7 +350,7 @@ def analyze_video(uploaded_file, athlete_name, pool_length, fps, analysis_method
 
                 # NEW: Stroke analysis (phases, rate, symmetry, body roll)
                 status_text.text("🏊 Аналіз гребка (фази, симетрія, body roll)...")
-                stroke_analyzer = StrokeAnalyzer(fps=float(fps))
+                stroke_analyzer = get_stroke_analyzer(fps=float(fps))
 
                 # Extract keypoints from swimming_pose_result
                 keypoints_list = []

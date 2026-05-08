@@ -87,6 +87,40 @@ TRANSLATIONS: dict = {
         "track_person_num": "Номер (зліва направо)",
         "track_max_lost": "Макс. кадрів без детекції",
         "track_bbox_pad": "Відступ bbox (%)",
+        # Analysis progress status messages
+        "status_extract_frames": "🎞️ Витягуємо кадри з відео...",
+        "status_extract_frames_short": "🎬 Витягуємо кадри...",
+        "status_detect_swimmer": "👁️ Детекція плавця (YOLO + 🌊 підводна)...",
+        "status_detect_runner": "🎯 Детекція бігуна...",
+        "status_detect_cyclist": "🎯 Детекція велосипедиста...",
+        "status_detect_person": "🎯 Детекція людини...",
+        "status_biomech": "🔬 Аналіз біомеханіки (pose)...",
+        "status_biomech_stable": "🦴 Аналіз біомеханіки (стабільний трекінг)...",
+        "status_biomech_short": "🦴 Аналіз біомеханіки...",
+        "status_biomech_viz": "🦴 Візуалізація біомеханіки...",
+        "status_trajectory": "📍 Аналіз траєкторії (bbox)...",
+        "status_splits": "⏱️ Аналіз сплітів і швидкості...",
+        "status_swim_pose": "🏊 Аналіз пози плавця (rotation + spine)...",
+        "status_stroke": "🏊 Аналіз гребка (фази, симетрія, body roll)...",
+        "status_running": "🏃 Аналіз техніки бігу...",
+        "status_cycling": "🚴 Аналіз техніки педалювання...",
+        "status_reps": "🔄 Підрахунок повторень...",
+        "status_annotated_video": "🎬 Створення анотованого відео...",
+        "status_skeleton_video": "🎬 Створення відео зі скелетом...",
+        "status_effects_video": "🎬 Створення відео з ефектами...",
+        "status_charts": "📊 Генерація графіків...",
+        "status_reports": "📊 Генерація звітів...",
+        "status_ai_coach": "🤖 AI тренер аналізує результати...",
+        "status_ai_coach_short": "🤖 AI тренер аналізує...",
+        "status_done": "✅ Аналіз завершено!",
+        # Result section labels
+        "result_stroke_analysis": "Аналіз гребка",
+        "result_swim_pose": "Поза плавця",
+        "result_metrics": "Метрики",
+        "result_improvements": "Покращення",
+        "result_regressions": "Регресії",
+        "result_exercise_stats": "Статистика вправи",
+        "result_ai_chat_athlete": "Контекст спортсмена",
     },
     "en": {
         # App header
@@ -166,15 +200,66 @@ TRANSLATIONS: dict = {
         "track_person_num": "Number (left to right)",
         "track_max_lost": "Max frames without detection",
         "track_bbox_pad": "BBox padding (%)",
+        # Analysis progress status messages
+        "status_extract_frames": "🎞️ Extracting frames from video...",
+        "status_extract_frames_short": "🎬 Extracting frames...",
+        "status_detect_swimmer": "👁️ Detecting swimmer (YOLO + 🌊 underwater)...",
+        "status_detect_runner": "🎯 Detecting runner...",
+        "status_detect_cyclist": "🎯 Detecting cyclist...",
+        "status_detect_person": "🎯 Detecting person...",
+        "status_biomech": "🔬 Biomechanics analysis (pose)...",
+        "status_biomech_stable": "🦴 Biomechanics analysis (stable tracking)...",
+        "status_biomech_short": "🦴 Biomechanics analysis...",
+        "status_biomech_viz": "🦴 Biomechanics visualization...",
+        "status_trajectory": "📍 Trajectory analysis (bbox)...",
+        "status_splits": "⏱️ Splits & speed analysis...",
+        "status_swim_pose": "🏊 Swimming pose analysis (rotation + spine)...",
+        "status_stroke": "🏊 Stroke analysis (phases, symmetry, body roll)...",
+        "status_running": "🏃 Running technique analysis...",
+        "status_cycling": "🚴 Pedaling technique analysis...",
+        "status_reps": "🔄 Counting repetitions...",
+        "status_annotated_video": "🎬 Generating annotated video...",
+        "status_skeleton_video": "🎬 Generating skeleton video...",
+        "status_effects_video": "🎬 Generating effects video...",
+        "status_charts": "📊 Generating charts...",
+        "status_reports": "📊 Generating reports...",
+        "status_ai_coach": "🤖 AI coach analyzing results...",
+        "status_ai_coach_short": "🤖 AI coach analyzing...",
+        "status_done": "✅ Analysis complete!",
+        # Result section labels
+        "result_stroke_analysis": "Stroke analysis",
+        "result_swim_pose": "Swimming pose",
+        "result_metrics": "Metrics",
+        "result_improvements": "Improvements",
+        "result_regressions": "Regressions",
+        "result_exercise_stats": "Exercise statistics",
+        "result_ai_chat_athlete": "Athlete context",
     },
 }
 
 
-def t(key: str) -> str:
-    """Return translated string for current language."""
+def t(key: str, **fmt) -> str:
+    """Return translated string for *key* in the active language.
+
+    Falls back to Ukrainian, then to *key* itself if no translation exists.
+    Optional keyword arguments are interpolated via str.format_map.
+
+    Example::
+        t("status_extract_frames")           # plain key
+        t("result_score", score=87)          # with interpolation
+    """
     lang = st.session_state.get("lang", "uk")
     val = TRANSLATIONS.get(lang, TRANSLATIONS["uk"]).get(key)
     if val is None:
-        # Fall back to Ukrainian
         val = TRANSLATIONS["uk"].get(key, key)
+    if fmt and isinstance(val, str):
+        try:
+            val = val.format_map(fmt)
+        except (KeyError, ValueError):
+            pass
     return val
+
+
+def get_lang() -> str:
+    """Return the current UI language code ('uk' or 'en')."""
+    return st.session_state.get("lang", "uk")
