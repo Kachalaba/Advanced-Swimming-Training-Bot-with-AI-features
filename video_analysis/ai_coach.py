@@ -36,26 +36,35 @@ class AICoach:
     - Offline fallback (rule-based)
     """
     
-    SYSTEM_PROMPT = """Ти професійний тренер з плавання з 20+ роками досвіду.
-Твоя задача - аналізувати біомеханічні дані плавця і давати конкретні, 
-практичні рекомендації для покращення техніки.
+    SYSTEM_PROMPT = """<system>
+<role>Ти — Senior тренер-аналітик з плавання та триатлону (20+ років досвіду, рівень МС).</role>
 
-Стиль відповіді:
-- Українською мовою
-- Конкретні числові показники
-- Практичні вправи для виправлення
-- Позитивний, мотивуючий тон
-- Пріоритезуй найважливіші покращення
+<rules>
+1. Відповідай ВИКЛЮЧНО українською мовою
+2. Використовуй конкретні числові показники з наданих даних аналізу
+3. Пріоритизуй рекомендації за впливом на результат згідно з аналітичною структурою
+4. Тон: конкретний, практичний, мотивуючий
+5. Відповідь — строго валідний JSON без markdown-огорток
+</rules>
 
-Формат відповіді (JSON):
+<analytical_framework>
+Рівень 1 — Критичні помилки: ризик травми або суттєва втрата швидкості (усунути першочергово)
+Рівень 2 — Технічні вади: помилки техніки з вимірним впливом на ефективність
+Рівень 3 — Оптимізація: покращення для спортсменів з добрим базовим рівнем
+Рівень 4 — Тонке налаштування: мікро-корекції для досвідчених атлетів
+</analytical_framework>
+
+<response_format>
 {
-    "summary": "Короткий підсумок аналізу (2-3 речення)",
-    "strengths": ["Сильна сторона 1", "Сильна сторона 2"],
-    "improvements": ["Що покращити 1", "Що покращити 2", "Що покращити 3"],
-    "drills": ["Вправа 1: опис", "Вправа 2: опис"],
+    "summary": "2-3 речення: поточний рівень + ключове спостереження з даних",
+    "strengths": ["конкретна сильна сторона з числовим підтвердженням"],
+    "improvements": ["Рівень N: конкретна вада → конкретна корекція"],
+    "drills": ["Назва вправи: деталі виконання + ціль"],
     "priority": "technique|endurance|speed",
-    "score": 75
-}"""
+    "score": 0
+}
+</response_format>
+</system>"""
 
     def __init__(
         self,
@@ -215,72 +224,104 @@ class AICoach:
         
         return "\n".join(lines)
     
+    _COACHING_TOOL = {
+        "name": "coaching_advice",
+        "description": "Повернути структурований тренерський висновок після аналізу біомеханіки плавця.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "summary": {
+                    "type": "string",
+                    "description": "2-3 речення: поточний рівень + ключове спостереження",
+                },
+                "strengths": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Сильні сторони з числовим підтвердженням",
+                },
+                "improvements": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Що покращити: Рівень N → конкретна корекція",
+                },
+                "drills": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Назва вправи: деталі виконання + ціль",
+                },
+                "priority": {
+                    "type": "string",
+                    "enum": ["technique", "endurance", "speed"],
+                },
+                "score": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100,
+                    "description": "Загальна оцінка техніки 0-100",
+                },
+            },
+            "required": ["summary", "strengths", "improvements", "drills", "priority", "score"],
+        },
+    }
+
     def _analyze_with_claude(self, context: str) -> CoachingAdvice:
-        """Analyze using Anthropic Claude."""
+        """Analyze using Anthropic Claude with Tool Use for guaranteed structured JSON."""
         try:
             message = self.client.messages.create(
-                model="claude-opus-4-6",
+                model="claude-3-5-sonnet-20241022",
                 max_tokens=1024,
+                temperature=0.2,
                 system=self.SYSTEM_PROMPT,
-                messages=[
-                    {"role": "user", "content": context}
-                ]
+                tools=[self._COACHING_TOOL],
+                tool_choice={"type": "any"},
+                messages=[{"role": "user", "content": context}],
             )
-            
-            response_text = message.content[0].text
-            return self._parse_response(response_text)
-            
+
+            for block in message.content:
+                if block.type == "tool_use" and block.name == "coaching_advice":
+                    data = block.input
+                    return CoachingAdvice(
+                        summary=data.get("summary", ""),
+                        strengths=data.get("strengths", []),
+                        improvements=data.get("improvements", []),
+                        drills=data.get("drills", []),
+                        priority=data.get("priority", "technique"),
+                        score=int(data.get("score", 50)),
+                    )
+
+            raise ValueError("coaching_advice tool not called in response")
+
         except Exception as e:
             logger.error(f"Claude API error: {e}")
             return self._analyze_offline({"error": str(e)})
     
     def _analyze_with_gpt(self, context: str) -> CoachingAdvice:
-        """Analyze using OpenAI GPT."""
+        """Analyze using OpenAI GPT with JSON Structured Outputs."""
         try:
             response = self.client.chat.completions.create(
-                model="gpt-3.5-turbo",  # Fast and cheap
+                model="gpt-4o-mini",
                 max_tokens=1024,
+                temperature=0.2,
+                response_format={"type": "json_object"},
                 messages=[
                     {"role": "system", "content": self.SYSTEM_PROMPT},
-                    {"role": "user", "content": context}
-                ]
+                    {"role": "user", "content": context},
+                ],
             )
-            
-            response_text = response.choices[0].message.content
-            return self._parse_response(response_text)
-            
+
+            data = json.loads(response.choices[0].message.content)
+            return CoachingAdvice(
+                summary=data.get("summary", ""),
+                strengths=data.get("strengths", []),
+                improvements=data.get("improvements", []),
+                drills=data.get("drills", []),
+                priority=data.get("priority", "technique"),
+                score=int(data.get("score", 50)),
+            )
+
         except Exception as e:
             logger.error(f"OpenAI API error: {e}")
             return self._analyze_offline({"error": str(e)})
-    
-    def _parse_response(self, response_text: str) -> CoachingAdvice:
-        """Parse LLM response into CoachingAdvice."""
-        try:
-            # Try to extract JSON from response
-            import re
-            json_match = re.search(r'\{[\s\S]*\}', response_text)
-            if json_match:
-                data = json.loads(json_match.group())
-                return CoachingAdvice(
-                    summary=data.get("summary", ""),
-                    strengths=data.get("strengths", []),
-                    improvements=data.get("improvements", []),
-                    drills=data.get("drills", []),
-                    priority=data.get("priority", "technique"),
-                    score=data.get("score", 50),
-                )
-        except json.JSONDecodeError:
-            pass
-        
-        # Fallback: use raw text
-        return CoachingAdvice(
-            summary=response_text[:200],
-            strengths=["Дані отримано"],
-            improvements=["Детальний аналіз в процесі"],
-            drills=[],
-            priority="technique",
-            score=50,
-        )
     
     def _analyze_offline(self, context: Any) -> CoachingAdvice:
         """Offline rule-based analysis."""

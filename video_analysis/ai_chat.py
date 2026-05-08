@@ -7,6 +7,7 @@ Features:
 - Automatic training plan generation
 """
 
+import json
 import logging
 import os
 from typing import Dict, List, Optional
@@ -86,10 +87,24 @@ DRYLAND_KNOWLEDGE = {
 # AI CHAT
 # ============================================================================
 
-_SYSTEM_PROMPT = """Ти — експертний тренер з плавання та триатлону з 20+ роками досвіду.
-Відповідай ВИКЛЮЧНО українською мовою. Будь конкретним, практичним, доброзичливим.
-Давай чіткі технічні поради щодо техніки плавання (freestyle, backstroke, breaststroke, butterfly),
-суходільних тренувань, відновлення та планування. Відповідь — не більше 300 слів."""
+_SYSTEM_PROMPT = """<system>
+<role>Ти — Senior тренер-аналітик з плавання та триатлону (20+ років досвіду, рівень МС).</role>
+
+<rules>
+1. Відповідай ВИКЛЮЧНО українською мовою
+2. Будь конкретним та практичним — посилайся на числові показники з контексту спортсмена
+3. Тон: професійний, мотивуючий, без зайвих слів
+4. Відповідь — не більше 300 слів
+5. Якщо є дані аналізу — аналізуй їх; не давай загальних порад без опори на дані
+</rules>
+
+<analytical_framework>
+Рівень 1 — Критичні помилки: ризик травми або суттєва втрата швидкості (усунути першочергово)
+Рівень 2 — Технічні вади: помилки техніки з вимірним впливом на ефективність
+Рівень 3 — Оптимізація: покращення для спортсменів з добрим базовим рівнем
+Рівень 4 — Тонке налаштування: мікро-корекції для досвідчених атлетів
+</analytical_framework>
+</system>"""
 
 
 class AIChat:
@@ -117,18 +132,41 @@ class AIChat:
                 logger.warning("anthropic package not installed, using keyword fallback")
 
     def set_context(self, analysis_results: Dict):
-        """Set context from analysis results."""
+        """Serialize full analysis_results to compact JSON, stripping heavy coordinate arrays."""
         self.athlete_data = analysis_results
-        parts = []
-        if "stroke_analysis" in analysis_results:
-            stroke = analysis_results["stroke_analysis"]
-            parts.append(f"Темп гребків: {getattr(stroke, 'stroke_rate', 'N/A')}/хв")
-            parts.append(f"Симетрія: {getattr(stroke, 'symmetry_score', 'N/A')}%")
-            parts.append(f"Body roll: {getattr(stroke, 'avg_body_roll', 'N/A')}°")
-        if "swimming_pose" in analysis_results:
-            pose = analysis_results["swimming_pose"]
-            parts.append(f"Обтічність: {pose.get('avg_streamline', 'N/A')}/100")
-        self.context = " | ".join(parts)
+
+        def _is_heavy(v) -> bool:
+            return isinstance(v, (bytes, bytearray)) or (
+                isinstance(v, (list, tuple)) and len(v) > 10
+            )
+
+        def _clean(obj):
+            if isinstance(obj, dict):
+                return {k: _clean(v) for k, v in obj.items() if not _is_heavy(v)}
+            if hasattr(obj, "__dataclass_fields__"):
+                return {
+                    f: _clean(getattr(obj, f))
+                    for f in obj.__dataclass_fields__
+                    if not _is_heavy(getattr(obj, f))
+                }
+            if isinstance(obj, (int, float, str, bool)) or obj is None:
+                return obj
+            return None
+
+        sections: Dict = {}
+        for key, val in analysis_results.items():
+            if key == "recent_sessions" and isinstance(val, list):
+                sections[key] = [
+                    {k: v for k, v in (s.items() if isinstance(s, dict) else vars(s).items())
+                     if k in ("date", "type", "ai_score")}
+                    for s in val[-5:]
+                ]
+            else:
+                cleaned = _clean(val)
+                if cleaned is not None:
+                    sections[key] = cleaned
+
+        self.context = json.dumps(sections, ensure_ascii=False, separators=(",", ":"))
 
     def chat(self, user_message: str) -> str:
         """Process user message and return response."""
@@ -149,24 +187,15 @@ class AIChat:
         return response
 
     def _build_system(self) -> str:
-        """Build system prompt with optional athlete context."""
+        """Build system prompt with optional athlete context embedded as JSON."""
         system = _SYSTEM_PROMPT
         ctx_parts = []
         if self.athlete_name and self.athlete_name != "Спортсмен":
             ctx_parts.append(f"Спортсмен: {self.athlete_name}")
         if self.context:
-            ctx_parts.append(f"Останній аналіз: {self.context}")
-        # Include last 5 sessions summary if available
-        sessions = self.athlete_data.get("recent_sessions", [])
-        if sessions:
-            recent = sessions[-5:]
-            summary = "; ".join(
-                f"[{s.get('date', '')[:10]} {s.get('type', '')} оцінка={s.get('ai_score', '')}]"
-                for s in recent
-            )
-            ctx_parts.append(f"Останні сесії: {summary}")
+            ctx_parts.append(f"Дані аналізу (JSON): {self.context}")
         if ctx_parts:
-            system += "\n\nКонтекст спортсмена:\n" + "\n".join(ctx_parts)
+            system += "\n\n<athlete_context>\n" + "\n".join(ctx_parts) + "\n</athlete_context>"
         return system
 
     def _llm_response(self, user_message: str) -> str:
@@ -178,8 +207,9 @@ class AIChat:
                 messages.append({"role": msg.role, "content": msg.content})
 
             result = self._client.messages.create(
-                model="claude-opus-4-6",
+                model="claude-3-5-sonnet-20241022",
                 max_tokens=512,
+                temperature=0.2,
                 system=self._build_system(),
                 messages=messages,
             )
