@@ -560,8 +560,9 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type,
 
             # Step 4: Running-specific analysis (multi-person)
             status_text.text("🏃 Аналіз техніки бігу...")
-            from video_analysis.running_analyzer import RunningAnalyzer, MultiPersonRunningAnalysis
-            analyzer = RunningAnalyzer(fps=float(fps), multi_person=True)
+            from video_analysis.running_analyzer import MultiPersonRunningAnalysis
+            from video_analysis.analyzer_factory import get_running_analyzer
+            analyzer = get_running_analyzer(fps=float(fps), multi_person=True)
 
             # Convert to format analyzer expects
             if num_persons == 1:

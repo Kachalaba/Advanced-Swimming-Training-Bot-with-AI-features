@@ -13,8 +13,8 @@ from video_analysis.frame_extractor import extract_frames_from_video
 from video_analysis.swimmer_detector import detect_swimmer_in_frames
 from video_analysis.ai_coach import get_ai_coaching
 from video_analysis.athlete_database import save_analysis_to_db
-from video_analysis.biomechanics_visualizer import BiomechanicsVisualizer
-from video_analysis.exercise_analyzer import ExerciseAnalyzer, generate_exercise_chart
+from video_analysis.exercise_analyzer import generate_exercise_chart
+from video_analysis.analyzer_factory import get_biomechanics_visualizer, get_exercise_analyzer
 
 logger = logging.getLogger(__name__)
 
@@ -160,7 +160,7 @@ def analyze_dryland(uploaded_file, athlete_name, exercise_type, fps, slow_motion
 
             # Step 3: First pass - collect angles for rep detection
             status_text.text("🦴 Аналіз біомеханіки...")
-            visualizer = BiomechanicsVisualizer(trajectory_length=30)
+            visualizer = get_biomechanics_visualizer(trajectory_length=30)
 
             first_frame_info = frame_result["frames"][0]
             first_path = str(Path(first_frame_info["path"] if isinstance(first_frame_info, dict) else first_frame_info))
@@ -206,7 +206,7 @@ def analyze_dryland(uploaded_file, athlete_name, exercise_type, fps, slow_motion
             # Step 4: Analyze exercise (reps, tempo, etc.)
             status_text.text("🔄 Підрахунок повторень...")
 
-            exercise_analyzer = ExerciseAnalyzer(fps=float(fps))
+            exercise_analyzer = get_exercise_analyzer(fps=float(fps))
             exercise_stats = exercise_analyzer.analyze(all_angles, exercise_type)
 
             st.markdown(f'<div class="status-success">🔄 Знайдено <strong>{exercise_stats.total_reps}</strong> повторень</div>', unsafe_allow_html=True)

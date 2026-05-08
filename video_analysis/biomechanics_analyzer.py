@@ -12,6 +12,14 @@ import cv2
 import numpy as np
 import mediapipe as mp
 
+from video_analysis.base_analyzer import get_pose_detector
+from video_analysis.constants import (
+    CLAHE_CLIP_LIMIT,
+    CLAHE_TILE_GRID_SIZE,
+    WATER_DENSITY_KG_M3,
+    BASE_DRAG_COEFFICIENT,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -19,23 +27,14 @@ class BiomechanicsAnalyzer:
     """Analyze swimming biomechanics and hydrodynamics using pose estimation."""
 
     def __init__(self):
-        """Initialize MediaPipe Pose for body keypoint detection."""
+        """Initialize MediaPipe Pose (shared cached instance) for keypoint detection."""
         self.mp_pose = mp.solutions.pose
         self.mp_drawing = mp.solutions.drawing_utils
         self.mp_drawing_styles = mp.solutions.drawing_styles
-        
-        # Initialize pose detector
-        self.pose = self.mp_pose.Pose(
-            static_image_mode=True,
-            model_complexity=2,  # 0=lite, 1=full, 2=heavy (best accuracy)
-            enable_segmentation=True,  # Better for underwater/complex backgrounds
-            min_detection_confidence=0.3,  # Lower for underwater (was 0.5)
-            min_tracking_confidence=0.3,   # Lower for challenging conditions
-        )
-        
-        # Water resistance coefficients (empirical values)
-        self.WATER_DENSITY = 1000  # kg/m³
-        self.BASE_DRAG_COEFFICIENT = 0.4  # Streamlined swimmer
+        # Use module-level cache — avoids reloading heavy model on every instantiation
+        self.pose = get_pose_detector(video_mode=False)
+        self.WATER_DENSITY = WATER_DENSITY_KG_M3
+        self.BASE_DRAG_COEFFICIENT = BASE_DRAG_COEFFICIENT
         
     def _preprocess_underwater_frame(self, frame: np.ndarray) -> np.ndarray:
         """Preprocess frame for better underwater pose detection.
@@ -55,7 +54,7 @@ class BiomechanicsAnalyzer:
         # Enhance contrast using CLAHE (Contrast Limited Adaptive Histogram Equalization)
         lab = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)
         l_ch, a, b = cv2.split(lab)
-        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+        clahe = cv2.createCLAHE(clipLimit=CLAHE_CLIP_LIMIT, tileGridSize=CLAHE_TILE_GRID_SIZE)
         l_enhanced = clahe.apply(l_ch)
         enhanced = cv2.merge([l_enhanced, a, b])
         enhanced_bgr = cv2.cvtColor(enhanced, cv2.COLOR_LAB2BGR)

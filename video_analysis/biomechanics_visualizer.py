@@ -10,6 +10,9 @@ from typing import Dict, List
 from collections import deque
 import mediapipe as mp
 
+from video_analysis.base_analyzer import get_pose_detector
+from video_analysis.constants import MIN_DETECTION_CONFIDENCE
+
 logger = logging.getLogger(__name__)
 
 # Colors (BGR)
@@ -42,13 +45,11 @@ LANDMARKS = {
 class BiomechanicsVisualizer:
     """Draw skeleton, angles, trajectories on frames."""
     
-    def __init__(self, trajectory_length: int = 20, min_conf: float = 0.5):
+    def __init__(self, trajectory_length: int = 20, min_conf: float = MIN_DETECTION_CONFIDENCE):
         self.min_conf = min_conf
         self.mp_pose = mp.solutions.pose
-        self.pose = self.mp_pose.Pose(
-            static_image_mode=False, model_complexity=2,
-            min_detection_confidence=min_conf, min_tracking_confidence=min_conf,
-        )
+        # Shared cached model — avoids reloading on every instantiation
+        self.pose = get_pose_detector(video_mode=True)
         self.trajectories = {
             "left_wrist": deque(maxlen=trajectory_length),
             "right_wrist": deque(maxlen=trajectory_length),
