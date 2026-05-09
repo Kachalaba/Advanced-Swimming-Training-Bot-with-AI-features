@@ -816,7 +816,7 @@ def display_running_results(analysis: RunningAnalysis, ai_advice, chart_path, ru
 
     # Chart
     if chart_path.exists():
-        st.image(str(chart_path), use_container_width=True)
+        st.image(str(chart_path), use_column_width=True)
 
     # AI advice
     if ai_advice:

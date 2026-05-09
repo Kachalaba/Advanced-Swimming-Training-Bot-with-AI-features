@@ -586,7 +586,7 @@ def display_cycling_results(analysis: CyclingAnalysis, ai_advice, chart_path, bi
 
     # Chart
     if chart_path.exists():
-        st.image(str(chart_path), use_container_width=True)
+        st.image(str(chart_path), use_column_width=True)
 
     # AI advice
     if ai_advice:

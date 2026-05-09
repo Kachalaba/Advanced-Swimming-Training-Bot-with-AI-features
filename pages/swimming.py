@@ -669,7 +669,7 @@ def display_stroke_analysis(biomechanics, output_dir):
     chart_path = output_dir / "stroke_chart.png"
     if chart_path.exists():
         st.markdown("### 📊 Графіки аналізу")
-        st.image(str(chart_path), use_container_width=True)
+        st.image(str(chart_path), use_column_width=True)
 
 
 def display_main_metrics(analysis, output_dir):
@@ -713,7 +713,7 @@ def display_main_metrics(analysis, output_dir):
     st.subheader("📈 График скорости")
     chart_path = Path(output_dir) / "reports" / "speed_chart.png"
     if chart_path.exists():
-        st.image(str(chart_path), use_container_width=True)
+        st.image(str(chart_path), use_column_width=True)
 
 
 def display_biomechanics(biomechanics, trajectory):

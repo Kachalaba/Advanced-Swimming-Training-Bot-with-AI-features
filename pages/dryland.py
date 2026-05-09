@@ -432,7 +432,7 @@ def display_dryland_results(pose_result, detection_result, output_dir, biomech_r
     # ========================================================================
     if chart_path and Path(chart_path).exists():
         st.markdown('<div class="section-title">📊 Графіки аналізу</div>', unsafe_allow_html=True)
-        st.image(str(chart_path), use_container_width=True)
+        st.image(str(chart_path), use_column_width=True)
 
     # ========================================================================
     # AI COACH
@@ -590,4 +590,4 @@ def display_dryland_results(pose_result, detection_result, output_dir, biomech_r
             cols = st.columns(3)
             for i, img_path in enumerate(pose_images):
                 with cols[i % 3]:
-                    st.image(str(img_path), caption=f"Кадр {i+1}", use_container_width=True)
+                    st.image(str(img_path), caption=f"Кадр {i+1}", use_column_width=True)
