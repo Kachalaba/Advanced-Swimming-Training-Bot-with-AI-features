@@ -24,6 +24,41 @@
 
 ---
 
+## New web app (Phase 1)
+
+A Next.js + FastAPI rewrite is in progress alongside the Streamlit
+prototype. Both run in parallel during the migration.
+
+```
+backend/    FastAPI app (REST API for analyzers, athlete data)
+frontend/   Next.js 15 app (App Router, Tailwind, dark UI)
+app.py      Streamlit prototype (still works, used as fallback)
+```
+
+Run the new stack locally with docker-compose:
+
+```bash
+docker compose up --build
+# frontend → http://localhost:3000
+# backend  → http://localhost:8000/api/health
+```
+
+Or run each part directly:
+
+```bash
+# backend
+cd backend && pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8000
+
+# frontend
+cd frontend && npm install && npm run dev
+```
+
+The Streamlit app (`streamlit run app.py`) keeps working independently
+on port 8501.
+
+---
+
 ## Для кого цей інструмент?
 
 | Користувач | Використання |
