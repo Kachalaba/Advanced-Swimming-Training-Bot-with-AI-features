@@ -380,8 +380,8 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type,
                 model_complexity=2,          # most accurate model
                 smooth_landmarks=True,       # MediaPipe built-in Kalman
                 enable_segmentation=False,
-                min_detection_confidence=0.5,
-                min_tracking_confidence=0.7,
+                min_detection_confidence=0.3,
+                min_tracking_confidence=0.5,
             )
 
             # YOLO-based target bbox tracking (IoU + centroid)
@@ -428,6 +428,7 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type,
                             target_track_id = 0
 
                     new_prev_bboxes = {}
+                    target_matched_this_frame = False
                     for curr_idx, bbox in enumerate(current_bboxes):
                         track_id = matches.get(curr_idx, track_id_counter)
                         if track_id not in [m for m in matches.values()]:
@@ -436,6 +437,34 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type,
                         new_prev_bboxes[track_id] = bbox
                         if track_id == target_track_id:
                             target_bbox = bbox
+                            target_matched_this_frame = True
+
+                    # ---- Lock-on: re-acquire target if track was lost ----
+                    # When the runner shrinks rapidly the IoU/centroid match
+                    # can fail and YOLO assigns a fresh track_id. Without
+                    # re-acquisition, target_bbox stays stale at the old
+                    # position and pose detection collapses. Snap target to
+                    # the bbox closest to the last known target position so
+                    # we keep following the same person until the end.
+                    if (not target_matched_this_frame
+                            and target_bbox is not None
+                            and current_bboxes):
+                        prev_cx = (target_bbox[0] + target_bbox[2]) / 2
+                        prev_cy = (target_bbox[1] + target_bbox[3]) / 2
+                        best_idx = min(
+                            range(len(current_bboxes)),
+                            key=lambda k: (
+                                ((current_bboxes[k][0] + current_bboxes[k][2]) / 2 - prev_cx) ** 2
+                                + ((current_bboxes[k][1] + current_bboxes[k][3]) / 2 - prev_cy) ** 2
+                            ),
+                        )
+                        # Re-bind target_track_id to whichever track now owns
+                        # that bbox so subsequent IoU matching stays stable.
+                        for tid, bb in new_prev_bboxes.items():
+                            if bb is current_bboxes[best_idx]:
+                                target_track_id = tid
+                                break
+                        target_bbox = current_bboxes[best_idx]
 
                     prev_bboxes = new_prev_bboxes
 
@@ -479,11 +508,17 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type,
                             raw_kps = {}
                             for idx, name in FULL_LANDMARK_MAP.items():
                                 lm = mp_result.pose_landmarks.landmark[idx]
+                                # Project back: undo upscale, add crop origin
+                                abs_x = cx1 + (lm.x * crop_w) / scale
+                                abs_y = cy1 + (lm.y * crop_h) / scale
                                 if lm.visibility >= MIN_LANDMARK_VISIBILITY:
-                                    # Project back: undo upscale, add crop origin
-                                    abs_x = cx1 + (lm.x * crop_w) / scale
-                                    abs_y = cy1 + (lm.y * crop_h) / scale
                                     raw_kps[name] = (abs_x, abs_y)
+                                elif name in ema_state:
+                                    # Low-confidence joint: keep last good
+                                    # smoothed position so the skeleton does
+                                    # not lose individual points when the
+                                    # runner is far / partially occluded.
+                                    raw_kps[name] = ema_state[name]
 
                             if raw_kps:
                                 pose_ok = True
