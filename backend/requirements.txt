@@ -2,3 +2,17 @@ fastapi==0.115.0
 uvicorn[standard]==0.30.6
 pydantic==2.5.3
 python-multipart==0.0.9
+
+# Video / ML pipeline (mirrors top-level requirements; pinned to stay
+# consistent between Streamlit and FastAPI codepaths).
+opencv-python==4.8.1.78
+opencv-contrib-python==4.8.1.78
+ultralytics==8.0.235
+mediapipe==0.10.9
+numpy==1.26.4
+pandas==2.1.4
+matplotlib==3.8.2
+Pillow==10.2.0
+
+# Reused by athlete_database.py and reports
+SQLAlchemy==2.0.29

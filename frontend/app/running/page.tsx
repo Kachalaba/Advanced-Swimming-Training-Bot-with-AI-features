@@ -2,11 +2,13 @@
 
 import { Award, Footprints, Target, TrendingUp, Zap } from "lucide-react";
 
+import { RunningUploader } from "@/components/sports/RunningUploader";
 import { SportLanding } from "@/components/sports/SportLanding";
 
 export default function RunningPage() {
   return (
     <SportLanding
+      uploader={<RunningUploader />}
       title="Running · Cadence, gait, form"
       subtitle="Per-step mechanics, foot strike classification, vertical oscillation, and arm-swing symmetry — locked onto your athlete across the whole run."
       badges={[

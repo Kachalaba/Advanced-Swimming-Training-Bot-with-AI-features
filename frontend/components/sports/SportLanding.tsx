@@ -45,6 +45,7 @@ export type SportLandingProps = {
   metrics: SportMetric[];
   sessions: SportSession[];
   insights: { tag: string; variant: "success" | "warn" | "info"; title: string; detail: string }[];
+  uploader?: React.ReactNode;
 };
 
 export function SportLanding({
@@ -56,6 +57,7 @@ export function SportLanding({
   metrics,
   sessions,
   insights,
+  uploader,
 }: SportLandingProps) {
   return (
     <div className="animate-slide-up space-y-8">
@@ -216,7 +218,7 @@ export function SportLanding({
           title="Upload new session"
           subtitle="Multi-angle video supported"
         >
-          <FileDropZone />
+          {uploader ?? <FileDropZone />}
         </ChartContainer>
         <ChartContainer title="Drills library" subtitle="Discipline-specific cues">
           <EmptyState
