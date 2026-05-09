@@ -380,8 +380,11 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type,
                 model_complexity=2,          # most accurate model
                 smooth_landmarks=True,       # MediaPipe built-in Kalman
                 enable_segmentation=False,
-                min_detection_confidence=0.3,
-                min_tracking_confidence=0.5,
+                # Loose confidences so back-view / distant runners are
+                # not dropped. YOLO bbox + spatial guards downstream
+                # filter out spurious detections.
+                min_detection_confidence=0.2,
+                min_tracking_confidence=0.4,
             )
 
             # YOLO-based target bbox tracking (IoU + centroid)
@@ -508,29 +511,33 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type,
                             raw_kps = {}
                             for idx, name in FULL_LANDMARK_MAP.items():
                                 lm = mp_result.pose_landmarks.landmark[idx]
-                                # Project back: undo upscale, add crop origin
-                                abs_x = cx1 + (lm.x * crop_w) / scale
-                                abs_y = cy1 + (lm.y * crop_h) / scale
                                 if lm.visibility >= MIN_LANDMARK_VISIBILITY:
+                                    # Project back: undo upscale, add crop origin
+                                    abs_x = cx1 + (lm.x * crop_w) / scale
+                                    abs_y = cy1 + (lm.y * crop_h) / scale
                                     raw_kps[name] = (abs_x, abs_y)
-                                elif name in ema_state:
-                                    # Low-confidence joint: keep last good
-                                    # smoothed position so the skeleton does
-                                    # not lose individual points when the
-                                    # runner is far / partially occluded.
-                                    raw_kps[name] = ema_state[name]
 
                             if raw_kps:
                                 pose_ok = True
 
                                 # ---- Step C-1: spatial containment guard ----
-                                # All projected keypoints must stay within the
-                                # padded crop region (± 30% bbox tolerance).
-                                # Catches shadow/background limbs that MediaPipe
-                                # mistakes for the runner's legs on sunny days.
+                                # Body keypoints must stay within the padded
+                                # crop region (± 30% bbox tolerance). Face
+                                # landmarks (nose/eyes/ears/mouth) are excluded
+                                # because they project erratically when the
+                                # runner is shown from the back or far away
+                                # and are not used by the running metrics.
+                                FACE_LANDMARKS = {
+                                    "nose", "left_eye_inner", "left_eye",
+                                    "left_eye_outer", "right_eye_inner",
+                                    "right_eye", "right_eye_outer", "left_ear",
+                                    "right_ear", "mouth_left", "mouth_right",
+                                }
                                 tol_x = (cx2 - cx1) * 0.3
                                 tol_y = (cy2 - cy1) * 0.3
-                                for _ax, _ay in raw_kps.values():
+                                for _name, (_ax, _ay) in raw_kps.items():
+                                    if _name in FACE_LANDMARKS:
+                                        continue
                                     if not (cx1 - tol_x <= _ax <= cx2 + tol_x and
                                             cy1 - tol_y <= _ay <= cy2 + tol_y):
                                         pose_ok = False
