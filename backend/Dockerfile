@@ -4,7 +4,8 @@ WORKDIR /srv
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DEFAULT_TIMEOUT=300
 
 # System deps required by opencv (libgl, libglib) and ffmpeg for video I/O.
 RUN apt-get update \
@@ -16,6 +17,14 @@ RUN apt-get update \
         libxrender1 \
         ffmpeg \
     && rm -rf /var/lib/apt/lists/*
+
+# Install torch from the CPU-only index FIRST. Without this pip resolves
+# the latest torch which drags in 2+GB of NVIDIA CUDA wheels on Linux
+# (including aarch64), which we never use server-side and which
+# routinely time out the build.
+RUN pip install \
+        --index-url https://download.pytorch.org/whl/cpu \
+        torch==2.1.2 torchvision==0.16.2
 
 COPY backend/requirements.txt /srv/requirements.txt
 RUN pip install -r /srv/requirements.txt
