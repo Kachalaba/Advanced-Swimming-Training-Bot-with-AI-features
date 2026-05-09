@@ -451,6 +451,7 @@ def detect_swimmer_in_frames(
     output_dir: str = "./detections",
     draw_boxes: bool = True,
     enable_tracking: bool = True,
+    confidence_threshold: float = 0.5,
 ) -> Dict:
     """Detect swimmer in frames (convenience function).
 
@@ -459,6 +460,8 @@ def detect_swimmer_in_frames(
         output_dir: Output directory for results
         draw_boxes: Whether to draw bounding boxes
         enable_tracking: If True, track same swimmer across frames (recommended for multi-person scenes)
+        confidence_threshold: Minimum YOLO confidence. Lower (e.g. 0.25) keeps
+            distant/small subjects detected; raise it to suppress false positives.
 
     Returns:
         Dict with detection results and paths
@@ -467,7 +470,11 @@ def detect_swimmer_in_frames(
     output_path.mkdir(parents=True, exist_ok=True)
 
     detector = SwimmerDetector()
-    detections = detector.detect_batch(frame_paths, enable_tracking=enable_tracking)
+    detections = detector.detect_batch(
+        frame_paths,
+        enable_tracking=enable_tracking,
+        confidence_threshold=confidence_threshold,
+    )
 
     # Save JSON
     json_path = detector.save_detections_json(

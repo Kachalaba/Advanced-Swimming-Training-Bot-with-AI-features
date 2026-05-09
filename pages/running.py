@@ -132,6 +132,7 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type,
                 output_dir=str(output_dir / "detections"),
                 draw_boxes=True,
                 enable_tracking=True,
+                confidence_threshold=0.25,
             )
             progress_bar.progress(30)
             st.markdown('<div class="status-success">✅ Детекція завершена</div>', unsafe_allow_html=True)
@@ -157,8 +158,10 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type,
                 31: "left_toe", 32: "right_toe",
             }
 
-            # Minimum landmark confidence to accept a detection
-            MIN_LANDMARK_VISIBILITY = 0.5
+            # Minimum landmark confidence to accept a detection.
+            # 0.3 keeps distant runners visible; MediaPipe visibility drops as
+            # the silhouette shrinks even when keypoints are correct.
+            MIN_LANDMARK_VISIBILITY = 0.3
             # Minimum crop dimension fed to MediaPipe (upscale smaller crops)
             MIN_CROP_SIZE = 256
 
@@ -513,7 +516,10 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type,
                                 tid = target_track_id if target_track_id is not None else 0
                                 if pose_ok and tid in prev_keypoints:
                                     person_diag = (bw ** 2 + bh ** 2) ** 0.5
-                                    max_jump = person_diag * 1.0
+                                    # Floor at 80px so the guard does not
+                                    # shrink below realistic frame-to-frame
+                                    # motion when the runner is far away.
+                                    max_jump = max(person_diag, 80.0) * 1.0
                                     for anchor in ("left_hip", "right_hip"):
                                         if anchor in raw_kps and anchor in prev_keypoints[tid]:
                                             dx = (raw_kps[anchor][0]
