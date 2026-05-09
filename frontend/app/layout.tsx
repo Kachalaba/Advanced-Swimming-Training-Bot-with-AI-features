@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+
+import { TopNav } from "@/components/layout/TopNav";
 import "./globals.css";
 
 const inter = Inter({
@@ -21,7 +23,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`dark ${inter.variable}`}>
-      <body className="bg-bg text-slate-100 font-sans">{children}</body>
+      <body className="bg-bg text-slate-100 font-sans">
+        <TopNav />
+        <main className="max-w-[1600px] mx-auto px-6 py-8">{children}</main>
+      </body>
     </html>
   );
 }
