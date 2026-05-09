@@ -1,3 +1,5 @@
+"use client";
+
 import { Award, Target, Waves, Zap } from "lucide-react";
 
 import { SportLanding } from "@/components/sports/SportLanding";

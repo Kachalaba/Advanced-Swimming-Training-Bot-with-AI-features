@@ -1,3 +1,5 @@
+"use client";
+
 import { Award, Footprints, Target, TrendingUp, Zap } from "lucide-react";
 
 import { SportLanding } from "@/components/sports/SportLanding";

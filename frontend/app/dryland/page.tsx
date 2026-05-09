@@ -1,3 +1,5 @@
+"use client";
+
 import { Activity, Dumbbell, Flame, Target } from "lucide-react";
 
 import { SportLanding } from "@/components/sports/SportLanding";
