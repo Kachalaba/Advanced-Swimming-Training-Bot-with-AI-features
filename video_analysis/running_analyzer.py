@@ -796,7 +796,7 @@ def generate_running_chart(analysis: RunningAnalysis, output_path: str):
     import matplotlib.pyplot as plt
     
     fig, axes = plt.subplots(2, 2, figsize=(12, 10))
-    fig.suptitle("🏃 Running Analysis", fontsize=14, fontweight='bold')
+    fig.suptitle("Running Analysis", fontsize=14, fontweight='bold')
     
     # 1. Step distribution
     ax1 = axes[0, 0]
@@ -828,23 +828,23 @@ def generate_running_chart(analysis: RunningAnalysis, output_path: str):
     
     recs = []
     if analysis.cadence < 170:
-        recs.append("⚠️ Cadence низький (<170). Спробуйте частіші кроки.")
+        recs.append("[!] Cadence низький (<170). Спробуйте частіші кроки.")
     elif analysis.cadence > 190:
-        recs.append("✅ Cadence оптимальний (>190)")
-    
+        recs.append("[OK] Cadence оптимальний (>190)")
+
     if analysis.avg_knee_lift < 30:
-        recs.append("⚠️ Низький підйом коліна. Працюйте над технікою.")
-    
+        recs.append("[!] Низький підйом коліна. Працюйте над технікою.")
+
     if analysis.forward_lean < 5:
-        recs.append("⚠️ Занадто вертикальна постава. Нахил 8-15° оптимальний.")
+        recs.append("[!] Занадто вертикальна постава. Нахил 8-15° оптимальний.")
     elif analysis.forward_lean > 20:
-        recs.append("⚠️ Занадто великий нахил вперед.")
-    
+        recs.append("[!] Занадто великий нахил вперед.")
+
     if analysis.arm_symmetry < 80:
-        recs.append("⚠️ Асиметрія рук. Слідкуйте за рівномірним махом.")
-    
+        recs.append("[!] Асиметрія рук. Слідкуйте за рівномірним махом.")
+
     if not recs:
-        recs.append("✅ Техніка бігу в нормі!")
+        recs.append("[OK] Техніка бігу в нормі!")
     
     rec_text = "\n".join(recs)
     ax4.text(0.1, 0.9, "Рекомендації:", fontsize=12, fontweight='bold',
