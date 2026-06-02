@@ -1,18 +1,18 @@
 """Unit tests for CyclingAnalyzer."""
 
 import sys
-import pytest
 from pathlib import Path
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 cv2 = pytest.importorskip("cv2", reason="cv2 not installed — skipping CyclingAnalyzer tests")
 
-from tests.fixtures.mock_keypoints import (
-    make_empty_frames,
-    make_cycling_frames,
-)
-from video_analysis.cycling_analyzer import CyclingAnalyzer, CyclingAnalysis
+from tests.fixtures.mock_keypoints import make_cycling_frames  # noqa: E402
+from tests.fixtures.mock_keypoints import make_empty_frames
+from video_analysis.cycling_analyzer import CyclingAnalysis  # noqa: E402
+from video_analysis.cycling_analyzer import CyclingAnalyzer
 
 
 class TestCyclingAnalyzerEmpty:
@@ -50,6 +50,7 @@ class TestCyclingAnalyzerMetrics:
     def test_inherits_base_calculate_angle(self):
         """Verify BaseAnalyzer inheritance is intact."""
         from video_analysis.base_analyzer import BaseAnalyzer
+
         analyzer = CyclingAnalyzer(fps=30.0)
         assert isinstance(analyzer, BaseAnalyzer)
         angle = analyzer._calculate_angle((0, 1), (0, 0), (1, 0))
@@ -57,8 +58,8 @@ class TestCyclingAnalyzerMetrics:
 
     def test_no_duplicate_calculate_angle(self):
         """Confirm _calculate_angle is inherited, not re-defined in CyclingAnalyzer."""
-        import inspect
-        from video_analysis.cycling_analyzer import CyclingAnalyzer
         from video_analysis.base_analyzer import BaseAnalyzer
+        from video_analysis.cycling_analyzer import CyclingAnalyzer
+
         # Method should come from BaseAnalyzer, not CyclingAnalyzer
         assert CyclingAnalyzer._calculate_angle is BaseAnalyzer._calculate_angle

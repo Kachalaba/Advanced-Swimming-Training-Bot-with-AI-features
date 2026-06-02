@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import functools
-from typing import Callable, TypeVar, Any
+from typing import Any, Callable, TypeVar
 
 from utils.logger import get_logger
 
@@ -21,19 +21,19 @@ def async_retry(
     exceptions: tuple[type[Exception], ...] = (Exception,),
 ):
     """Decorator to retry async functions with exponential backoff.
-    
+
     Args:
         max_attempts: Maximum number of retry attempts
         base_delay: Initial delay in seconds between retries
         max_delay: Maximum delay cap in seconds
         exponential: Use exponential backoff (doubles each retry)
         exceptions: Tuple of exception types to catch and retry
-        
+
     Example:
         >>> @async_retry(max_attempts=3, exceptions=(ConnectionError,))
         >>> async def fetch_data():
         >>>     return await api_call()
-        
+
     Returns:
         Decorated function with retry logic
     """
@@ -97,9 +97,9 @@ def async_retry(
 
 class RetryContext:
     """Context manager for manual retry control.
-    
+
     Useful when you need more fine-grained control over retry logic.
-    
+
     Example:
         >>> retry = RetryContext(max_attempts=3, base_delay=1.0)
         >>> async with retry:
@@ -140,10 +140,10 @@ class RetryContext:
 
     async def should_retry(self, exception: Exception) -> bool:
         """Determine if should retry after exception.
-        
+
         Args:
             exception: Exception that occurred
-            
+
         Returns:
             True if should retry, False otherwise
         """
@@ -154,9 +154,7 @@ class RetryContext:
 
         # Calculate and apply delay
         if self.exponential:
-            delay = min(
-                self.base_delay * (2 ** (self.current_attempt - 1)), self.max_delay
-            )
+            delay = min(self.base_delay * (2 ** (self.current_attempt - 1)), self.max_delay)
         else:
             delay = self.base_delay
 

@@ -1,6 +1,5 @@
 """Unit tests for BaseAnalyzer shared utilities."""
 
-import math
 import sys
 from pathlib import Path
 
@@ -11,6 +10,7 @@ from video_analysis.base_analyzer import BaseAnalyzer
 
 class ConcreteAnalyzer(BaseAnalyzer):
     """Minimal concrete subclass used only in tests."""
+
     pass
 
 
@@ -61,6 +61,7 @@ class TestGetPoint:
     def test_object_with_xy(self):
         class Lm:
             x, y = 0.3, 0.8
+
         kps = {"nose": Lm()}
         pt = self.a._get_point(kps, "nose")
         assert pt == (0.3, 0.8)

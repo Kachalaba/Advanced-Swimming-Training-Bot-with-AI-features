@@ -83,7 +83,11 @@ TRANSLATIONS: dict = {
         "common_fast_analysis": "⏱️ Швидкий аналіз (1-3 хв)",
         # Tracking
         "track_who": "🎯 Кого аналізувати?",
-        "track_options": ["Найбільший у кадрі (авто)", "Найближчий до центру", "Вибрати за номером"],
+        "track_options": [
+            "Найбільший у кадрі (авто)",
+            "Найближчий до центру",
+            "Вибрати за номером",
+        ],
         "track_person_num": "Номер (зліва направо)",
         "track_max_lost": "Макс. кадрів без детекції",
         "track_bbox_pad": "Відступ bbox (%)",
@@ -196,7 +200,11 @@ TRANSLATIONS: dict = {
         "common_fast_analysis": "⏱️ Quick analysis (1-3 min)",
         # Tracking
         "track_who": "🎯 Who to analyze?",
-        "track_options": ["Largest in frame (auto)", "Closest to center", "Select by number"],
+        "track_options": [
+            "Largest in frame (auto)",
+            "Closest to center",
+            "Select by number",
+        ],
         "track_person_num": "Number (left to right)",
         "track_max_lost": "Max frames without detection",
         "track_bbox_pad": "BBox padding (%)",

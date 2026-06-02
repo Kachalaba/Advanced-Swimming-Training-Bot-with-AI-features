@@ -6,9 +6,9 @@ from typing import Any, Dict, Iterable, Set, Tuple
 
 from aiogram.filters import BaseFilter
 from aiogram.types import TelegramObject
+from role_service import ROLE_ADMIN, ROLE_ATHLETE, ROLE_TRAINER, RoleService
 
 from i18n import t
-from role_service import ROLE_ADMIN, ROLE_ATHLETE, ROLE_TRAINER, RoleService
 
 DEFAULT_ROLE_KEY = "user_role"
 
@@ -63,9 +63,7 @@ class RequireRolesFilter(BaseFilter):
         self._ordered_roles: Tuple[str, ...] = normalized_roles
         self.context_key = context_key
 
-    async def __call__(
-        self, event: TelegramObject, **kwargs: Any
-    ) -> bool | Dict[str, Any]:
+    async def __call__(self, event: TelegramObject, **kwargs: Any) -> bool | Dict[str, Any]:
         role = kwargs.get(self.context_key)
         if role is None:
             role_service: RoleService | None = kwargs.get("role_service")
@@ -95,9 +93,7 @@ class RequireRolesFilter(BaseFilter):
         return build_forbidden_message(self._ordered_roles, lang=lang)
 
 
-def require_roles(
-    *roles: str, context_key: str = DEFAULT_ROLE_KEY
-) -> RequireRolesFilter:
+def require_roles(*roles: str, context_key: str = DEFAULT_ROLE_KEY) -> RequireRolesFilter:
     """Shortcut returning :class:`RequireRolesFilter` instance."""
 
     return RequireRolesFilter(*roles, context_key=context_key)

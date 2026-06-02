@@ -70,14 +70,10 @@ def get_logger(name: str) -> logging.Logger:
 
     logger = logging.getLogger(name)
 
-    if not any(
-        getattr(handler, "_is_sprint_json_stream", False) for handler in logger.handlers
-    ):
+    if not any(getattr(handler, "_is_sprint_json_stream", False) for handler in logger.handlers):
         logger.addHandler(_configure_stream_handler())
 
-    if not any(
-        getattr(handler, "_is_sprint_json_file", False) for handler in logger.handlers
-    ):
+    if not any(getattr(handler, "_is_sprint_json_file", False) for handler in logger.handlers):
         logger.addHandler(_configure_file_handler())
 
     logger.setLevel(logging.INFO)

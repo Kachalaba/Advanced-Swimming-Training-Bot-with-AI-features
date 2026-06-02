@@ -11,9 +11,7 @@ _LANGUAGE_CONTEXT: ContextVar[str] = ContextVar("language", default="uk")
 
 
 def _strip_quotes(value: str) -> str:
-    if (value.startswith('"') and value.endswith('"')) or (
-        value.startswith("'") and value.endswith("'")
-    ):
+    if (value.startswith('"') and value.endswith('"')) or (value.startswith("'") and value.endswith("'")):
         return value[1:-1]
     return value
 
@@ -112,4 +110,9 @@ def t(key: str, *, lang: str | None = None, **kwargs: Any) -> str:
     return template
 
 
-__all__ = ["t", "get_current_language", "set_context_language", "reset_context_language"]
+__all__ = [
+    "t",
+    "get_current_language",
+    "set_context_language",
+    "reset_context_language",
+]

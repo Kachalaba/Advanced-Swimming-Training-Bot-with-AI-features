@@ -1,13 +1,14 @@
 """Unit tests for AthleteDatabase — context manager, duplicate handling, CRUD."""
 
-import sys
 import sqlite3
+import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 import pytest
-from video_analysis.athlete_database import AthleteDatabase, Athlete, TrainingSession
+
+from video_analysis.athlete_database import Athlete, AthleteDatabase, TrainingSession
 
 
 @pytest.fixture
@@ -75,11 +76,13 @@ class TestAthleteDatabase:
 
     def test_delete_athlete_cascades_sessions(self, db):
         athlete_id = db.add_athlete(Athlete(name="Cascaded"))
-        db.add_session(TrainingSession(
-            athlete_id=athlete_id,
-            session_type="swimming",
-            date="2024-01-01",
-        ))
+        db.add_session(
+            TrainingSession(
+                athlete_id=athlete_id,
+                session_type="swimming",
+                date="2024-01-01",
+            )
+        )
         db.delete_athlete(athlete_id)
         sessions = db.get_sessions(athlete_id)
         assert sessions == []
@@ -110,11 +113,13 @@ class TestTrainingSessions:
     def test_get_sessions_for_athlete(self, db):
         athlete_id = db.add_athlete(Athlete(name="Multi Session"))
         for i in range(3):
-            db.add_session(TrainingSession(
-                athlete_id=athlete_id,
-                session_type="swimming",
-                date=f"2024-01-0{i+1}",
-            ))
+            db.add_session(
+                TrainingSession(
+                    athlete_id=athlete_id,
+                    session_type="swimming",
+                    date=f"2024-01-0{i+1}",
+                )
+            )
         sessions = db.get_sessions(athlete_id)
         assert len(sessions) == 3
 
@@ -130,30 +135,32 @@ class TestTrainingSessions:
 
     def test_delete_session(self, db):
         athlete_id = db.add_athlete(Athlete(name="Delete Session"))
-        session_id = db.add_session(TrainingSession(
-            athlete_id=athlete_id, session_type="swimming", date="2024-01-01"
-        ))
+        session_id = db.add_session(TrainingSession(athlete_id=athlete_id, session_type="swimming", date="2024-01-01"))
         db.delete_session(session_id)
         assert db.get_session(session_id) is None
 
     def test_get_athlete_stats(self, db):
         athlete_id = db.add_athlete(Athlete(name="Stats Tester"))
-        db.add_session(TrainingSession(
-            athlete_id=athlete_id,
-            session_type="swimming",
-            date="2024-01-01",
-            duration_sec=600.0,
-            distance_m=500.0,
-            ai_score=80,
-        ))
-        db.add_session(TrainingSession(
-            athlete_id=athlete_id,
-            session_type="swimming",
-            date="2024-01-02",
-            duration_sec=720.0,
-            distance_m=600.0,
-            ai_score=85,
-        ))
+        db.add_session(
+            TrainingSession(
+                athlete_id=athlete_id,
+                session_type="swimming",
+                date="2024-01-01",
+                duration_sec=600.0,
+                distance_m=500.0,
+                ai_score=80,
+            )
+        )
+        db.add_session(
+            TrainingSession(
+                athlete_id=athlete_id,
+                session_type="swimming",
+                date="2024-01-02",
+                duration_sec=720.0,
+                distance_m=600.0,
+                ai_score=85,
+            )
+        )
 
         stats = db.get_athlete_stats(athlete_id)
         assert stats["total_sessions"] == 2
@@ -172,11 +179,13 @@ class TestContextManagerBehavior:
         # Attempt to add a session with a non-existent athlete_id to trigger FK-like error
         # We test that invalid data doesn't corrupt the DB
         try:
-            db.add_session(TrainingSession(
-                athlete_id=99999,  # Non-existent
-                session_type="swimming",
-                date="2024-01-01",
-            ))
+            db.add_session(
+                TrainingSession(
+                    athlete_id=99999,  # Non-existent
+                    session_type="swimming",
+                    date="2024-01-01",
+                )
+            )
         except Exception:
             pass
 

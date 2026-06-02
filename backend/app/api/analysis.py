@@ -1,4 +1,5 @@
 """Analysis endpoints (upload → progress stream → result + video)."""
+
 from __future__ import annotations
 
 import asyncio
@@ -11,6 +12,7 @@ from pathlib import Path
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 
+from app.api.upload_validation import UploadValidationError, copy_upload_with_limit, validate_video_upload
 from app.services import running as running_pipeline
 from app.services.jobs import Job, registry
 
@@ -51,12 +53,25 @@ async def upload_running(
     fps: float = Form(30.0),
 ) -> dict[str, str]:
     """Accept a video upload, kick off analysis, return a job id."""
+    try:
+        suffix = validate_video_upload(
+            filename=video.filename,
+            content_type=video.content_type,
+            declared_size=getattr(video, "size", None),
+        )
+    except UploadValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     job = registry.create(kind="running")
-    suffix = Path(video.filename or "video.mp4").suffix or ".mp4"
     video_path = job.workspace / f"input{suffix}"
-    with video_path.open("wb") as f:
-        shutil.copyfileobj(video.file, f)
+    try:
+        with video_path.open("wb") as f:
+            bytes_written = copy_upload_with_limit(video.file, f)
+    except UploadValidationError as exc:
+        shutil.rmtree(job.workspace, ignore_errors=True)
+        raise HTTPException(status_code=413, detail=str(exc)) from exc
     logger.info("Saved upload %s (%d bytes)", video_path, video_path.stat().st_size)
+    logger.debug("Copied %d upload bytes for job %s", bytes_written, job.id)
 
     thread = threading.Thread(
         target=_run_pipeline_in_thread,

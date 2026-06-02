@@ -4,17 +4,18 @@ Dryland/gym analysis page module.
 
 import logging
 import sqlite3
-import streamlit as st
-import cv2
 from pathlib import Path
 from typing import Dict
 
-from video_analysis.frame_extractor import extract_frames_from_video
-from video_analysis.swimmer_detector import detect_swimmer_in_frames
+import cv2
+import streamlit as st
+
 from video_analysis.ai_coach import get_ai_coaching
+from video_analysis.analyzer_factory import get_biomechanics_visualizer, get_exercise_analyzer
 from video_analysis.athlete_database import save_analysis_to_db
 from video_analysis.exercise_analyzer import generate_exercise_chart
-from video_analysis.analyzer_factory import get_biomechanics_visualizer, get_exercise_analyzer
+from video_analysis.frame_extractor import extract_frames_from_video
+from video_analysis.swimmer_detector import detect_swimmer_in_frames
 
 logger = logging.getLogger(__name__)
 
@@ -22,20 +23,19 @@ logger = logging.getLogger(__name__)
 def render_dryland_tab():
     """Render dryland/gym analysis tab."""
 
-    st.markdown("""
+    st.markdown(
+        """
     <div class="section-title">Аналіз сухих тренувань</div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
     # Settings
     with st.expander("⚙️ Налаштування", expanded=True):
         col1, col2, col3 = st.columns(3)
 
         with col1:
-            athlete_name = st.text_input(
-                "👤 Ім'я спортсмена",
-                value="Спортсмен",
-                key="gym_athlete"
-            )
+            athlete_name = st.text_input("👤 Ім'я спортсмена", value="Спортсмен", key="gym_athlete")
 
         with col2:
             exercise_type = st.selectbox(
@@ -45,79 +45,88 @@ def render_dryland_tab():
                     "general": "🎯 Загальний аналіз",
                     "strength": "💪 Силові вправи",
                     "flexibility": "🤸 Гнучкість",
-                    "technique": "🎓 Техніка рухів"
+                    "technique": "🎓 Техніка рухів",
                 }[x],
-                key="gym_type"
+                key="gym_type",
             )
 
         with col3:
-            fps = st.select_slider(
-                "🎬 FPS",
-                options=[10, 15, 20, 30],
-                value=15,
-                key="gym_fps"
-            )
+            fps = st.select_slider("🎬 FPS", options=[10, 15, 20, 30], value=15, key="gym_fps")
 
         slow_motion = st.select_slider(
             "🐢 Slow-motion",
             options=[1.0, 0.75, 0.5, 0.25],
             value=1.0,
             format_func=lambda x: f"{x}x" if x == 1.0 else f"🐢 {x}x",
-            key="gym_slowmo"
+            key="gym_slowmo",
         )
 
     # Upload
-    st.markdown("""
+    st.markdown(
+        """
     <div class="section-title">Завантаження відео</div>
-    """, unsafe_allow_html=True)
-
-    uploaded_file = st.file_uploader(
-        "Перетягніть файл або оберіть",
-        type=["mp4", "mov", "avi"],
-        key="gym_upload"
+    """,
+        unsafe_allow_html=True,
     )
+
+    uploaded_file = st.file_uploader("Перетягніть файл або оберіть", type=["mp4", "mov", "avi"], key="gym_upload")
 
     if uploaded_file:
         col1, col2 = st.columns(2)
         with col1:
-            st.markdown(f"""
+            st.markdown(
+                f"""
             <div class="metric-item">
                 <div class="metric-value">{uploaded_file.size / (1024*1024):.1f}</div>
                 <div class="metric-label">МБ</div>
             </div>
-            """, unsafe_allow_html=True)
+            """,
+                unsafe_allow_html=True,
+            )
         with col2:
-            st.markdown(f"""
+            st.markdown(
+                f"""
             <div class="metric-item">
                 <div class="metric-value">{fps}</div>
                 <div class="metric-label">FPS</div>
             </div>
-            """, unsafe_allow_html=True)
+            """,
+                unsafe_allow_html=True,
+            )
 
         st.markdown("<br>", unsafe_allow_html=True)
 
-        if st.button("🏋️ АНАЛІЗУВАТИ ВПРАВУ", type="primary", use_container_width=True, key="gym_analyze"):
+        if st.button(
+            "🏋️ АНАЛІЗУВАТИ ВПРАВУ",
+            type="primary",
+            use_container_width=True,
+            key="gym_analyze",
+        ):
             analyze_dryland(uploaded_file, athlete_name, exercise_type, fps, slow_motion)
 
     # Features
     with st.expander("📊 Можливості аналізу"):
         col1, col2 = st.columns(2)
         with col1:
-            st.markdown("""
+            st.markdown(
+                """
             **Поза тіла:**
             - 📐 33 ключові точки
             - 📏 Кути суглобів
             - 🦴 Вісь хребта
             - ⚖️ Баланс тіла
-            """)
+            """
+            )
         with col2:
-            st.markdown("""
+            st.markdown(
+                """
             **Аналіз руху:**
             - 🔄 Траєкторія руху
             - ⏱️ Темп виконання
             - 📈 Амплітуда
             - ✅ Рекомендації
-            """)
+            """
+            )
 
 
 def analyze_dryland(uploaded_file, athlete_name, exercise_type, fps, slow_motion=1.0):
@@ -145,7 +154,10 @@ def analyze_dryland(uploaded_file, athlete_name, exercise_type, fps, slow_motion
                 fps=float(fps),
             )
             progress_bar.progress(15)
-            st.markdown(f'<div class="status-success">✅ Витягнуто {frame_result["count"]} кадрів</div>', unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="status-success">✅ Витягнуто {frame_result["count"]} кадрів</div>',
+                unsafe_allow_html=True,
+            )
 
             # Step 2: Detect person
             status_text.text("🎯 Детекція людини...")
@@ -156,7 +168,10 @@ def analyze_dryland(uploaded_file, athlete_name, exercise_type, fps, slow_motion
                 enable_tracking=True,
             )
             progress_bar.progress(30)
-            st.markdown('<div class="status-success">✅ Детекція завершена</div>', unsafe_allow_html=True)
+            st.markdown(
+                '<div class="status-success">✅ Детекція завершена</div>',
+                unsafe_allow_html=True,
+            )
 
             # Step 3: First pass - collect angles for rep detection
             status_text.text("🦴 Аналіз біомеханіки...")
@@ -209,15 +224,22 @@ def analyze_dryland(uploaded_file, athlete_name, exercise_type, fps, slow_motion
             exercise_analyzer = get_exercise_analyzer(fps=float(fps))
             exercise_stats = exercise_analyzer.analyze(all_angles, exercise_type)
 
-            st.markdown(f'<div class="status-success">🔄 Знайдено <strong>{exercise_stats.total_reps}</strong> повторень</div>', unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="status-success">🔄 Знайдено <strong>{exercise_stats.total_reps}</strong> повторень</div>',
+                unsafe_allow_html=True,
+            )
             if exercise_stats.total_reps > 0:
-                st.markdown(f'<div class="status-info">⏱️ Темп: {exercise_stats.avg_tempo:.1f}с/повт | 📐 Амплітуда: {exercise_stats.avg_range_of_motion:.0f}° | 📊 Стабільність: {exercise_stats.stability_score:.0f}%</div>', unsafe_allow_html=True)
+                st.markdown(
+                    f'<div class="status-info">⏱️ Темп: {exercise_stats.avg_tempo:.1f}с/повт | 📐 Амплітуда: {exercise_stats.avg_range_of_motion:.0f}° | 📊 Стабільність: {exercise_stats.stability_score:.0f}%</div>',
+                    unsafe_allow_html=True,
+                )
 
             progress_bar.progress(65)
 
             # Determine main movement
             if detected_movements:
                 from collections import Counter
+
                 movement_counts = Counter(detected_movements)
                 main_movement = movement_counts.most_common(1)[0][0]
             else:
@@ -250,7 +272,10 @@ def analyze_dryland(uploaded_file, athlete_name, exercise_type, fps, slow_motion
 
             video_writer.release()
 
-            st.markdown(f'<div class="status-success">🎬 Відео створено ({slow_motion}x швидкість)</div>', unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="status-success">🎬 Відео створено ({slow_motion}x швидкість)</div>',
+                unsafe_allow_html=True,
+            )
 
             progress_bar.progress(85)
 
@@ -265,7 +290,7 @@ def analyze_dryland(uploaded_file, athlete_name, exercise_type, fps, slow_motion
             status_text.text("🤖 AI тренер аналізує...")
 
             pose_result = {
-                "detection_rate": frames_with_pose / len(frame_result["frames"]) if frame_result["frames"] else 0,
+                "detection_rate": (frames_with_pose / len(frame_result["frames"]) if frame_result["frames"] else 0),
                 "avg_streamline": 70,
                 "avg_deviation": 5,
                 "frame_analyses": [{"has_pose": True, "angles": a} for a in all_angles if a],
@@ -290,9 +315,17 @@ def analyze_dryland(uploaded_file, athlete_name, exercise_type, fps, slow_motion
 
             # Display results
             display_dryland_results(
-                pose_result, detection_result, output_dir,
-                {"main_movement": main_movement, "all_angles": all_angles, "exercise_stats": exercise_stats},
-                annotated_video_path, ai_advice, chart_path if chart_path.exists() else None
+                pose_result,
+                detection_result,
+                output_dir,
+                {
+                    "main_movement": main_movement,
+                    "all_angles": all_angles,
+                    "exercise_stats": exercise_stats,
+                },
+                annotated_video_path,
+                ai_advice,
+                chart_path if chart_path.exists() else None,
             )
 
             # Save to database
@@ -300,9 +333,12 @@ def analyze_dryland(uploaded_file, athlete_name, exercise_type, fps, slow_motion
                 session_id = save_analysis_to_db(
                     athlete_name=athlete_name,
                     session_type="dryland",
-                    analysis={"main_movement": main_movement, "exercise_stats": exercise_stats},
+                    analysis={
+                        "main_movement": main_movement,
+                        "exercise_stats": exercise_stats,
+                    },
                     ai_advice=ai_advice,
-                    video_path=str(video_path) if 'video_path' in dir() else ""
+                    video_path=str(video_path) if "video_path" in dir() else "",
                 )
                 st.success(f"💾 Результати збережено в базу даних (сесія #{session_id})")
             except (sqlite3.Error, ValueError, OSError) as db_error:
@@ -316,6 +352,7 @@ def analyze_dryland(uploaded_file, athlete_name, exercise_type, fps, slow_motion
             logger.exception("Unexpected error in dryland analysis")
             st.error("❌ Непередбачена помилка. Перевірте логи.")
             import traceback
+
             st.code(traceback.format_exc())
 
 
@@ -349,7 +386,15 @@ def detect_movement_type(angles: Dict) -> str:
         return "🏋️ Загальна вправа"
 
 
-def display_dryland_results(pose_result, detection_result, output_dir, biomech_result=None, video_path=None, ai_advice=None, chart_path=None):
+def display_dryland_results(
+    pose_result,
+    detection_result,
+    output_dir,
+    biomech_result=None,
+    video_path=None,
+    ai_advice=None,
+    chart_path=None,
+):
     """Display dryland exercise analysis results."""
 
     st.markdown('<div class="section-title">Результати аналізу</div>', unsafe_allow_html=True)
@@ -360,7 +405,8 @@ def display_dryland_results(pose_result, detection_result, output_dir, biomech_r
     exercise_stats = biomech_result.get("exercise_stats") if biomech_result else None
 
     if exercise_stats and exercise_stats.total_reps > 0:
-        st.markdown(f"""
+        st.markdown(
+            f"""
         <div style="background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
                     border-radius: 16px; padding: 1.5rem; margin: 1rem 0;">
             <div style="display: flex; justify-content: space-around; flex-wrap: wrap; gap: 1rem;">
@@ -382,39 +428,49 @@ def display_dryland_results(pose_result, detection_result, output_dir, biomech_r
                 </div>
             </div>
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
         # Rep details table
         if exercise_stats.reps:
             with st.expander("📋 Деталі по кожному повторенню"):
                 rep_data = []
                 for rep in exercise_stats.reps:
-                    rep_data.append({
-                        "№": rep.rep_number,
-                        "Тривалість (с)": f"{rep.duration_sec:.2f}",
-                        "Мін. кут (°)": f"{rep.min_angle:.0f}",
-                        "Макс. кут (°)": f"{rep.max_angle:.0f}",
-                        "Амплітуда (°)": f"{rep.range_of_motion:.0f}",
-                    })
+                    rep_data.append(
+                        {
+                            "№": rep.rep_number,
+                            "Тривалість (с)": f"{rep.duration_sec:.2f}",
+                            "Мін. кут (°)": f"{rep.min_angle:.0f}",
+                            "Макс. кут (°)": f"{rep.max_angle:.0f}",
+                            "Амплітуда (°)": f"{rep.range_of_motion:.0f}",
+                        }
+                    )
                 st.table(rep_data)
 
     # ========================================================================
     # DETECTED MOVEMENT TYPE
     # ========================================================================
     if biomech_result and biomech_result.get("main_movement"):
-        st.markdown(f"""
+        st.markdown(
+            f"""
         <div style="background: linear-gradient(135deg, #059669 0%, #10b981 100%);
                     border-radius: 12px; padding: 1rem; margin: 1rem 0; text-align: center;">
             <div style="font-size: 1.8rem;">{biomech_result["main_movement"]}</div>
             <div style="color: rgba(255,255,255,0.8); font-size: 0.9rem;">Автоматично визначений тип вправи</div>
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
     # ========================================================================
     # VIDEO WITH EFFECTS
     # ========================================================================
     if video_path and Path(video_path).exists():
-        st.markdown('<div class="section-title">🎬 Відео з біомеханікою</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="section-title">🎬 Відео з біомеханікою</div>',
+            unsafe_allow_html=True,
+        )
         st.video(str(video_path))
 
         # Download button
@@ -431,7 +487,10 @@ def display_dryland_results(pose_result, detection_result, output_dir, biomech_r
     # CHART
     # ========================================================================
     if chart_path and Path(chart_path).exists():
-        st.markdown('<div class="section-title">📊 Графіки аналізу</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="section-title">📊 Графіки аналізу</div>',
+            unsafe_allow_html=True,
+        )
         st.image(str(chart_path), use_column_width=True)
 
     # ========================================================================
@@ -444,7 +503,8 @@ def display_dryland_results(pose_result, detection_result, output_dir, biomech_r
         score = ai_advice.score
         score_color = "#10b981" if score >= 70 else "#f59e0b" if score >= 50 else "#ef4444"
 
-        st.markdown(f"""
+        st.markdown(
+            f"""
         <div style="background: linear-gradient(135deg, rgba(59,130,246,0.2) 0%, rgba(139,92,246,0.2) 100%);
                     border: 1px solid {score_color}; border-radius: 16px; padding: 1.5rem; margin: 1rem 0;">
             <div style="display: flex; align-items: center; gap: 2rem; flex-wrap: wrap;">
@@ -457,7 +517,9 @@ def display_dryland_results(pose_result, detection_result, output_dir, biomech_r
                 </div>
             </div>
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
         col1, col2 = st.columns(2)
         with col1:
@@ -481,39 +543,51 @@ def display_dryland_results(pose_result, detection_result, output_dir, biomech_r
 
     with col1:
         det_rate = pose_result.get("detection_rate", 0) * 100
-        st.markdown(f"""
+        st.markdown(
+            f"""
         <div class="metric-item">
             <div class="metric-value">{det_rate:.0f}%</div>
             <div class="metric-label">Детекція</div>
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
     with col2:
         streamline = pose_result.get("avg_streamline", 0)
-        st.markdown(f"""
+        st.markdown(
+            f"""
         <div class="metric-item">
             <div class="metric-value">{streamline:.0f}</div>
             <div class="metric-label">Streamline</div>
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
     with col3:
         deviation = pose_result.get("avg_deviation", 0)
-        st.markdown(f"""
+        st.markdown(
+            f"""
         <div class="metric-item">
             <div class="metric-value">{deviation:.1f}°</div>
             <div class="metric-label">Відхилення</div>
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
     with col4:
         frames = len(pose_result.get("frame_analyses", []))
-        st.markdown(f"""
+        st.markdown(
+            f"""
         <div class="metric-item">
             <div class="metric-value">{frames}</div>
             <div class="metric-label">Кадрів</div>
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
     # Detailed analysis
     st.markdown('<div class="section-title">Детальний аналіз</div>', unsafe_allow_html=True)

@@ -31,6 +31,7 @@ logger = logging.getLogger(__name__)
 # Interfaces / Protocols
 # ---------------------------------------------------------------------------
 
+
 @runtime_checkable
 class AICoachProtocol(Protocol):
     """Minimal interface every AI coaching implementation must satisfy.
@@ -52,10 +53,12 @@ class AICoachProtocol(Protocol):
 # Shared result container
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class AnalysisReport:
     """Unified container returned by ``AnalysisService.run_*`` methods."""
-    sport: str                          # "swimming" | "running" | "cycling" | "dryland"
+
+    sport: str  # "swimming" | "running" | "cycling" | "dryland"
     athlete_id: Optional[int] = None
     athlete_name: str = "Unknown"
     fps: float = 30.0
@@ -72,6 +75,7 @@ class AnalysisReport:
 # ---------------------------------------------------------------------------
 # Service
 # ---------------------------------------------------------------------------
+
 
 class AnalysisService:
     """Coordinates sport-specific analyzers, AI coaching, and DB persistence.
@@ -110,30 +114,35 @@ class AnalysisService:
     def _get_stroke_analyzer(self):
         if self._stroke_analyzer is None:
             from video_analysis.analyzer_factory import get_stroke_analyzer
+
             self._stroke_analyzer = get_stroke_analyzer(fps=self.fps)
         return self._stroke_analyzer
 
     def _get_running_analyzer(self):
         if self._running_analyzer is None:
             from video_analysis.analyzer_factory import get_running_analyzer
+
             self._running_analyzer = get_running_analyzer(fps=self.fps)
         return self._running_analyzer
 
     def _get_cycling_analyzer(self):
         if self._cycling_analyzer is None:
             from video_analysis.analyzer_factory import get_cycling_analyzer
+
             self._cycling_analyzer = get_cycling_analyzer(fps=self.fps)
         return self._cycling_analyzer
 
     def _get_ai_coach(self) -> AICoachProtocol:
         if self._ai_coach is None:
             try:
-                from video_analysis.ai_coach import AICoach
-                self._ai_coach = AICoach(provider="auto")
+                from video_analysis.ai_chat import AIChat
+
+                self._ai_coach = AIChat(athlete_name=self.athlete_name)
             except Exception as exc:
-                logger.warning("AICoach init failed (%s), using offline fallback", exc)
-                from video_analysis.ai_coach import AICoach
-                self._ai_coach = AICoach(provider="offline")
+                logger.warning("AIChat init failed (%s), using keyword fallback", exc)
+                from video_analysis.ai_chat import AIChat
+
+                self._ai_coach = AIChat(athlete_name=self.athlete_name)
         return self._ai_coach
 
     # ------------------------------------------------------------------
@@ -220,10 +229,11 @@ class AnalysisService:
             return False
         try:
             from video_analysis.athlete_database import save_analysis_to_db
+
             save_analysis_to_db(
-                athlete_id=report.athlete_id,
-                sport=report.sport,
-                analysis_data=report.metrics,
+                athlete_name=report.athlete_name,
+                session_type=report.sport,
+                analysis=report.metrics,
             )
             return True
         except Exception as exc:

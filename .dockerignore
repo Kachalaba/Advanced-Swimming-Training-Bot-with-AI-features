@@ -24,3 +24,7 @@ examples/
 !README.md
 reports/
 data/*.db
+frontend/.next/
+frontend/node_modules/
+frontend/*.tsbuildinfo
+node_modules/

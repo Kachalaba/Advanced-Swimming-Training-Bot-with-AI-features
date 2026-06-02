@@ -8,14 +8,14 @@ Features:
 - Session comparison
 """
 
-import sqlite3
 import json
 import logging
+import sqlite3
 from contextlib import contextmanager
-from pathlib import Path
+from dataclasses import asdict, dataclass
 from datetime import datetime
-from typing import Dict, List, Optional, Any
-from dataclasses import dataclass, asdict
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +26,7 @@ DB_PATH = Path(__file__).parent.parent / "data" / "athletes.db"
 @dataclass
 class Athlete:
     """Athlete profile."""
+
     id: Optional[int] = None
     name: str = ""
     age: Optional[int] = None
@@ -38,6 +39,7 @@ class Athlete:
 @dataclass
 class TrainingSession:
     """Training session record."""
+
     id: Optional[int] = None
     athlete_id: int = 0
     session_type: str = "swimming"  # swimming, dryland
@@ -105,7 +107,8 @@ class AthleteDatabase:
             cursor = conn.cursor()
 
             # Athletes table
-            cursor.execute("""
+            cursor.execute(
+                """
                 CREATE TABLE IF NOT EXISTS athletes (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT NOT NULL UNIQUE,
@@ -115,10 +118,12 @@ class AthleteDatabase:
                     created_at TEXT,
                     notes TEXT
                 )
-            """)
+            """
+            )
 
             # Training sessions table
-            cursor.execute("""
+            cursor.execute(
+                """
                 CREATE TABLE IF NOT EXISTS sessions (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     athlete_id INTEGER NOT NULL,
@@ -148,7 +153,8 @@ class AthleteDatabase:
 
                     FOREIGN KEY (athlete_id) REFERENCES athletes(id)
                 )
-            """)
+            """
+            )
 
         logger.info(f"Database initialized at {self.db_path}")
 
@@ -161,17 +167,20 @@ class AthleteDatabase:
         with self._get_connection() as conn:
             cursor = conn.cursor()
             try:
-                cursor.execute("""
+                cursor.execute(
+                    """
                     INSERT INTO athletes (name, age, level, specialization, created_at, notes)
                     VALUES (?, ?, ?, ?, ?, ?)
-                """, (
-                    athlete.name,
-                    athlete.age,
-                    athlete.level,
-                    athlete.specialization,
-                    datetime.now().isoformat(),
-                    athlete.notes,
-                ))
+                """,
+                    (
+                        athlete.name,
+                        athlete.age,
+                        athlete.level,
+                        athlete.specialization,
+                        datetime.now().isoformat(),
+                        athlete.notes,
+                    ),
+                )
                 athlete_id = cursor.lastrowid
                 logger.info(f"Added athlete: {athlete.name} (ID: {athlete_id})")
                 return athlete_id
@@ -197,8 +206,13 @@ class AthleteDatabase:
 
         if row:
             return Athlete(
-                id=row[0], name=row[1], age=row[2], level=row[3],
-                specialization=row[4], created_at=row[5], notes=row[6]
+                id=row[0],
+                name=row[1],
+                age=row[2],
+                level=row[3],
+                specialization=row[4],
+                created_at=row[5],
+                notes=row[6],
             )
         return None
 
@@ -210,8 +224,15 @@ class AthleteDatabase:
             rows = cursor.fetchall()
 
         return [
-            Athlete(id=r[0], name=r[1], age=r[2], level=r[3],
-                    specialization=r[4], created_at=r[5], notes=r[6])
+            Athlete(
+                id=r[0],
+                name=r[1],
+                age=r[2],
+                level=r[3],
+                specialization=r[4],
+                created_at=r[5],
+                notes=r[6],
+            )
             for r in rows
         ]
 
@@ -222,11 +243,20 @@ class AthleteDatabase:
 
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 UPDATE athletes SET name=?, age=?, level=?, specialization=?, notes=?
                 WHERE id=?
-            """, (athlete.name, athlete.age, athlete.level,
-                  athlete.specialization, athlete.notes, athlete.id))
+            """,
+                (
+                    athlete.name,
+                    athlete.age,
+                    athlete.level,
+                    athlete.specialization,
+                    athlete.notes,
+                    athlete.id,
+                ),
+            )
         return True
 
     def delete_athlete(self, athlete_id: int) -> bool:
@@ -245,21 +275,38 @@ class AthleteDatabase:
         """Add training session. Returns session ID."""
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT INTO sessions (
                     athlete_id, session_type, date, duration_sec, distance_m,
                     avg_speed, stroke_rate, stroke_count, symmetry_score, body_roll, streamline_score,
                     reps, exercise_type, avg_tempo, stability_score,
                     ai_score, ai_summary, full_analysis, video_path, notes
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                session.athlete_id, session.session_type, session.date or datetime.now().isoformat(),
-                session.duration_sec, session.distance_m,
-                session.avg_speed, session.stroke_rate, session.stroke_count,
-                session.symmetry_score, session.body_roll, session.streamline_score,
-                session.reps, session.exercise_type, session.avg_tempo, session.stability_score,
-                session.ai_score, session.ai_summary, session.full_analysis, session.video_path, session.notes
-            ))
+            """,
+                (
+                    session.athlete_id,
+                    session.session_type,
+                    session.date or datetime.now().isoformat(),
+                    session.duration_sec,
+                    session.distance_m,
+                    session.avg_speed,
+                    session.stroke_rate,
+                    session.stroke_count,
+                    session.symmetry_score,
+                    session.body_roll,
+                    session.streamline_score,
+                    session.reps,
+                    session.exercise_type,
+                    session.avg_tempo,
+                    session.stability_score,
+                    session.ai_score,
+                    session.ai_summary,
+                    session.full_analysis,
+                    session.video_path,
+                    session.notes,
+                ),
+            )
             session_id = cursor.lastrowid
 
         logger.info(f"Added session {session_id} for athlete {session.athlete_id}")
@@ -270,15 +317,21 @@ class AthleteDatabase:
         with self._get_connection() as conn:
             cursor = conn.cursor()
             if session_type:
-                cursor.execute("""
+                cursor.execute(
+                    """
                     SELECT * FROM sessions WHERE athlete_id = ? AND session_type = ?
                     ORDER BY date DESC LIMIT ?
-                """, (athlete_id, session_type, limit))
+                """,
+                    (athlete_id, session_type, limit),
+                )
             else:
-                cursor.execute("""
+                cursor.execute(
+                    """
                     SELECT * FROM sessions WHERE athlete_id = ?
                     ORDER BY date DESC LIMIT ?
-                """, (athlete_id, limit))
+                """,
+                    (athlete_id, limit),
+                )
             rows = cursor.fetchall()
 
         return [self._row_to_session(r) for r in rows]
@@ -295,13 +348,27 @@ class AthleteDatabase:
     def _row_to_session(self, row) -> TrainingSession:
         """Convert database row to TrainingSession."""
         return TrainingSession(
-            id=row[0], athlete_id=row[1], session_type=row[2], date=row[3],
-            duration_sec=row[4], distance_m=row[5],
-            avg_speed=row[6], stroke_rate=row[7], stroke_count=row[8],
-            symmetry_score=row[9], body_roll=row[10], streamline_score=row[11],
-            reps=row[12], exercise_type=row[13], avg_tempo=row[14], stability_score=row[15],
-            ai_score=row[16], ai_summary=row[17], full_analysis=row[18],
-            video_path=row[19], notes=row[20]
+            id=row[0],
+            athlete_id=row[1],
+            session_type=row[2],
+            date=row[3],
+            duration_sec=row[4],
+            distance_m=row[5],
+            avg_speed=row[6],
+            stroke_rate=row[7],
+            stroke_count=row[8],
+            symmetry_score=row[9],
+            body_roll=row[10],
+            streamline_score=row[11],
+            reps=row[12],
+            exercise_type=row[13],
+            avg_tempo=row[14],
+            stability_score=row[15],
+            ai_score=row[16],
+            ai_summary=row[17],
+            full_analysis=row[18],
+            video_path=row[19],
+            notes=row[20],
         )
 
     def delete_session(self, session_id: int) -> bool:
@@ -316,15 +383,31 @@ class AthleteDatabase:
     # ========================================================================
 
     # Allowed column names for get_progress — prevents SQL injection
-    _ALLOWED_METRICS = frozenset({
-        "ai_score", "avg_speed", "stroke_rate", "stroke_count",
-        "symmetry_score", "body_roll", "streamline_score",
-        "reps", "avg_tempo", "stability_score", "duration_sec", "distance_m",
-    })
+    _ALLOWED_METRICS = frozenset(
+        {
+            "ai_score",
+            "avg_speed",
+            "stroke_rate",
+            "stroke_count",
+            "symmetry_score",
+            "body_roll",
+            "streamline_score",
+            "reps",
+            "avg_tempo",
+            "stability_score",
+            "duration_sec",
+            "distance_m",
+        }
+    )
 
-    def get_progress(self, athlete_id: int, metric: str = "ai_score",
-                     session_type: str = None, limit: int = 20,
-                     days: int = None) -> List[Dict]:
+    def get_progress(
+        self,
+        athlete_id: int,
+        metric: str = "ai_score",
+        session_type: str = None,
+        limit: int = 20,
+        days: int = None,
+    ) -> List[Dict]:
         """Get progress data for a metric over time."""
         if metric not in self._ALLOWED_METRICS:
             raise ValueError(f"Invalid metric '{metric}'. Allowed: {sorted(self._ALLOWED_METRICS)}")
@@ -355,28 +438,34 @@ class AthleteDatabase:
             cursor = conn.cursor()
 
             # Count sessions
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT session_type, COUNT(*) as count,
                        AVG(ai_score) as avg_score,
                        MAX(ai_score) as best_score
                 FROM sessions WHERE athlete_id = ?
                 GROUP BY session_type
-            """, (athlete_id,))
+            """,
+                (athlete_id,),
+            )
 
             type_stats = {}
             for row in cursor.fetchall():
                 type_stats[row[0]] = {
                     "count": row[1],
                     "avg_score": round(row[2] or 0, 1),
-                    "best_score": row[3] or 0
+                    "best_score": row[3] or 0,
                 }
 
             # Total stats
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT COUNT(*), AVG(ai_score), MAX(ai_score),
                        SUM(duration_sec), SUM(distance_m)
                 FROM sessions WHERE athlete_id = ?
-            """, (athlete_id,))
+            """,
+                (athlete_id,),
+            )
 
             row = cursor.fetchone()
 
@@ -386,7 +475,7 @@ class AthleteDatabase:
             "best_score": row[2] or 0,
             "total_time_min": round((row[3] or 0) / 60, 1),
             "total_distance_m": round(row[4] or 0, 1),
-            "by_type": type_stats
+            "by_type": type_stats,
         }
 
     def compare_sessions(self, session_id_1: int, session_id_2: int) -> Dict:
@@ -397,7 +486,7 @@ class AthleteDatabase:
         if not s1 or not s2:
             return {}
 
-        comparison = {
+        comparison: Dict[str, Any] = {
             "session_1": asdict(s1),
             "session_2": asdict(s2),
             "improvements": [],
@@ -443,7 +532,7 @@ def save_analysis_to_db(
     session_type: str,
     analysis: Dict,
     ai_advice: Any = None,
-    video_path: str = ""
+    video_path: str = "",
 ) -> int:
     """
     Convenience function to save analysis results to database.
@@ -477,10 +566,24 @@ def save_analysis_to_db(
         biomech = analysis.get("biomechanics", {})
         stroke = biomech.get("stroke_analysis")
         if stroke:
-            session.stroke_rate = getattr(stroke, 'stroke_rate', 0) if hasattr(stroke, 'stroke_rate') else stroke.get('stroke_rate', 0)
-            session.stroke_count = getattr(stroke, 'total_strokes', 0) if hasattr(stroke, 'total_strokes') else stroke.get('total_strokes', 0)
-            session.symmetry_score = getattr(stroke, 'symmetry_score', 0) if hasattr(stroke, 'symmetry_score') else stroke.get('symmetry_score', 0)
-            session.body_roll = getattr(stroke, 'avg_body_roll', 0) if hasattr(stroke, 'avg_body_roll') else stroke.get('avg_body_roll', 0)
+            session.stroke_rate = (
+                getattr(stroke, "stroke_rate", 0) if hasattr(stroke, "stroke_rate") else stroke.get("stroke_rate", 0)
+            )
+            session.stroke_count = (
+                getattr(stroke, "total_strokes", 0)
+                if hasattr(stroke, "total_strokes")
+                else stroke.get("total_strokes", 0)
+            )
+            session.symmetry_score = (
+                getattr(stroke, "symmetry_score", 0)
+                if hasattr(stroke, "symmetry_score")
+                else stroke.get("symmetry_score", 0)
+            )
+            session.body_roll = (
+                getattr(stroke, "avg_body_roll", 0)
+                if hasattr(stroke, "avg_body_roll")
+                else stroke.get("avg_body_roll", 0)
+            )
 
         swimming_pose = biomech.get("swimming_pose", {})
         session.streamline_score = swimming_pose.get("avg_streamline", 0)
@@ -488,13 +591,13 @@ def save_analysis_to_db(
     elif session_type == "dryland":
         exercise_stats = analysis.get("exercise_stats")
         if exercise_stats:
-            session.reps = getattr(exercise_stats, 'total_reps', 0)
-            session.avg_tempo = getattr(exercise_stats, 'avg_tempo', 0)
-            session.stability_score = getattr(exercise_stats, 'stability_score', 0)
+            session.reps = getattr(exercise_stats, "total_reps", 0)
+            session.avg_tempo = getattr(exercise_stats, "avg_tempo", 0)
+            session.stability_score = getattr(exercise_stats, "stability_score", 0)
         session.exercise_type = analysis.get("main_movement", "")
 
     if ai_advice:
-        session.ai_score = getattr(ai_advice, 'score', 0)
-        session.ai_summary = getattr(ai_advice, 'summary', '')
+        session.ai_score = getattr(ai_advice, "score", 0)
+        session.ai_summary = getattr(ai_advice, "summary", "")
 
     return db.add_session(session)

@@ -56,12 +56,15 @@ def render_history_tab():
         st.markdown("### 📊 По типам тренувань")
         for stype, sdata in stats["by_type"].items():
             type_icon = "🏊" if stype == "swimming" else "🏋️"
-            st.markdown(f"""
+            st.markdown(
+                f"""
             <div style="background: rgba(59,130,246,0.1); border-radius: 8px; padding: 0.5rem 1rem; margin: 0.5rem 0;">
                 <strong>{type_icon} {stype.capitalize()}</strong>: {sdata['count']} сесій |
                 Середня: {sdata['avg_score']}/100 | Найкраща: {sdata['best_score']}/100
             </div>
-            """, unsafe_allow_html=True)
+            """,
+                unsafe_allow_html=True,
+            )
 
     # Multi-metric progress chart
     st.markdown("### 📈 Динаміка метрик")
@@ -78,20 +81,26 @@ def render_history_tab():
         "duration_sec": "Тривалість (с)",
     }
     _PERIOD_DAYS = {"7 днів": 7, "30 днів": 30, "90 днів": 90, "Весь час": None}
-    _SESSION_TYPES = {"Всі": "all", "Swimming": "swimming", "Running": "running",
-                      "Cycling": "cycling", "Dryland": "dryland"}
+    _SESSION_TYPES = {
+        "Всі": "all",
+        "Swimming": "swimming",
+        "Running": "running",
+        "Cycling": "cycling",
+        "Dryland": "dryland",
+    }
 
     _mcol1, _mcol2, _mcol3 = st.columns(3)
     with _mcol1:
-        selected_metric = st.selectbox("📊 Метрика", list(_METRIC_LABELS.keys()),
-                                       format_func=lambda k: _METRIC_LABELS[k],
-                                       key="hist_metric")
+        selected_metric = st.selectbox(
+            "📊 Метрика",
+            list(_METRIC_LABELS.keys()),
+            format_func=lambda k: _METRIC_LABELS[k],
+            key="hist_metric",
+        )
     with _mcol2:
-        selected_period_label = st.radio("📅 Період", list(_PERIOD_DAYS.keys()),
-                                         horizontal=True, key="hist_period")
+        selected_period_label = st.radio("📅 Період", list(_PERIOD_DAYS.keys()), horizontal=True, key="hist_period")
     with _mcol3:
-        selected_type_label = st.selectbox("🏊 Тип", list(_SESSION_TYPES.keys()),
-                                           key="hist_stype")
+        selected_type_label = st.selectbox("🏊 Тип", list(_SESSION_TYPES.keys()), key="hist_stype")
 
     progress_data = db.get_progress(
         athlete.id,
@@ -103,13 +112,16 @@ def render_history_tab():
 
     if progress_data:
         df_prog = pd.DataFrame(progress_data)
-        df_prog['date'] = pd.to_datetime(df_prog['date'])
-        df_prog = df_prog.dropna(subset=['value'])
+        df_prog["date"] = pd.to_datetime(df_prog["date"])
+        df_prog = df_prog.dropna(subset=["value"])
         if not df_prog.empty:
             try:
                 import plotly.express as px
+
                 fig = px.line(
-                    df_prog, x='date', y='value',
+                    df_prog,
+                    x="date",
+                    y="value",
                     title=f"{_METRIC_LABELS[selected_metric]} — {athlete.name}",
                     markers=True,
                     color_discrete_sequence=["#3b82f6"],
@@ -123,7 +135,7 @@ def render_history_tab():
                 )
                 st.plotly_chart(fig, use_container_width=True)
             except ImportError:
-                st.line_chart(df_prog.set_index('date')['value'])
+                st.line_chart(df_prog.set_index("date")["value"])
         else:
             st.info("Немає даних для вибраної метрики/фільтрів")
     else:
@@ -136,19 +148,22 @@ def render_history_tab():
     if sessions:
         # CSV export
         import pandas as pd
+
         _csv_rows = []
         for s in sessions:
-            _csv_rows.append({
-                "date": s.date[:10],
-                "type": s.session_type,
-                "ai_score": s.ai_score,
-                "distance_m": s.distance_m,
-                "duration_sec": s.duration_sec,
-                "avg_speed": s.avg_speed,
-                "stroke_rate": s.stroke_rate,
-                "symmetry_score": s.symmetry_score,
-                "ai_summary": s.ai_summary or "",
-            })
+            _csv_rows.append(
+                {
+                    "date": s.date[:10],
+                    "type": s.session_type,
+                    "ai_score": s.ai_score,
+                    "distance_m": s.distance_m,
+                    "duration_sec": s.duration_sec,
+                    "avg_speed": s.avg_speed,
+                    "stroke_rate": s.stroke_rate,
+                    "symmetry_score": s.symmetry_score,
+                    "ai_summary": s.ai_summary or "",
+                }
+            )
         _csv_bytes = pd.DataFrame(_csv_rows).to_csv(index=False).encode("utf-8")
         st.download_button(
             "⬇️ Завантажити CSV",

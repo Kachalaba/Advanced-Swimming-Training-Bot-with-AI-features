@@ -67,7 +67,7 @@ export function RunningUploader() {
           {uploading ? "Uploading…" : "Drop a running video here"}
         </p>
         <p className="text-xs text-slate-500 mt-1">
-          MP4, MOV up to 2GB · Side-on view recommended
+          MP4, MOV, AVI, MKV up to 512 MB · Side-on view recommended
         </p>
         {error ? (
           <p className="text-xs text-rose-400 mt-3">{error}</p>

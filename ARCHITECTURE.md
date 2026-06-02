@@ -1,67 +1,126 @@
-# ARCHITECTURE.md — шарова архітектура Sprint-Bot
+# SPRINT AI Architecture
 
-Sprint-Bot поєднує легасі aiogram-хендлери та нову модульну структуру `sprint_bot`. Мета — поступово перенести доменну логіку в нові шари, не зупиняючи функціональний реліз.
+SPRINT AI is a triathlon video-analysis platform. The current repository has
+two application shells that share the same computer-vision and biomechanics
+core:
 
-## Огляд шарів
+- `app.py` and `pages/` — Streamlit prototype and trainer-facing fallback UI.
+- `backend/` — FastAPI API for the new web app.
+- `frontend/` — Next.js UI for the new web app.
+- `video_analysis/` — shared analysis domain: frame extraction, YOLO tracking,
+  MediaPipe pose processing, sport-specific analyzers, AI coaching, reports,
+  and persistence helpers.
+
+## Runtime Flow
 
 ```mermaid
-graph TD
-    TG[Telegram API] -->|updates| APP[bot.py / aiogram Dispatcher]
-    APP -->|commands, callbacks| HANDLERS[handlers/*]
-    APP -->|use cases| APPLICATION[sprint_bot.application]
-    APPLICATION -->|business rules| DOMAIN[sprint_bot.domain]
-    APPLICATION -->|repositories| INFRA[sprint_bot.infrastructure]
-    INFRA -->|ORM| DB[(Postgres)]
-    INFRA -->|Sheets API| SHEETS[(Google Sheets)]
-    APPLICATION -->|services| SERVICES[services/*]
-    SERVICES --> REPORTS[reports/*]
-    SERVICES --> BACKUP[backup_service.py]
-    SERVICES --> NOTIFY[notifications.py]
-    APPLICATION --> UTILITIES[utils/*, middlewares/*, filters/*]
-
-    subgraph Observability
-        UTILITIES --> LOGGER[utils/logger.py]
-        UTILITIES --> SENTRY[utils/sentry.py]
+flowchart LR
+    subgraph Streamlit
+        ST["app.py + pages/*"]
     end
 
-    subgraph Operations
-        BACKUP --> S3[(S3 / MinIO)]
-        REPORTS --> IMAGES[(PNG/PDF)]
+    subgraph WebApp
+        FE["Next.js frontend"]
+        API["FastAPI backend"]
+        JOBS["In-memory job registry"]
     end
+
+    subgraph Core
+        FRAMES["frame_extractor"]
+        DETECT["swimmer_detector / YOLO"]
+        POSE["MediaPipe pose"]
+        ANALYZERS["stroke / running / cycling / exercise analyzers"]
+        COACH["AI coach fallback or LLM provider"]
+        DB["Athlete database"]
+    end
+
+    ST --> FRAMES
+    ST --> DETECT
+    ST --> POSE
+    ST --> ANALYZERS
+    ST --> COACH
+    ST --> DB
+
+    FE --> API
+    API --> JOBS
+    JOBS --> FRAMES
+    JOBS --> DETECT
+    JOBS --> POSE
+    JOBS --> ANALYZERS
 ```
 
-## Ключові компоненти
+## Main Components
 
-- **bot.py** — створює `Bot`, `Dispatcher`, підключає middlewares, DI та запускає полінг/вебхук.
-- **handlers/** — aiogram-хендлери команд `/newsprint`, `/progress`, онбординг і адмін-панель.
-- **sprint_bot.application** — сучасні use-case-и, які ізолюють логіку від телеграм-хендлерів.
-- **sprint_bot.domain** — обчислення сплітів, моделей спринту, нормалізація результатів.
-- **sprint_bot.infrastructure** — репозиторії Postgres і адаптери Google Sheets.
-- **services/** — процедурні сервіси для аналітики, експорту, команд backup, які ще не перенесені в нову архітектуру.
-- **reports/** — генерація графіків, CSV, зображень результатів.
-- **utils/** — логування, робота з персональними даними, допоміжні утиліти.
-- **alembic/**, **db/** — міграції та SQLAlchemy-моделі.
+### Streamlit Shell
 
-## Потік даних
+`app.py` configures the seven-tab UI and loads pages from `pages/`. This path is
+still the broadest UI surface: swimming, running, cycling, dryland, athlete
+history, AI assistant, and video tools.
 
-1. Telegram надсилає оновлення → `bot.py` маршрутизує їх у Dispatcher.
-2. Dispatcher викликає відповідний хендлер (`handlers/` або новий use-case в `sprint_bot.application`).
-3. Хендлер звертається до сервісів (`services/`, `reports/`) або до шарів application/domain/infrastructure за даними.
-4. Інфраструктурний шар читає дані з Postgres (`infra/db`) чи Google Sheets (`scripts/import_sheets` для синхронізації).
-5. Результат повертається в Telegram через методи aiogram, або потрапляє у звіти/бекопи/сповіщення.
+Sport pages should prefer cached factories from
+`video_analysis/analyzer_factory.py` for heavy analyzers. Shared geometry and
+smoothing helpers belong in `video_analysis/base_analyzer.py`.
 
-## Зовнішні залежності
+### FastAPI Backend
 
-- **Telegram Bot API** — основний канал взаємодії.
-- **Postgres 15** — первинне сховище (через async SQLAlchemy та Alembic).
-- **Google Sheets** — імпорт/експорт даних команди (gspread).
-- **S3/MinIO** — зберігання резервних копій (`backup_service.py`).
-- **Sentry** — моніторинг, збір логів і алертів.
+`backend/app/main.py` wires health, athlete, and analysis routers. The current
+production-ready analysis endpoint is running upload + Server-Sent Events:
 
-## План еволюції
+1. `POST /api/analysis/running` validates and stores a video upload.
+2. A background thread runs `backend/app/services/running.py`.
+3. `GET /api/analysis/running/{job_id}/events` streams progress and final data.
+4. `GET /api/analysis/running/{job_id}/video` serves the annotated MP4.
 
-- Перемістити обробники з `services/` у `sprint_bot.application` з чіткими інтерфейсами.
-- Оновити інфраструктуру на патерн `Unit of Work` та централізувати DI.
-- Додати HTTP-endpoint для health/ready проб, щоб моніторинг не залежав від Telegram.
-- Розширити тестовий шар, покривши нові модулі end-to-end сценаріями (`tests/sprint_bot/*`).
+The job registry is intentionally in-memory for Phase 1. It is single-process
+only and should be replaced by a durable queue before multi-worker deployment.
 
+### Next.js Frontend
+
+`frontend/` is the new trainer UI. It talks to FastAPI through
+`NEXT_PUBLIC_BACKEND_URL`, uploads running videos, subscribes to SSE progress,
+and renders the annotated result video.
+
+### Analysis Core
+
+`video_analysis/` is the primary domain package. The key rule is to avoid
+duplicating analyzer utilities: sport analyzers inherit `BaseAnalyzer`, and new
+heavy object construction should go through `analyzer_factory.py` or an
+equivalent service-layer boundary.
+
+### Persistence
+
+There are two persistence layers:
+
+- Active Streamlit backend: raw SQLite in `video_analysis/athlete_database.py`.
+- Migration target: SQLAlchemy models in `video_analysis/models.py`.
+
+New API-facing work should prefer the ORM path, but existing Streamlit pages
+still depend on raw SQLite. A migration plan should consolidate these paths
+before athlete history becomes a shared web feature.
+
+## Deployment
+
+### Streamlit
+
+Use the root `Dockerfile`. It runs `entrypoint.sh`, serving Streamlit on
+`PORT` or `8443` by default.
+
+### Web App
+
+Use `docker-compose.yml` for the FastAPI + Next.js stack:
+
+```bash
+docker compose up --build
+```
+
+- Frontend: `http://localhost:3000`
+- Backend health: `http://localhost:8000/api/health`
+
+## Current Limitations
+
+- FastAPI jobs are in-memory and not durable across restarts.
+- Only running analysis is exposed through the new API.
+- Athlete endpoints in `backend/app/api/athletes.py` are still stubbed.
+- Raw SQLite and ORM persistence coexist.
+- Some Streamlit pages still contain page-local tracking pipelines that should
+  gradually move into service modules.

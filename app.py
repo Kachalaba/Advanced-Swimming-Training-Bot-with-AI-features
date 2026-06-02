@@ -4,9 +4,10 @@
 """
 
 import logging
-import streamlit as st
-from pathlib import Path
 import sys
+from pathlib import Path
+
+import streamlit as st
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +64,8 @@ else:
         --bg-app-end: #e8f0fe;
     """
 
-st.markdown(f"""
+st.markdown(
+    f"""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
@@ -309,7 +311,9 @@ st.markdown(f"""
         margin: 0.4rem 0;
     }}
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 
 # ============================================================================
@@ -319,35 +323,49 @@ from i18n.translations import t  # noqa: E402
 
 _col_header, _col_lang, _col_toggle = st.columns([13, 1, 1])
 with _col_header:
-    st.markdown(f"""
+    st.markdown(
+        f"""
     <div class="premium-header">
         <div class="logo-text">⚡ SPRINT AI</div>
         <div class="tagline">{t('tagline')}</div>
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 with _col_lang:
     st.markdown("<div style='margin-top:1.8rem'></div>", unsafe_allow_html=True)
     _lang = st.session_state["lang"]
     _lang_icon = "🇬🇧" if _lang == "uk" else "🇺🇦"
-    if st.button(_lang_icon, key="lang_toggle", help="Switch language / Змінити мову", use_container_width=True):
+    if st.button(
+        _lang_icon,
+        key="lang_toggle",
+        help="Switch language / Змінити мову",
+        use_container_width=True,
+    ):
         st.session_state["lang"] = "en" if _lang == "uk" else "uk"
         st.rerun()
 with _col_toggle:
     st.markdown("<div style='margin-top:1.8rem'></div>", unsafe_allow_html=True)
     _toggle_icon = "☀️" if _theme == "dark" else "🌙"
-    if st.button(_toggle_icon, key="theme_toggle", help="Переключити тему / Switch theme", use_container_width=True):
+    if st.button(
+        _toggle_icon,
+        key="theme_toggle",
+        help="Переключити тему / Switch theme",
+        use_container_width=True,
+    ):
         st.session_state["theme"] = "light" if _theme == "dark" else "dark"
         st.rerun()
+
+from pages.ai_assistant import render_ai_tab  # noqa: E402
+from pages.cycling import render_cycling_tab  # noqa: E402
+from pages.dryland import render_dryland_tab  # noqa: E402
+from pages.history import render_history_tab  # noqa: E402
+from pages.running import render_running_tab  # noqa: E402
 
 # ============================================================================
 # PAGE MODULE IMPORTS
 # ============================================================================
 from pages.swimming import render_swimming_tab  # noqa: E402
-from pages.running import render_running_tab  # noqa: E402
-from pages.cycling import render_cycling_tab  # noqa: E402
-from pages.dryland import render_dryland_tab  # noqa: E402
-from pages.history import render_history_tab  # noqa: E402
-from pages.ai_assistant import render_ai_tab  # noqa: E402
 from pages.tools import render_tools_tab  # noqa: E402
 
 
@@ -357,15 +375,25 @@ def main():
     # ========================================================================
     # MAIN TABS
     # ========================================================================
-    tab_swimming, tab_running, tab_cycling, tab_dryland, tab_history, tab_ai, tab_tools = st.tabs([
-        t("tab_swimming"),
-        t("tab_running"),
-        t("tab_cycling"),
-        t("tab_dryland"),
-        t("tab_history"),
-        t("tab_ai"),
-        t("tab_tools"),
-    ])
+    (
+        tab_swimming,
+        tab_running,
+        tab_cycling,
+        tab_dryland,
+        tab_history,
+        tab_ai,
+        tab_tools,
+    ) = st.tabs(
+        [
+            t("tab_swimming"),
+            t("tab_running"),
+            t("tab_cycling"),
+            t("tab_dryland"),
+            t("tab_history"),
+            t("tab_ai"),
+            t("tab_tools"),
+        ]
+    )
 
     # ========================================================================
     # TAB 1: SWIMMING

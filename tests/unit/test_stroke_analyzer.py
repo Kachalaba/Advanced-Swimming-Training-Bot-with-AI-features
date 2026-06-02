@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from video_analysis.stroke_analyzer import StrokeAnalyzer, StrokeAnalysis
+from video_analysis.stroke_analyzer import StrokeAnalysis, StrokeAnalyzer
 
 
 def _make_empty_keypoints():
@@ -19,26 +19,29 @@ def _make_keypoints_with_wrists(n_frames: int = 60, fps: float = 10.0):
     for i in range(n_frames):
         # Simulate sinusoidal wrist movement to trigger stroke detection
         import math
+
         t = i / fps
         left_y = 0.5 + 0.3 * math.sin(2 * math.pi * 0.5 * t)
         right_y = 0.5 + 0.3 * math.sin(2 * math.pi * 0.5 * t + math.pi)
-        frames.append({
-            11: {"x": 0.3, "y": 0.5, "visibility": 0.9},   # LEFT_SHOULDER
-            12: {"x": 0.7, "y": 0.5, "visibility": 0.9},   # RIGHT_SHOULDER
-            13: {"x": 0.25, "y": 0.5, "visibility": 0.9},  # LEFT_ELBOW
-            14: {"x": 0.75, "y": 0.5, "visibility": 0.9},  # RIGHT_ELBOW
-            15: {"x": 0.2, "y": left_y, "visibility": 0.9},  # LEFT_WRIST
-            16: {"x": 0.8, "y": right_y, "visibility": 0.9},  # RIGHT_WRIST
-            23: {"x": 0.35, "y": 0.7, "visibility": 0.9},  # LEFT_HIP
-            24: {"x": 0.65, "y": 0.7, "visibility": 0.9},  # RIGHT_HIP
-            27: {"x": 0.35, "y": 0.9, "visibility": 0.9},  # LEFT_ANKLE
-            28: {"x": 0.65, "y": 0.9, "visibility": 0.9},  # RIGHT_ANKLE
-            25: {"x": 0.35, "y": 0.8, "visibility": 0.9},  # LEFT_KNEE
-            26: {"x": 0.65, "y": 0.8, "visibility": 0.9},  # RIGHT_KNEE
-            0:  {"x": 0.5, "y": 0.1, "visibility": 0.9},   # NOSE
-            7:  {"x": 0.45, "y": 0.1, "visibility": 0.9},  # LEFT_EAR
-            8:  {"x": 0.55, "y": 0.1, "visibility": 0.9},  # RIGHT_EAR
-        })
+        frames.append(
+            {
+                11: {"x": 0.3, "y": 0.5, "visibility": 0.9},  # LEFT_SHOULDER
+                12: {"x": 0.7, "y": 0.5, "visibility": 0.9},  # RIGHT_SHOULDER
+                13: {"x": 0.25, "y": 0.5, "visibility": 0.9},  # LEFT_ELBOW
+                14: {"x": 0.75, "y": 0.5, "visibility": 0.9},  # RIGHT_ELBOW
+                15: {"x": 0.2, "y": left_y, "visibility": 0.9},  # LEFT_WRIST
+                16: {"x": 0.8, "y": right_y, "visibility": 0.9},  # RIGHT_WRIST
+                23: {"x": 0.35, "y": 0.7, "visibility": 0.9},  # LEFT_HIP
+                24: {"x": 0.65, "y": 0.7, "visibility": 0.9},  # RIGHT_HIP
+                27: {"x": 0.35, "y": 0.9, "visibility": 0.9},  # LEFT_ANKLE
+                28: {"x": 0.65, "y": 0.9, "visibility": 0.9},  # RIGHT_ANKLE
+                25: {"x": 0.35, "y": 0.8, "visibility": 0.9},  # LEFT_KNEE
+                26: {"x": 0.65, "y": 0.8, "visibility": 0.9},  # RIGHT_KNEE
+                0: {"x": 0.5, "y": 0.1, "visibility": 0.9},  # NOSE
+                7: {"x": 0.45, "y": 0.1, "visibility": 0.9},  # LEFT_EAR
+                8: {"x": 0.55, "y": 0.1, "visibility": 0.9},  # RIGHT_EAR
+            }
+        )
     return frames
 
 

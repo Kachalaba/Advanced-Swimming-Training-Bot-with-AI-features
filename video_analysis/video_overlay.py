@@ -55,7 +55,7 @@ class VideoOverlayGenerator:
             first_frame_path = first_frame_info["path"]
         else:
             first_frame_path = first_frame_info
-        
+
         first_frame = cv2.imread(first_frame_path)
         if first_frame is None:
             raise ValueError(f"Cannot read first frame: {first_frame_path}")
@@ -71,7 +71,7 @@ class VideoOverlayGenerator:
             if writer.isOpened():
                 logger.info(f"Using codec: {codec} at {self.fps} fps")
                 break
-        
+
         if not writer.isOpened():
             raise ValueError(f"Unable to open video writer for {output_path}")
 
@@ -84,7 +84,7 @@ class VideoOverlayGenerator:
                 frame_path = frame_info["path"]
             else:
                 frame_path = frame_info
-            
+
             frame = cv2.imread(frame_path)
             if frame is None:
                 logger.warning("Skipping unreadable frame: %s", frame_path)
@@ -125,9 +125,7 @@ class VideoOverlayGenerator:
             label += f" | {confidence:.2f}"
 
         (label_w, label_h), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
-        cv2.rectangle(
-            frame, (x1, y1 - label_h - 10), (x1 + label_w, y1), (0, 176, 80), -1
-        )
+        cv2.rectangle(frame, (x1, y1 - label_h - 10), (x1 + label_w, y1), (0, 176, 80), -1)
         cv2.putText(
             frame,
             label,
@@ -224,9 +222,7 @@ class VideoOverlayGenerator:
         if not analysis:
             return []
         wall_touches = analysis.get("wall_touches", {})
-        frames = (
-            wall_touches.get("frames", []) if isinstance(wall_touches, dict) else []
-        )
+        frames = wall_touches.get("frames", []) if isinstance(wall_touches, dict) else []
         return sorted({int(frame) for frame in frames})
 
 

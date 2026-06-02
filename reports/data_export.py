@@ -76,9 +76,7 @@ async def load_results(
     return await asyncio.to_thread(_load_results_sync, filters, path)
 
 
-def _load_results_sync(
-    filters: ExportFilters, db_path: Path
-) -> tuple[ResultRecord, ...]:
+def _load_results_sync(filters: ExportFilters, db_path: Path) -> tuple[ResultRecord, ...]:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(db_path) as conn:
         conn.row_factory = sqlite3.Row

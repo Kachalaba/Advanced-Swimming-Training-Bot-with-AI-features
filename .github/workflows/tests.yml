@@ -5,10 +5,12 @@ on:
     branches:
       - main
       - codex/**
+      - Codex/**
+      - claude/**
   pull_request:
 
 jobs:
-  pytest:
+  python-tests:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

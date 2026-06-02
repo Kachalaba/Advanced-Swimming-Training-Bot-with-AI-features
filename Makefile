@@ -1,11 +1,17 @@
-.PHONY: format lint test
+.PHONY: format lint test typecheck
 
 format:
-	isort video_analysis examples tests
-	black video_analysis examples tests
+	isort .
+	black .
 
 lint:
-	ruff check video_analysis examples tests
+	ruff check .
+	black --check .
+	isort --check-only .
+	mypy video_analysis --ignore-missing-imports --no-strict-optional
+
+typecheck:
+	mypy video_analysis --ignore-missing-imports --no-strict-optional
 
 test:
 	pytest

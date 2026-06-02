@@ -136,13 +136,13 @@ class SwimmerDetector:
         confidence_threshold: float = 0.5,
     ) -> List[Dict]:
         """Detect and track the same swimmer across frames.
-        
+
         Uses IoU and distance to maintain swimmer identity when multiple people present.
-        
+
         Args:
             frame_paths: List of frame paths
             confidence_threshold: Minimum confidence
-            
+
         Returns:
             List of detection results tracking the same swimmer
         """
@@ -150,7 +150,7 @@ class SwimmerDetector:
         prev_bbox = None
         prev_center = None
         target_lane = None
-        
+
         for i, frame_info in enumerate(frame_paths):
             # Support both dict format {"path": ..., "timestamp": ...} and plain string
             if isinstance(frame_info, dict):
@@ -161,34 +161,34 @@ class SwimmerDetector:
                 frame_path = frame_info
                 timestamp = i / 30.0
                 video_frame = i
-            
+
             # Get all person detections in frame
             all_detections = self._detect_all_persons(frame_path, confidence_threshold)
-            
+
             if not all_detections:
                 # No detection found
-                results.append({
-                    "frame_index": i,
-                    "frame_path": frame_path,
-                    "timestamp": timestamp,
-                    "video_frame": video_frame,
-                    "bbox": None,
-                    "confidence": None,
-                    "center": None,
-                    "lane": None,
-                })
+                results.append(
+                    {
+                        "frame_index": i,
+                        "frame_path": frame_path,
+                        "timestamp": timestamp,
+                        "video_frame": video_frame,
+                        "bbox": None,
+                        "confidence": None,
+                        "center": None,
+                        "lane": None,
+                    }
+                )
                 continue
-            
+
             # First frame: pick largest/most centered detection
             if prev_bbox is None:
                 best_det = self._pick_initial_swimmer(all_detections)
                 target_lane = best_det.get("lane")
             else:
                 # Track: pick detection closest to previous
-                best_det = self._pick_tracked_swimmer(
-                    all_detections, prev_bbox, prev_center, target_lane
-                )
-            
+                best_det = self._pick_tracked_swimmer(all_detections, prev_bbox, prev_center, target_lane)
+
             best_det["frame_index"] = i
             best_det["frame_path"] = frame_path
             best_det["timestamp"] = timestamp
@@ -197,79 +197,79 @@ class SwimmerDetector:
             best_det["all_boxes"] = [d["bbox"] for d in all_detections]
             best_det["all_detections"] = all_detections
             results.append(best_det)
-            
+
             # Update tracking state
             prev_bbox = best_det.get("bbox")
             prev_center = best_det.get("center")
             if best_det.get("lane"):
                 target_lane = best_det["lane"]
-        
+
         return results
-    
-    def _detect_all_persons(
-        self, frame_path: str, confidence_threshold: float
-    ) -> List[Dict]:
+
+    def _detect_all_persons(self, frame_path: str, confidence_threshold: float) -> List[Dict]:
         """Get all person detections in a frame.
-        
+
         Args:
             frame_path: Path to frame
             confidence_threshold: Minimum confidence
-            
+
         Returns:
             List of all person detections with bbox, confidence, center, lane
         """
         frame = cv2.imread(frame_path)
         if frame is None:
             return []
-        
+
         height, width = frame.shape[:2]
         results = self.model(frame, verbose=False)
-        
+
         detections = []
         for result in results:
             boxes = result.boxes
             for box in boxes:
                 cls = int(box.cls[0])
                 conf = float(box.conf[0])
-                
+
                 if cls == self.person_class_id and conf >= confidence_threshold:
                     x1, y1, x2, y2 = map(int, box.xyxy[0])
                     cx = (x1 + x2) // 2
                     cy = (y1 + y2) // 2
                     lane = min(8, max(1, int((cx / width) * 8) + 1))
-                    
-                    detections.append({
-                        "bbox": [x1, y1, x2, y2],
-                        "confidence": conf,
-                        "center": [cx, cy],
-                        "lane": lane,
-                    })
-        
+
+                    detections.append(
+                        {
+                            "bbox": [x1, y1, x2, y2],
+                            "confidence": conf,
+                            "center": [cx, cy],
+                            "lane": lane,
+                        }
+                    )
+
         return detections
-    
+
     def _pick_initial_swimmer(self, detections: List[Dict]) -> Dict:
         """Pick the most likely swimmer from first frame.
-        
+
         Strategy: largest bbox (likely the main subject).
-        
+
         Args:
             detections: All person detections
-            
+
         Returns:
             Best detection
         """
         best_det = None
         best_area = 0
-        
+
         for det in detections:
             bbox = det["bbox"]
             area = (bbox[2] - bbox[0]) * (bbox[3] - bbox[1])
             if area > best_area:
                 best_area = area
                 best_det = det
-        
+
         return best_det or detections[0]
-    
+
     def _pick_tracked_swimmer(
         self,
         detections: List[Dict],
@@ -278,28 +278,28 @@ class SwimmerDetector:
         target_lane: int = None,
     ) -> Dict:
         """Pick detection that best matches previous swimmer.
-        
+
         Uses IoU, center distance, and lane consistency.
-        
+
         Args:
             detections: All person detections in current frame
             prev_bbox: Previous frame bbox
             prev_center: Previous frame center
             target_lane: Expected lane number
-            
+
         Returns:
             Best matching detection
         """
         best_det = None
         best_score = -1
-        
+
         for det in detections:
             score = 0.0
-            
+
             # IoU similarity (0-1)
             iou = self._calculate_iou(prev_bbox, det["bbox"])
             score += iou * 3.0  # Weight: 3x
-            
+
             # Center distance (inverse, normalized)
             if prev_center and det["center"]:
                 dx = det["center"][0] - prev_center[0]
@@ -308,31 +308,31 @@ class SwimmerDetector:
                 # Max expected movement ~200px between frames
                 dist_score = max(0, 1.0 - dist / 200.0)
                 score += dist_score * 2.0  # Weight: 2x
-            
+
             # Lane consistency
             if target_lane and det["lane"] == target_lane:
                 score += 1.0  # Weight: 1x
-            
+
             # Confidence bonus
             score += det["confidence"] * 0.5  # Weight: 0.5x
-            
+
             if score > best_score:
                 best_score = score
                 best_det = det
-        
+
         # Fallback: return highest confidence if tracking failed
         if best_det is None:
             best_det = max(detections, key=lambda d: d["confidence"])
-        
+
         return best_det
-    
+
     def _calculate_iou(self, bbox1: List[int], bbox2: List[int]) -> float:
         """Calculate Intersection over Union between two bboxes.
-        
+
         Args:
             bbox1: [x1, y1, x2, y2]
             bbox2: [x1, y1, x2, y2]
-            
+
         Returns:
             IoU value (0-1)
         """
@@ -340,15 +340,15 @@ class SwimmerDetector:
         y1 = max(bbox1[1], bbox2[1])
         x2 = min(bbox1[2], bbox2[2])
         y2 = min(bbox1[3], bbox2[3])
-        
+
         if x2 < x1 or y2 < y1:
             return 0.0
-        
+
         intersection = (x2 - x1) * (y2 - y1)
         area1 = (bbox1[2] - bbox1[0]) * (bbox1[3] - bbox1[1])
         area2 = (bbox2[2] - bbox2[0]) * (bbox2[3] - bbox2[1])
         union = area1 + area2 - intersection
-        
+
         return intersection / union if union > 0 else 0.0
 
     def draw_detections(
@@ -379,9 +379,7 @@ class SwimmerDetector:
 
             # Draw label
             label = f"Swimmer (Lane {lane}): {conf:.2f}"
-            (label_w, label_h), _ = cv2.getTextSize(
-                label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2
-            )
+            (label_w, label_h), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
             cv2.rectangle(
                 frame,
                 (x1, y1 - label_h - 10),

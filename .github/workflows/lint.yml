@@ -5,11 +5,12 @@ on:
     branches:
       - main
       - codex/**
+      - Codex/**
       - claude/**
   pull_request:
 
 jobs:
-  lint:
+  python-lint:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -26,14 +27,5 @@ jobs:
           python -m pip install --upgrade pip
           pip install ruff black isort mypy
 
-      - name: Run ruff linter
-        run: ruff check .
-
-      - name: Check formatting (black)
-        run: black --check .
-
-      - name: Check import order (isort)
-        run: isort --check-only .
-
-      - name: Type check (mypy)
-        run: mypy video_analysis --ignore-missing-imports --no-strict-optional
+      - name: Run Python quality gates
+        run: make lint

@@ -16,9 +16,9 @@ import numpy as np
 
 from video_analysis.constants import (
     EMA_ALPHA,
-    SMOOTHING_WINDOW_SIZE,
     MEDIAPIPE_POSE_CONFIG,
     MEDIAPIPE_POSE_VIDEO_CONFIG,
+    SMOOTHING_WINDOW_SIZE,
 )
 
 logger = logging.getLogger(__name__)
@@ -40,6 +40,7 @@ def get_pose_detector(video_mode: bool = False):
     if key not in _pose_cache:
         try:
             import mediapipe as mp  # lazy import — heavy dependency
+
             config = MEDIAPIPE_POSE_VIDEO_CONFIG if video_mode else MEDIAPIPE_POSE_CONFIG
             _pose_cache[key] = mp.solutions.pose.Pose(**config)
             logger.info("MediaPipe Pose loaded (mode=%s)", key)
@@ -47,6 +48,7 @@ def get_pose_detector(video_mode: bool = False):
             logger.error("Failed to initialize MediaPipe Pose: %s", exc)
             raise
     return _pose_cache[key]
+
 
 Point2D = Tuple[float, float]
 

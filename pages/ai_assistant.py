@@ -3,6 +3,7 @@ AI assistant page module.
 """
 
 import logging
+
 import streamlit as st
 
 from video_analysis.ai_chat import AIChat, generate_training_plan, text_to_speech
@@ -26,13 +27,24 @@ def render_ai_tab():
 
         # Athlete name picker for context
         import os
-        athlete_name_chat = st.text_input("👤 Ім'я спортсмена (для контексту)", value="Спортсмен", key="ai_athlete_name")
+
+        athlete_name_chat = st.text_input(
+            "👤 Ім'я спортсмена (для контексту)",
+            value="Спортсмен",
+            key="ai_athlete_name",
+        )
 
         # LLM status indicator
         if os.environ.get("ANTHROPIC_API_KEY"):
-            st.markdown('<div class="status-success">🤖 Claude AI активний — відповіді на базі LLM</div>', unsafe_allow_html=True)
+            st.markdown(
+                '<div class="status-success">🤖 Claude AI активний — відповіді на базі LLM</div>',
+                unsafe_allow_html=True,
+            )
         else:
-            st.markdown('<div class="status-info">💡 Режим без API ключа — відповіді на базі бази знань. Додайте ANTHROPIC_API_KEY для Claude AI.</div>', unsafe_allow_html=True)
+            st.markdown(
+                '<div class="status-info">💡 Режим без API ключа — відповіді на базі бази знань. Додайте ANTHROPIC_API_KEY для Claude AI.</div>',
+                unsafe_allow_html=True,
+            )
 
         # Initialize chat in session state (reset if athlete changed)
         if "ai_chat" not in st.session_state or st.session_state.get("ai_chat_athlete") != athlete_name_chat:
@@ -45,20 +57,30 @@ def render_ai_tab():
         # Display chat history
         for msg in st.session_state.chat_history:
             if msg["role"] == "user":
-                st.markdown(f"""
+                st.markdown(
+                    f"""
                 <div style="background: rgba(59,130,246,0.2); border-radius: 12px; padding: 0.75rem; margin: 0.5rem 0; text-align: right;">
                     <strong>Ви:</strong> {msg["content"]}
                 </div>
-                """, unsafe_allow_html=True)
+                """,
+                    unsafe_allow_html=True,
+                )
             else:
-                st.markdown(f"""
+                st.markdown(
+                    f"""
                 <div style="background: rgba(16,185,129,0.2); border-radius: 12px; padding: 0.75rem; margin: 0.5rem 0;">
                     <strong>🤖 AI:</strong> {msg["content"]}
                 </div>
-                """, unsafe_allow_html=True)
+                """,
+                    unsafe_allow_html=True,
+                )
 
         # Chat input
-        user_input = st.text_input("Ваше питання:", key="ai_chat_input", placeholder="Наприклад: Як покращити body roll?")
+        user_input = st.text_input(
+            "Ваше питання:",
+            key="ai_chat_input",
+            placeholder="Наприклад: Як покращити body roll?",
+        )
 
         col1, col2, col3 = st.columns([1, 1, 1])
         with col1:
@@ -78,7 +100,11 @@ def render_ai_tab():
         with col3:
             # TTS button
             if st.session_state.chat_history:
-                last_response = st.session_state.chat_history[-1]["content"] if st.session_state.chat_history[-1]["role"] == "assistant" else ""
+                last_response = (
+                    st.session_state.chat_history[-1]["content"]
+                    if st.session_state.chat_history[-1]["role"] == "assistant"
+                    else ""
+                )
                 if last_response and st.button("🔊 Озвучити", use_container_width=True):
                     try:
                         # Simplified text for TTS
@@ -97,7 +123,7 @@ def render_ai_tab():
             "Що таке catch?",
             "Типові помилки",
             "Як покращити body roll?",
-            "Вправи для плечей"
+            "Вправи для плечей",
         ]
         for i, (col, question) in enumerate(zip(quick_cols, quick_questions)):
             with col:
@@ -117,19 +143,29 @@ def render_ai_tab():
 
         with col1:
             plan_name = st.text_input("👤 Ім'я спортсмена", value="Спортсмен", key="plan_name")
-            plan_level = st.selectbox("📊 Рівень", ["beginner", "intermediate", "advanced"],
-                                     format_func=lambda x: {"beginner": "🌱 Початківець",
-                                                           "intermediate": "📈 Середній",
-                                                           "advanced": "🏆 Просунутий"}[x],
-                                     key="plan_level")
+            plan_level = st.selectbox(
+                "📊 Рівень",
+                ["beginner", "intermediate", "advanced"],
+                format_func=lambda x: {
+                    "beginner": "🌱 Початківець",
+                    "intermediate": "📈 Середній",
+                    "advanced": "🏆 Просунутий",
+                }[x],
+                key="plan_level",
+            )
 
         with col2:
-            plan_goal = st.selectbox("🎯 Мета", ["general", "speed", "endurance", "technique"],
-                                    format_func=lambda x: {"general": "🎯 Загальна підготовка",
-                                                          "speed": "⚡ Швидкість",
-                                                          "endurance": "🏃 Витривалість",
-                                                          "technique": "🎓 Техніка"}[x],
-                                    key="plan_goal")
+            plan_goal = st.selectbox(
+                "🎯 Мета",
+                ["general", "speed", "endurance", "technique"],
+                format_func=lambda x: {
+                    "general": "🎯 Загальна підготовка",
+                    "speed": "⚡ Швидкість",
+                    "endurance": "🏃 Витривалість",
+                    "technique": "🎓 Техніка",
+                }[x],
+                key="plan_goal",
+            )
             plan_weeks = st.slider("📆 Тижнів", 1, 12, 4, key="plan_weeks")
 
         sessions_per_week = st.slider("🏊 Тренувань на тиждень", 2, 6, 4, key="plan_sessions")
@@ -140,7 +176,7 @@ def render_ai_tab():
                 level=plan_level,
                 goal=plan_goal,
                 sessions_per_week=sessions_per_week,
-                weeks=plan_weeks
+                weeks=plan_weeks,
             )
 
             st.success(f"✅ План створено: {plan.notes}")
@@ -152,10 +188,13 @@ def render_ai_tab():
 
                     for session in week_sessions:
                         type_icon = "🏊" if session["type"] == "Плавання" else "🏋️"
-                        st.markdown(f"""
+                        st.markdown(
+                            f"""
                         <div style="background: rgba(59,130,246,0.1); border-radius: 8px; padding: 0.75rem; margin: 0.5rem 0;">
                             <strong>{type_icon} {session['day']} - {session['type']}</strong> ({session['duration']} хв)<br>
                             <span style="color: #60a5fa;">Фокус: {session['focus']}</span><br>
                             <span style="color: #94a3b8;">{session['workout']}</span>
                         </div>
-                        """, unsafe_allow_html=True)
+                        """,
+                            unsafe_allow_html=True,
+                        )

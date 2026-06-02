@@ -11,13 +11,14 @@ Features:
 - Left/Right balance
 """
 
-import cv2
-import numpy as np
 import logging
 import math
-from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Dict, List
+
+import cv2
+import numpy as np
 
 from video_analysis.base_analyzer import BaseAnalyzer
 
@@ -26,16 +27,18 @@ logger = logging.getLogger(__name__)
 
 class PedalPhase(Enum):
     """Pedal stroke phases."""
-    POWER = "Power"           # 12-5 o'clock (pushing down)
+
+    POWER = "Power"  # 12-5 o'clock (pushing down)
     TRANSITION_BOTTOM = "Bottom"  # 5-7 o'clock
-    RECOVERY = "Recovery"     # 7-11 o'clock (pulling up)
-    TRANSITION_TOP = "Top"    # 11-12 o'clock
+    RECOVERY = "Recovery"  # 7-11 o'clock (pulling up)
+    TRANSITION_TOP = "Top"  # 11-12 o'clock
     UNKNOWN = "Unknown"
 
 
 @dataclass
 class PedalStroke:
     """Single pedal revolution data."""
+
     frame_start: int
     frame_end: int
     side: str  # "left" or "right"
@@ -47,58 +50,59 @@ class PedalStroke:
 @dataclass
 class CyclingAnalysis:
     """Cycling analysis results."""
+
     total_revolutions: int = 0
     left_revolutions: int = 0
     right_revolutions: int = 0
-    
+
     cadence: float = 0  # RPM
-    
+
     avg_knee_angle_top: float = 0  # degrees at top of stroke
     avg_knee_angle_bottom: float = 0  # degrees at bottom
     knee_range: float = 0  # Total range of motion
-    
+
     avg_hip_angle: float = 0  # Aero position
-    
+
     upper_body_stability: float = 0  # percentage (less movement = better)
-    
+
     left_right_balance: float = 50  # percentage (50 = perfect balance)
-    
+
     power_phase_pct: float = 0  # percentage of stroke in power phase
-    
+
     pedal_strokes: List[PedalStroke] = field(default_factory=list)
     phase_distribution: Dict[str, float] = field(default_factory=dict)
-    
+
     duration_sec: float = 0
-    
+
     # Position analysis
     saddle_height_score: float = 0  # Based on knee extension
     aero_score: float = 0  # Based on hip angle
-    
+
     # NEW: Advanced metrics
     # Ankle angle (ankling technique)
     avg_ankle_angle_top: float = 0  # degrees at top
     avg_ankle_angle_bottom: float = 0  # degrees at bottom
     ankling_range: float = 0  # Total ankle ROM
     ankling_score: float = 0  # 0-100
-    
+
     # Dead spot analysis
     dead_spot_top: float = 0  # time spent at 12 o'clock (ms)
     dead_spot_bottom: float = 0  # time spent at 6 o'clock (ms)
     dead_spot_score: float = 0  # 0-100, less = better
-    
+
     # Pedal smoothness
     pedal_smoothness: float = 0  # 0-100
     torque_effectiveness: float = 0  # estimated 0-100
-    
+
     # Body movement
     lateral_sway: float = 0  # pixels
     vertical_bounce: float = 0  # pixels
     rock_detected: bool = False
-    
+
     # Reach and stack
     reach_angle: float = 0  # arm angle (degrees)
     stack_score: float = 0  # handlebar height appropriateness
-    
+
     # Overall
     efficiency_score: float = 0  # 0-100
     bike_fit_score: float = 0  # 0-100
@@ -106,7 +110,7 @@ class CyclingAnalysis:
 
 class CyclingAnalyzer(BaseAnalyzer):
     """Analyze cycling biomechanics from video."""
-    
+
     # MediaPipe landmark indices
     LANDMARKS = {
         "nose": 0,
@@ -123,13 +127,13 @@ class CyclingAnalyzer(BaseAnalyzer):
         "left_ankle": 27,
         "right_ankle": 28,
     }
-    
+
     def __init__(self, fps: float = 30.0):
         super().__init__()
         self.fps = fps
         self.pedal_strokes: List[PedalStroke] = []
         self.phases: List[PedalPhase] = []
-        
+
         # NEW: Advanced tracking
         self.ankle_angles_top: List[float] = []
         self.ankle_angles_bottom: List[float] = []
@@ -138,33 +142,33 @@ class CyclingAnalyzer(BaseAnalyzer):
         self.shoulder_x_positions: List[float] = []
         self.shoulder_y_positions: List[float] = []
         self.arm_angles: List[float] = []
-        
+
     def analyze(self, keypoints_list: List[Dict], fps: float = None) -> CyclingAnalysis:
         """
         Analyze cycling from keypoints sequence.
-        
+
         Args:
             keypoints_list: List of keypoints dicts per frame
             fps: Frames per second
-            
+
         Returns:
             CyclingAnalysis with metrics
         """
         if fps:
             self.fps = fps
-            
+
         if not keypoints_list or len(keypoints_list) < 10:
             return self._empty_analysis()
-        
+
         self.pedal_strokes = []
         self.phases = []
-        
+
         # Track metrics per frame
         knee_angles_left = []
         knee_angles_right = []
         hip_angles = []
         shoulder_positions = []  # For stability
-        
+
         # For revolution detection
         prev_left_knee_y = None
         prev_right_knee_y = None
@@ -172,17 +176,17 @@ class CyclingAnalyzer(BaseAnalyzer):
         right_rev_start = None
         left_going_down = False
         right_going_down = False
-        
+
         left_min_knee = 180
         left_max_knee = 0
         right_min_knee = 180
         right_max_knee = 0
-        
+
         for frame_idx, kps in enumerate(keypoints_list):
             if not kps:
                 self.phases.append(PedalPhase.UNKNOWN)
                 continue
-            
+
             # Get key points
             l_hip = self._get_point(kps, "left_hip")
             r_hip = self._get_point(kps, "right_hip")
@@ -192,36 +196,37 @@ class CyclingAnalyzer(BaseAnalyzer):
             r_ankle = self._get_point(kps, "right_ankle")
             l_shoulder = self._get_point(kps, "left_shoulder")
             r_shoulder = self._get_point(kps, "right_shoulder")
-            
+
             # Calculate knee angles
             if l_hip and l_knee and l_ankle:
                 knee_angle = self._calculate_angle(l_hip, l_knee, l_ankle)
                 knee_angles_left.append(knee_angle)
                 left_min_knee = min(left_min_knee, knee_angle)
                 left_max_knee = max(left_max_knee, knee_angle)
-            
+
             if r_hip and r_knee and r_ankle:
                 knee_angle = self._calculate_angle(r_hip, r_knee, r_ankle)
                 knee_angles_right.append(knee_angle)
                 right_min_knee = min(right_min_knee, knee_angle)
                 right_max_knee = max(right_max_knee, knee_angle)
-            
+
             # Calculate hip angle (torso angle for aero position)
             if l_shoulder and r_shoulder and l_hip and r_hip:
-                shoulder_center = ((l_shoulder[0] + r_shoulder[0]) / 2,
-                                  (l_shoulder[1] + r_shoulder[1]) / 2)
-                hip_center = ((l_hip[0] + r_hip[0]) / 2,
-                             (l_hip[1] + r_hip[1]) / 2)
-                
+                shoulder_center = (
+                    (l_shoulder[0] + r_shoulder[0]) / 2,
+                    (l_shoulder[1] + r_shoulder[1]) / 2,
+                )
+                hip_center = ((l_hip[0] + r_hip[0]) / 2, (l_hip[1] + r_hip[1]) / 2)
+
                 # Angle from horizontal (lower = more aero)
                 dx = shoulder_center[0] - hip_center[0]
                 dy = hip_center[1] - shoulder_center[1]
                 hip_angle = math.degrees(math.atan2(dy, abs(dx) + 0.001))
                 hip_angles.append(hip_angle)
-                
+
                 # Track shoulder position for stability
                 shoulder_positions.append(shoulder_center)
-            
+
             # Revolution detection based on knee Y position cycle
             if l_knee:
                 if prev_left_knee_y is not None:
@@ -236,7 +241,7 @@ class CyclingAnalyzer(BaseAnalyzer):
                                 side="left",
                                 duration_sec=(frame_idx - left_rev_start) / self.fps,
                                 min_knee_angle=left_min_knee,
-                                max_knee_angle=left_max_knee
+                                max_knee_angle=left_max_knee,
                             )
                             self.pedal_strokes.append(stroke)
                             left_min_knee = 180
@@ -244,9 +249,9 @@ class CyclingAnalyzer(BaseAnalyzer):
                         left_rev_start = frame_idx
                     elif l_knee[1] < prev_left_knee_y and left_going_down:
                         left_going_down = False
-                
+
                 prev_left_knee_y = l_knee[1]
-            
+
             if r_knee:
                 if prev_right_knee_y is not None:
                     if r_knee[1] > prev_right_knee_y and not right_going_down:
@@ -258,7 +263,7 @@ class CyclingAnalyzer(BaseAnalyzer):
                                 side="right",
                                 duration_sec=(frame_idx - right_rev_start) / self.fps,
                                 min_knee_angle=right_min_knee,
-                                max_knee_angle=right_max_knee
+                                max_knee_angle=right_max_knee,
                             )
                             self.pedal_strokes.append(stroke)
                             right_min_knee = 180
@@ -266,13 +271,13 @@ class CyclingAnalyzer(BaseAnalyzer):
                         right_rev_start = frame_idx
                     elif r_knee[1] < prev_right_knee_y and right_going_down:
                         right_going_down = False
-                
+
                 prev_right_knee_y = r_knee[1]
-            
+
             # Detect pedal phase
             phase = self._detect_phase(kps)
             self.phases.append(phase)
-            
+
             # NEW: Advanced metrics collection
             # Ankle angle (ankling)
             ankle_angle = self._analyze_ankle_angle(kps, phase)
@@ -281,47 +286,49 @@ class CyclingAnalyzer(BaseAnalyzer):
                     self.ankle_angles_top.append(ankle_angle)
                 elif phase == PedalPhase.TRANSITION_BOTTOM:
                     self.ankle_angles_bottom.append(ankle_angle)
-            
+
             # Dead spot detection
             if phase == PedalPhase.TRANSITION_TOP:
                 self.dead_spot_frames_top.append(frame_idx)
             elif phase == PedalPhase.TRANSITION_BOTTOM:
                 self.dead_spot_frames_bottom.append(frame_idx)
-            
+
             # Body sway tracking
             if l_shoulder and r_shoulder:
                 center_x = (l_shoulder[0] + r_shoulder[0]) / 2
                 center_y = (l_shoulder[1] + r_shoulder[1]) / 2
                 self.shoulder_x_positions.append(center_x)
                 self.shoulder_y_positions.append(center_y)
-            
+
             # Arm angle (reach)
             arm_angle = self._analyze_arm_angle(kps)
             if arm_angle != 0:
                 self.arm_angles.append(arm_angle)
-        
+
         # Calculate final metrics
         return self._calculate_stats(
-            knee_angles_left, knee_angles_right,
-            hip_angles, shoulder_positions,
-            len(keypoints_list)
+            knee_angles_left,
+            knee_angles_right,
+            hip_angles,
+            shoulder_positions,
+            len(keypoints_list),
         )
-    
+
     # _get_point and _calculate_angle are inherited from BaseAnalyzer
-    
+
     def _detect_phase(self, kps: Dict) -> PedalPhase:
         """Detect current pedal phase based on leg position."""
         l_knee = self._get_point(kps, "left_knee")
         l_hip = self._get_point(kps, "left_hip")
         l_ankle = self._get_point(kps, "left_ankle")
-        
+
         if not all([l_knee, l_hip, l_ankle]):
             return PedalPhase.UNKNOWN
-        
+
         # Determine phase based on knee position relative to hip
         knee_rel_y = l_knee[1] - l_hip[1]
         ankle_rel_y = l_ankle[1] - l_hip[1]
-        
+
         if knee_rel_y > 50 and ankle_rel_y > 0:
             return PedalPhase.POWER
         elif knee_rel_y < -30:
@@ -330,11 +337,11 @@ class CyclingAnalyzer(BaseAnalyzer):
             return PedalPhase.TRANSITION_BOTTOM
         else:
             return PedalPhase.TRANSITION_TOP
-    
+
     # =========================================================================
     # NEW: Advanced Analysis Methods
     # =========================================================================
-    
+
     def _analyze_ankle_angle(self, kps: Dict, phase: PedalPhase) -> float:
         """
         Analyze ankle angle for ankling technique.
@@ -344,24 +351,24 @@ class CyclingAnalyzer(BaseAnalyzer):
         l_ankle = self._get_point(kps, "left_ankle")
         r_knee = self._get_point(kps, "right_knee")
         r_ankle = self._get_point(kps, "right_ankle")
-        
+
         angles = []
-        
+
         # Left leg ankle angle (relative to lower leg)
         if l_knee and l_ankle:
             dx = l_ankle[0] - l_knee[0]
             dy = l_ankle[1] - l_knee[1]
             angle = math.degrees(math.atan2(dy, dx))
             angles.append(angle)
-        
+
         if r_knee and r_ankle:
             dx = r_ankle[0] - r_knee[0]
             dy = r_ankle[1] - r_knee[1]
             angle = math.degrees(math.atan2(dy, dx))
             angles.append(angle)
-        
+
         return np.mean(angles) if angles else 0
-    
+
     def _analyze_arm_angle(self, kps: Dict) -> float:
         """Analyze arm angle for reach position."""
         l_shoulder = self._get_point(kps, "left_shoulder")
@@ -370,42 +377,41 @@ class CyclingAnalyzer(BaseAnalyzer):
         r_shoulder = self._get_point(kps, "right_shoulder")
         r_elbow = self._get_point(kps, "right_elbow")
         r_wrist = self._get_point(kps, "right_wrist")
-        
+
         angles = []
-        
+
         if l_shoulder and l_elbow and l_wrist:
             angle = self._calculate_angle(l_shoulder, l_elbow, l_wrist)
             angles.append(angle)
-        
+
         if r_shoulder and r_elbow and r_wrist:
             angle = self._calculate_angle(r_shoulder, r_elbow, r_wrist)
             angles.append(angle)
-        
+
         return np.mean(angles) if angles else 0
-    
-    def _calculate_stats(self, knee_left, knee_right, hip_angles,
-                        shoulder_positions, total_frames) -> CyclingAnalysis:
+
+    def _calculate_stats(self, knee_left, knee_right, hip_angles, shoulder_positions, total_frames) -> CyclingAnalysis:
         """Calculate final cycling statistics."""
-        
+
         duration = total_frames / self.fps
-        
+
         left_revs = len([s for s in self.pedal_strokes if s.side == "left"])
         right_revs = len([s for s in self.pedal_strokes if s.side == "right"])
         total_revs = left_revs + right_revs
-        
+
         # Cadence (RPM) - revolutions per minute
         # Each leg does half the revolutions
         cadence = (total_revs / duration) * 30 if duration > 0 else 0  # *30 because we count each leg
-        
+
         # Knee angles
         all_knee = knee_left + knee_right
         avg_knee_bottom = min(all_knee) if all_knee else 0  # Most extended
         avg_knee_top = max(all_knee) if all_knee else 0  # Most flexed
         knee_range = avg_knee_top - avg_knee_bottom
-        
+
         # Hip angle (aero position)
         avg_hip = np.mean(hip_angles) if hip_angles else 0
-        
+
         # Upper body stability (less movement = better)
         if len(shoulder_positions) > 1:
             x_coords = [p[0] for p in shoulder_positions]
@@ -417,24 +423,23 @@ class CyclingAnalyzer(BaseAnalyzer):
             stability = max(0, 100 - movement / 2)  # Rough scaling
         else:
             stability = 0
-        
+
         # Left/Right balance
         if total_revs > 0:
             balance = (left_revs / total_revs) * 100
         else:
             balance = 50
-        
+
         # Phase distribution
         phase_counts = {}
         for phase in self.phases:
             phase_counts[phase.value] = phase_counts.get(phase.value, 0) + 1
-        
+
         total_phases = len(self.phases)
-        phase_dist = {k: (v / total_phases * 100) if total_phases > 0 else 0 
-                     for k, v in phase_counts.items()}
-        
+        phase_dist = {k: (v / total_phases * 100) if total_phases > 0 else 0 for k, v in phase_counts.items()}
+
         power_phase_pct = phase_dist.get("Power", 0)
-        
+
         # Saddle height score (based on knee extension at bottom)
         # Optimal: 140-150 degrees at bottom
         if avg_knee_bottom > 0:
@@ -446,7 +451,7 @@ class CyclingAnalyzer(BaseAnalyzer):
                 saddle_score = 60
         else:
             saddle_score = 0
-        
+
         # Aero score (based on hip angle)
         # Lower angle = more aero, optimal 30-45 degrees
         if hip_angles:
@@ -460,11 +465,11 @@ class CyclingAnalyzer(BaseAnalyzer):
                 aero_score = 60
         else:
             aero_score = 0
-        
+
         # =====================================================================
         # NEW: Advanced metrics calculation
         # =====================================================================
-        
+
         # Ankling analysis
         avg_ankle_top = np.mean(self.ankle_angles_top) if self.ankle_angles_top else 0
         avg_ankle_bottom = np.mean(self.ankle_angles_bottom) if self.ankle_angles_bottom else 0
@@ -476,7 +481,7 @@ class CyclingAnalyzer(BaseAnalyzer):
             ankling_score = 80
         else:
             ankling_score = 60
-        
+
         # Dead spot analysis
         dead_spot_top_frames = len(self.dead_spot_frames_top)
         dead_spot_bottom_frames = len(self.dead_spot_frames_bottom)
@@ -485,7 +490,7 @@ class CyclingAnalyzer(BaseAnalyzer):
         # Less dead spot time = better
         total_dead_spot = dead_spot_top_ms + dead_spot_bottom_ms
         dead_spot_score = max(0, 100 - total_dead_spot / 10)
-        
+
         # Pedal smoothness (based on phase distribution evenness)
         if phase_dist:
             phase_values = list(phase_dist.values())
@@ -493,25 +498,25 @@ class CyclingAnalyzer(BaseAnalyzer):
             pedal_smoothness = max(0, 100 - phase_std * 2)
         else:
             pedal_smoothness = 50
-        
+
         # Torque effectiveness (estimated from power phase)
         torque_effectiveness = min(100, power_phase_pct * 2.5)
-        
+
         # Lateral sway
         if self.shoulder_x_positions:
             lateral_sway = max(self.shoulder_x_positions) - min(self.shoulder_x_positions)
         else:
             lateral_sway = 0
-        
+
         # Vertical bounce
         if self.shoulder_y_positions:
             vertical_bounce = max(self.shoulder_y_positions) - min(self.shoulder_y_positions)
         else:
             vertical_bounce = 0
-        
+
         # Rock detected if sway > 30 pixels
         rock_detected = lateral_sway > 30 or vertical_bounce > 20
-        
+
         # Reach angle
         avg_arm_angle = np.mean(self.arm_angles) if self.arm_angles else 0
         # Stack score (arm angle should be 140-160 for good position)
@@ -521,20 +526,20 @@ class CyclingAnalyzer(BaseAnalyzer):
             stack_score = 80
         else:
             stack_score = 60
-        
+
         # Overall efficiency score
         efficiency_score = (
-            saddle_score * 0.2 +
-            aero_score * 0.2 +
-            stability * 0.2 +
-            pedal_smoothness * 0.2 +
-            ankling_score * 0.1 +
-            dead_spot_score * 0.1
+            saddle_score * 0.2
+            + aero_score * 0.2
+            + stability * 0.2
+            + pedal_smoothness * 0.2
+            + ankling_score * 0.1
+            + dead_spot_score * 0.1
         )
-        
+
         # Bike fit score
         bike_fit_score = (saddle_score + aero_score + stack_score) / 3
-        
+
         return CyclingAnalysis(
             total_revolutions=total_revs,
             left_revolutions=left_revs,
@@ -570,16 +575,15 @@ class CyclingAnalyzer(BaseAnalyzer):
             efficiency_score=round(efficiency_score, 1),
             bike_fit_score=round(bike_fit_score, 1),
         )
-    
+
     def _empty_analysis(self) -> CyclingAnalysis:
         """Return empty analysis."""
         return CyclingAnalysis()
-    
-    def draw_overlay(self, frame: np.ndarray, kps: Dict,
-                    analysis: CyclingAnalysis = None) -> np.ndarray:
+
+    def draw_overlay(self, frame: np.ndarray, kps: Dict, analysis: CyclingAnalysis = None) -> np.ndarray:
         """Draw cycling metrics overlay on frame."""
         h, w = frame.shape[:2]
-        
+
         # Draw skeleton
         connections = [
             ("left_shoulder", "right_shoulder"),
@@ -595,7 +599,7 @@ class CyclingAnalyzer(BaseAnalyzer):
             ("left_knee", "left_ankle"),
             ("right_knee", "right_ankle"),
         ]
-        
+
         for start, end in connections:
             p1 = self._get_point(kps, start)
             p2 = self._get_point(kps, end)
@@ -603,7 +607,7 @@ class CyclingAnalyzer(BaseAnalyzer):
                 pt1 = (int(p1[0]), int(p1[1]))
                 pt2 = (int(p2[0]), int(p2[1]))
                 cv2.line(frame, pt1, pt2, (255, 165, 0), 2)  # Orange for cycling
-        
+
         # Draw keypoints
         for name in self.LANDMARKS.keys():
             pt = self._get_point(kps, name)
@@ -612,71 +616,110 @@ class CyclingAnalyzer(BaseAnalyzer):
                 if "knee" in name:
                     color = (0, 255, 255)  # Highlight knees
                 cv2.circle(frame, (int(pt[0]), int(pt[1])), 5, color, -1)
-        
+
         # Draw metrics panel
         if analysis:
             panel_h = 140
             cv2.rectangle(frame, (10, h - panel_h - 10), (320, h - 10), (0, 0, 0), -1)
             cv2.rectangle(frame, (10, h - panel_h - 10), (320, h - 10), (255, 165, 0), 2)
-            
+
             y = h - panel_h + 20
-            cv2.putText(frame, f"Cadence: {analysis.cadence:.0f} RPM", (20, y),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
+            cv2.putText(
+                frame,
+                f"Cadence: {analysis.cadence:.0f} RPM",
+                (20, y),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                (255, 255, 255),
+                1,
+            )
             y += 25
-            cv2.putText(frame, f"Knee Range: {analysis.knee_range:.0f}°", (20, y),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
+            cv2.putText(
+                frame,
+                f"Knee Range: {analysis.knee_range:.0f}°",
+                (20, y),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                (255, 255, 255),
+                1,
+            )
             y += 25
-            cv2.putText(frame, f"Hip Angle: {analysis.avg_hip_angle:.0f}°", (20, y),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
+            cv2.putText(
+                frame,
+                f"Hip Angle: {analysis.avg_hip_angle:.0f}°",
+                (20, y),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                (255, 255, 255),
+                1,
+            )
             y += 25
-            cv2.putText(frame, f"Stability: {analysis.upper_body_stability:.0f}%", (20, y),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
+            cv2.putText(
+                frame,
+                f"Stability: {analysis.upper_body_stability:.0f}%",
+                (20, y),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                (255, 255, 255),
+                1,
+            )
             y += 25
-            cv2.putText(frame, f"L/R Balance: {analysis.left_right_balance:.0f}%", (20, y),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
-        
+            cv2.putText(
+                frame,
+                f"L/R Balance: {analysis.left_right_balance:.0f}%",
+                (20, y),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                (255, 255, 255),
+                1,
+            )
+
         return frame
 
 
 def generate_cycling_chart(analysis: CyclingAnalysis, output_path: str):
     """Generate cycling analysis charts."""
     import matplotlib.pyplot as plt
-    
+
     fig, axes = plt.subplots(2, 2, figsize=(12, 10))
-    fig.suptitle("🚴 Cycling Analysis", fontsize=14, fontweight='bold')
-    
+    fig.suptitle("🚴 Cycling Analysis", fontsize=14, fontweight="bold")
+
     # 1. Revolution balance
     ax1 = axes[0, 0]
     revs = [analysis.left_revolutions, analysis.right_revolutions]
-    colors = ['#f59e0b', '#10b981']
-    ax1.bar(['Ліва нога', 'Права нога'], revs, color=colors)
-    ax1.set_title('Баланс обертів')
-    ax1.set_ylabel('Обертів')
-    
+    colors = ["#f59e0b", "#10b981"]
+    ax1.bar(["Ліва нога", "Права нога"], revs, color=colors)
+    ax1.set_title("Баланс обертів")
+    ax1.set_ylabel("Обертів")
+
     # 2. Key metrics
     ax2 = axes[0, 1]
-    metrics = ['Cadence\n(RPM)', 'Knee Range\n(°)', 'Stability\n(%)', 'Aero\nScore']
-    values = [analysis.cadence, analysis.knee_range,
-              analysis.upper_body_stability, analysis.aero_score]
-    colors = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6']
+    metrics = ["Cadence\n(RPM)", "Knee Range\n(°)", "Stability\n(%)", "Aero\nScore"]
+    values = [
+        analysis.cadence,
+        analysis.knee_range,
+        analysis.upper_body_stability,
+        analysis.aero_score,
+    ]
+    colors = ["#3b82f6", "#10b981", "#f59e0b", "#8b5cf6"]
     ax2.bar(metrics, values, color=colors)
-    ax2.set_title('Ключові метрики')
-    
+    ax2.set_title("Ключові метрики")
+
     # 3. Phase distribution
     ax3 = axes[1, 0]
     if analysis.phase_distribution:
         phases = list(analysis.phase_distribution.keys())
         pcts = list(analysis.phase_distribution.values())
-        colors_pie = ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#6b7280']
-        ax3.pie(pcts, labels=phases, autopct='%1.1f%%', colors=colors_pie[:len(phases)])
-    ax3.set_title('Фази педалювання')
-    
+        colors_pie = ["#ef4444", "#f59e0b", "#10b981", "#3b82f6", "#6b7280"]
+        ax3.pie(pcts, labels=phases, autopct="%1.1f%%", colors=colors_pie[: len(phases)])
+    ax3.set_title("Фази педалювання")
+
     # 4. Position analysis & recommendations
     ax4 = axes[1, 1]
-    ax4.axis('off')
-    
+    ax4.axis("off")
+
     recs = []
-    
+
     # Saddle height
     if analysis.avg_knee_angle_bottom < 140:
         recs.append("⚠️ Сідло занизько. Коліно надто зігнуте внизу.")
@@ -684,7 +727,7 @@ def generate_cycling_chart(analysis: CyclingAnalysis, output_path: str):
         recs.append("⚠️ Сідло зависоко. Нога надто випрямлена.")
     else:
         recs.append("✅ Висота сідла оптимальна")
-    
+
     # Cadence
     if analysis.cadence < 80:
         recs.append("⚠️ Каденс низький (<80). Спробуйте легшу передачу.")
@@ -692,30 +735,45 @@ def generate_cycling_chart(analysis: CyclingAnalysis, output_path: str):
         recs.append("⚠️ Каденс високий (>110). Можливо важча передача.")
     else:
         recs.append("✅ Каденс в оптимальному діапазоні (80-100)")
-    
+
     # Stability
     if analysis.upper_body_stability < 70:
         recs.append("⚠️ Нестабільний корпус. Працюйте над core.")
-    
+
     # Balance
     if abs(analysis.left_right_balance - 50) > 10:
         recs.append(f"⚠️ Дисбаланс L/R: {analysis.left_right_balance:.0f}%")
-    
+
     rec_text = "\n".join(recs)
-    ax4.text(0.1, 0.95, "Bike Fit & Рекомендації:", fontsize=12, fontweight='bold',
-            transform=ax4.transAxes, va='top')
-    ax4.text(0.1, 0.80, rec_text, fontsize=10, transform=ax4.transAxes, va='top',
-            wrap=True)
-    
+    ax4.text(
+        0.1,
+        0.95,
+        "Bike Fit & Рекомендації:",
+        fontsize=12,
+        fontweight="bold",
+        transform=ax4.transAxes,
+        va="top",
+    )
+    ax4.text(0.1, 0.80, rec_text, fontsize=10, transform=ax4.transAxes, va="top", wrap=True)
+
     # Scores
-    ax4.text(0.1, 0.35, f"Saddle Score: {analysis.saddle_height_score:.0f}/100", 
-            fontsize=11, transform=ax4.transAxes)
-    ax4.text(0.1, 0.25, f"Aero Score: {analysis.aero_score:.0f}/100",
-            fontsize=11, transform=ax4.transAxes)
-    
+    ax4.text(
+        0.1,
+        0.35,
+        f"Saddle Score: {analysis.saddle_height_score:.0f}/100",
+        fontsize=11,
+        transform=ax4.transAxes,
+    )
+    ax4.text(
+        0.1,
+        0.25,
+        f"Aero Score: {analysis.aero_score:.0f}/100",
+        fontsize=11,
+        transform=ax4.transAxes,
+    )
+
     plt.tight_layout()
-    plt.savefig(output_path, dpi=150, bbox_inches='tight',
-                facecolor='#1a1a2e', edgecolor='none')
+    plt.savefig(output_path, dpi=150, bbox_inches="tight", facecolor="#1a1a2e", edgecolor="none")
     plt.close()
-    
+
     return output_path

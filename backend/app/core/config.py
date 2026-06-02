@@ -10,9 +10,7 @@ class Settings:
             "http://localhost:3000,http://127.0.0.1:3000",
         ).split(",")
     )
-    athlete_db_path: str = os.environ.get(
-        "ATHLETE_DB_PATH", "data/athletes_orm.db"
-    )
+    athlete_db_path: str = os.environ.get("ATHLETE_DB_PATH", "data/athletes_orm.db")
 
 
 settings = Settings()

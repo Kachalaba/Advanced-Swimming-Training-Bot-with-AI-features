@@ -14,23 +14,23 @@ POOL_LENGTH_METERS = 25.0
 STROKE_MIN_DURATION_SEC = 0.3
 STROKE_MAX_DURATION_SEC = 5.0
 
-HAND_ENTRY_ANGLE_MIN = 10          # degrees — valid range lower bound
-HAND_ENTRY_ANGLE_MAX = 80          # degrees — valid range upper bound
-OPTIMAL_HAND_ENTRY_ANGLE = 40      # degrees — biomechanically ideal
+HAND_ENTRY_ANGLE_MIN = 10  # degrees — valid range lower bound
+HAND_ENTRY_ANGLE_MAX = 80  # degrees — valid range upper bound
+OPTIMAL_HAND_ENTRY_ANGLE = 40  # degrees — biomechanically ideal
 
-ELBOW_ANGLE_MIN = 60               # degrees — valid elbow catch range
-ELBOW_ANGLE_MAX = 180              # degrees
+ELBOW_ANGLE_MIN = 60  # degrees — valid elbow catch range
+ELBOW_ANGLE_MAX = 180  # degrees
 
-ELBOW_SCORE_OPTIMAL_MIN = 90       # degrees — full score band
+ELBOW_SCORE_OPTIMAL_MIN = 90  # degrees — full score band
 ELBOW_SCORE_OPTIMAL_MAX = 120
-ELBOW_SCORE_GOOD_MIN = 80          # degrees — reduced-score band
+ELBOW_SCORE_GOOD_MIN = 80  # degrees — reduced-score band
 ELBOW_SCORE_GOOD_MAX = 130
-ELBOW_SCORE_GOOD_PCT = 80          # score value for good-but-not-optimal
-ELBOW_SCORE_REFERENCE = 105        # degrees — centre of scoring curve
+ELBOW_SCORE_GOOD_PCT = 80  # score value for good-but-not-optimal
+ELBOW_SCORE_REFERENCE = 105  # degrees — centre of scoring curve
 
-BREATHING_THRESHOLD_PX = 30        # pixels — lateral head offset for breath
-BODY_ROLL_MAX_VALID = 90           # degrees — filter outliers
-KICK_AMPLITUDE_SCALE = 45          # scale factor: normalised amplitude → degrees
+BREATHING_THRESHOLD_PX = 30  # pixels — lateral head offset for breath
+BODY_ROLL_MAX_VALID = 90  # degrees — filter outliers
+KICK_AMPLITUDE_SCALE = 45  # scale factor: normalised amplitude → degrees
 
 # Scoring multipliers (score = 100 − deviation × multiplier)
 HAND_ENTRY_SCORE_MULTIPLIER = 2
@@ -41,23 +41,23 @@ KICK_SYMMETRY_MULTIPLIER = 3
 # ---------------------------------------------------------------------------
 # Running analysis thresholds
 # ---------------------------------------------------------------------------
-RUN_PHASE_THRESHOLD_PX = 50        # pixels — stance/flight detection
+RUN_PHASE_THRESHOLD_PX = 50  # pixels — stance/flight detection
 
-GROUND_CONTACT_THRESHOLD_PX = 50   # pixels — ankle below hip for contact
-GROUND_CONTACT_MIN_MS = 50         # ms — filter noise
-GROUND_CONTACT_MAX_MS = 500        # ms — filter noise
+GROUND_CONTACT_THRESHOLD_PX = 50  # pixels — ankle below hip for contact
+GROUND_CONTACT_MIN_MS = 50  # ms — filter noise
+GROUND_CONTACT_MAX_MS = 500  # ms — filter noise
 
-HEEL_STRIKE_ANGLE_THRESHOLD = 10   # degrees — foot angle → heel strike
+HEEL_STRIKE_ANGLE_THRESHOLD = 10  # degrees — foot angle → heel strike
 SEVERE_HEEL_STRIKE_THRESHOLD = 15  # degrees — adds injury risk
 FOREFOOT_STRIKE_ANGLE_THRESHOLD = -5  # degrees — foot angle → forefoot
 
-OVERSTRIDING_THRESHOLD_PX = -30    # pixels — foot ahead of CoM
-LONG_CONTACT_TIME_MS = 300         # ms — adds injury risk
-ARM_CROSSOVER_PCT_THRESHOLD = 30   # % crossover frames — flag detected
+OVERSTRIDING_THRESHOLD_PX = -30  # pixels — foot ahead of CoM
+LONG_CONTACT_TIME_MS = 300  # ms — adds injury risk
+ARM_CROSSOVER_PCT_THRESHOLD = 30  # % crossover frames — flag detected
 
-HIP_DROP_HIGH_THRESHOLD = 5        # degrees — adds injury risk
-HIP_DROP_MULTIPLIER = 5            # score = 100 − drop × multiplier
-BOUNCE_MULTIPLIER = 0.5            # score = 100 − osc × multiplier
+HIP_DROP_HIGH_THRESHOLD = 5  # degrees — adds injury risk
+HIP_DROP_MULTIPLIER = 5  # score = 100 − drop × multiplier
+BOUNCE_MULTIPLIER = 0.5  # score = 100 − osc × multiplier
 
 EFFICIENCY_COMPONENT_WEIGHT = 0.2  # weight for each of 5 efficiency components
 

@@ -64,7 +64,5 @@ def scrub_sensitive_mapping(mapping: dict[str, Any]) -> dict[str, Any]:
         if isinstance(key, str) and key.lower() in _SENSITIVE_KEYS:
             mapping[key] = _scrub_value(value, key=key)
         elif isinstance(value, (dict, list, tuple)):
-            mapping[key] = _scrub_value(
-                value, key=key if isinstance(key, str) else None
-            )
+            mapping[key] = _scrub_value(value, key=key if isinstance(key, str) else None)
     return mapping

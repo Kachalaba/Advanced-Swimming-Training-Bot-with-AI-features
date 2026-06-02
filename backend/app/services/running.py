@@ -13,6 +13,7 @@ proven on real footage:
   - Pose detection / tracking confidence 0.2 / 0.4
   - Face landmarks excluded from spatial containment guard
 """
+
 from __future__ import annotations
 
 import logging
@@ -32,8 +33,9 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from video_analysis.frame_extractor import extract_frames_from_video  # noqa: E402
+from video_analysis.running_analyzer import RunningAnalysis  # noqa: E402
+from video_analysis.running_analyzer import RunningAnalyzer
 from video_analysis.swimmer_detector import detect_swimmer_in_frames  # noqa: E402
-from video_analysis.running_analyzer import RunningAnalyzer, RunningAnalysis  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -49,22 +51,53 @@ MAX_LOST_FRAMES = 10
 YOLO_CONF = 0.25
 
 FULL_LANDMARK_MAP = {
-    0: "nose", 1: "left_eye_inner", 2: "left_eye", 3: "left_eye_outer",
-    4: "right_eye_inner", 5: "right_eye", 6: "right_eye_outer",
-    7: "left_ear", 8: "right_ear", 9: "mouth_left", 10: "mouth_right",
-    11: "left_shoulder", 12: "right_shoulder", 13: "left_elbow",
-    14: "right_elbow", 15: "left_wrist", 16: "right_wrist",
-    17: "left_pinky", 18: "right_pinky", 19: "left_index",
-    20: "right_index", 21: "left_thumb", 22: "right_thumb",
-    23: "left_hip", 24: "right_hip", 25: "left_knee", 26: "right_knee",
-    27: "left_ankle", 28: "right_ankle", 29: "left_heel", 30: "right_heel",
-    31: "left_toe", 32: "right_toe",
+    0: "nose",
+    1: "left_eye_inner",
+    2: "left_eye",
+    3: "left_eye_outer",
+    4: "right_eye_inner",
+    5: "right_eye",
+    6: "right_eye_outer",
+    7: "left_ear",
+    8: "right_ear",
+    9: "mouth_left",
+    10: "mouth_right",
+    11: "left_shoulder",
+    12: "right_shoulder",
+    13: "left_elbow",
+    14: "right_elbow",
+    15: "left_wrist",
+    16: "right_wrist",
+    17: "left_pinky",
+    18: "right_pinky",
+    19: "left_index",
+    20: "right_index",
+    21: "left_thumb",
+    22: "right_thumb",
+    23: "left_hip",
+    24: "right_hip",
+    25: "left_knee",
+    26: "right_knee",
+    27: "left_ankle",
+    28: "right_ankle",
+    29: "left_heel",
+    30: "right_heel",
+    31: "left_toe",
+    32: "right_toe",
 }
 
 FACE_LANDMARKS = {
-    "nose", "left_eye_inner", "left_eye", "left_eye_outer",
-    "right_eye_inner", "right_eye", "right_eye_outer", "left_ear",
-    "right_ear", "mouth_left", "mouth_right",
+    "nose",
+    "left_eye_inner",
+    "left_eye",
+    "left_eye_outer",
+    "right_eye_inner",
+    "right_eye",
+    "right_eye_outer",
+    "left_ear",
+    "right_ear",
+    "mouth_left",
+    "mouth_right",
 }
 
 # Skeleton drawing
@@ -72,14 +105,20 @@ _C_LEFT = (255, 120, 60)
 _C_RIGHT = (60, 180, 255)
 _C_TORSO = (200, 200, 200)
 _LEFT_CONN = [
-    ("left_shoulder", "left_elbow"), ("left_elbow", "left_wrist"),
-    ("left_hip", "left_knee"), ("left_knee", "left_ankle"),
-    ("left_ankle", "left_heel"), ("left_heel", "left_toe"),
+    ("left_shoulder", "left_elbow"),
+    ("left_elbow", "left_wrist"),
+    ("left_hip", "left_knee"),
+    ("left_knee", "left_ankle"),
+    ("left_ankle", "left_heel"),
+    ("left_heel", "left_toe"),
 ]
 _RIGHT_CONN = [
-    ("right_shoulder", "right_elbow"), ("right_elbow", "right_wrist"),
-    ("right_hip", "right_knee"), ("right_knee", "right_ankle"),
-    ("right_ankle", "right_heel"), ("right_heel", "right_toe"),
+    ("right_shoulder", "right_elbow"),
+    ("right_elbow", "right_wrist"),
+    ("right_hip", "right_knee"),
+    ("right_knee", "right_ankle"),
+    ("right_ankle", "right_heel"),
+    ("right_heel", "right_toe"),
 ]
 _TORSO_CONN = [
     ("left_shoulder", "right_shoulder"),
@@ -146,7 +185,8 @@ def _match_tracks(current_bboxes, prev_bboxes, frame_w, frame_h, iou_thr=0.2):
     matches: dict[int, int] = {}
     used: set[int] = set()
     sorted_curr = sorted(
-        enumerate(current_bboxes), key=lambda x: (x[1][0] + x[1][2]) / 2,
+        enumerate(current_bboxes),
+        key=lambda x: (x[1][0] + x[1][2]) / 2,
     )
     for ci, cb in sorted_curr:
         best_iou, best_id = 0.0, None
@@ -218,7 +258,9 @@ def analyze_running_video(
 
     yield ProgressEvent(2, "Extracting frames")
     frame_result = extract_frames_from_video(
-        str(video_path), output_dir=str(frames_dir), fps=fps,
+        str(video_path),
+        output_dir=str(frames_dir),
+        fps=fps,
     )
     frames = frame_result["frames"]
     if not frames:
@@ -238,9 +280,7 @@ def analyze_running_video(
     yield ProgressEvent(30, "Detection complete")
 
     # Read first frame to learn video dims
-    first_path = str(
-        Path(frames[0]["path"] if isinstance(frames[0], dict) else frames[0])
-    )
+    first_path = str(Path(frames[0]["path"] if isinstance(frames[0], dict) else frames[0]))
     first_frame = cv2.imread(first_path)
     if first_frame is None:
         yield ErrorEvent("Could not read first frame")
@@ -249,6 +289,7 @@ def analyze_running_video(
 
     # Initialize MediaPipe pose with relaxed confidences
     import mediapipe as _mp
+
     pose_hq = _mp.solutions.pose.Pose(
         static_image_mode=False,
         model_complexity=2,
@@ -283,9 +324,7 @@ def analyze_running_video(
     yield ProgressEvent(32, "Pose estimation with lock-on tracking")
     n = len(frames)
     for i, frame_info in enumerate(frames):
-        frame_path = str(
-            Path(frame_info["path"] if isinstance(frame_info, dict) else frame_info)
-        )
+        frame_path = str(Path(frame_info["path"] if isinstance(frame_info, dict) else frame_info))
         frame = cv2.imread(frame_path)
         if frame is None:
             keypoints_list.append({})
@@ -298,9 +337,7 @@ def analyze_running_video(
         # Step A: pull YOLO detections for this frame
         if i < len(detection_result["detections"]):
             det = detection_result["detections"][i]
-            bboxes = det.get("all_boxes") or (
-                [det.get("bbox")] if det.get("bbox") else []
-            )
+            bboxes = det.get("all_boxes") or ([det.get("bbox")] if det.get("bbox") else [])
             current_bboxes = sorted(
                 [b for b in bboxes if b],
                 key=lambda b: (b[0] + b[2]) / 2,
@@ -396,10 +433,7 @@ def analyze_running_video(
                         for name, (ax, ay) in raw.items():
                             if name in FACE_LANDMARKS:
                                 continue
-                            if not (
-                                cx1 - tol_x <= ax <= cx2 + tol_x
-                                and cy1 - tol_y <= ay <= cy2 + tol_y
-                            ):
+                            if not (cx1 - tol_x <= ax <= cx2 + tol_x and cy1 - tol_y <= ay <= cy2 + tol_y):
                                 pose_ok = False
                                 break
 
@@ -473,10 +507,24 @@ def analyze_running_video(
     for af in annotated_frames:
         if af is None:
             continue
-        cv2.putText(af, cadence_label, (10, h - 60),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
-        cv2.putText(af, strike_label, (10, h - 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+        cv2.putText(
+            af,
+            cadence_label,
+            (10, h - 60),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            (0, 255, 255),
+            2,
+        )
+        cv2.putText(
+            af,
+            strike_label,
+            (10, h - 30),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            (0, 255, 255),
+            2,
+        )
         writer.write(af)
     writer.release()
 
@@ -497,11 +545,7 @@ def _serialize_analysis(a: RunningAnalysis) -> dict[str, Any]:
         d = asdict(a)
     except TypeError:
         # Fallback for non-dataclass results
-        d = {
-            k: getattr(a, k)
-            for k in dir(a)
-            if not k.startswith("_") and not callable(getattr(a, k))
-        }
+        d = {k: getattr(a, k) for k in dir(a) if not k.startswith("_") and not callable(getattr(a, k))}
     # Coerce non-serializable types
     out: dict[str, Any] = {}
     for k, v in d.items():

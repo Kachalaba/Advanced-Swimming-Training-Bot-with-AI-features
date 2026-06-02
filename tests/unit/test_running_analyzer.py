@@ -1,19 +1,18 @@
 """Unit tests for RunningAnalyzer."""
 
 import sys
-import pytest
 from pathlib import Path
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 cv2 = pytest.importorskip("cv2", reason="cv2 not installed — skipping RunningAnalyzer tests")
 
-from tests.fixtures.mock_keypoints import (
-    make_empty_frames,
-    make_static_standing_frames,
-    make_running_frames,
-)
-from video_analysis.running_analyzer import RunningAnalyzer, RunningAnalysis
+from tests.fixtures.mock_keypoints import make_empty_frames  # noqa: E402
+from tests.fixtures.mock_keypoints import make_running_frames, make_static_standing_frames
+from video_analysis.running_analyzer import RunningAnalysis  # noqa: E402
+from video_analysis.running_analyzer import RunningAnalyzer
 
 
 class TestRunningAnalyzerEmpty:
@@ -64,6 +63,7 @@ class TestRunningAnalyzerMetrics:
     def test_inherits_base_calculate_angle(self):
         """Verify BaseAnalyzer methods are accessible after inheritance."""
         from video_analysis.base_analyzer import BaseAnalyzer
+
         analyzer = RunningAnalyzer(fps=30.0)
         assert isinstance(analyzer, BaseAnalyzer)
         angle = analyzer._calculate_angle((1, 0), (0, 0), (0, 1))

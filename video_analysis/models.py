@@ -23,25 +23,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
-from sqlalchemy import (
-    Column,
-    DateTime,
-    Float,
-    ForeignKey,
-    Index,
-    Integer,
-    String,
-    Text,
-    create_engine,
-    event,
-)
+from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, String, Text, create_engine, event
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.pool import StaticPool
-
 
 # ---------------------------------------------------------------------------
 # Base
 # ---------------------------------------------------------------------------
+
 
 class Base(DeclarativeBase):
     pass
@@ -50,6 +39,7 @@ class Base(DeclarativeBase):
 # ---------------------------------------------------------------------------
 # Models
 # ---------------------------------------------------------------------------
+
 
 class AthleteModel(Base):
     """Athlete profile."""
@@ -61,18 +51,14 @@ class AthleteModel(Base):
     age: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     level: Mapped[str] = mapped_column(String(50), default="amateur")
     specialization: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     sessions: Mapped[List["SessionModel"]] = relationship(
         "SessionModel", back_populates="athlete", cascade="all, delete-orphan"
     )
 
-    __table_args__ = (
-        Index("ix_athletes_name", "name"),
-    )
+    __table_args__ = (Index("ix_athletes_name", "name"),)
 
     def __repr__(self) -> str:
         return f"<AthleteModel id={self.id} name={self.name!r}>"
@@ -84,9 +70,7 @@ class SessionModel(Base):
     __tablename__ = "sessions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    athlete_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("athletes.id", ondelete="CASCADE"), nullable=False
-    )
+    athlete_id: Mapped[int] = mapped_column(Integer, ForeignKey("athletes.id", ondelete="CASCADE"), nullable=False)
     session_type: Mapped[str] = mapped_column(String(50), nullable=False)
     date: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
 
@@ -166,6 +150,7 @@ def get_engine(db_url: str | None = None, echo: bool = False):
 
     # Enable WAL mode for SQLite (better concurrent read performance)
     if db_url.startswith("sqlite"):
+
         @event.listens_for(engine, "connect")
         def _set_wal(dbapi_conn, _record):
             dbapi_conn.execute("PRAGMA journal_mode=WAL")

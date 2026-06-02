@@ -4,15 +4,16 @@ Running analysis page module.
 
 import logging
 import sqlite3
-import streamlit as st
-import cv2
 from pathlib import Path
 
-from video_analysis.frame_extractor import extract_frames_from_video
-from video_analysis.swimmer_detector import detect_swimmer_in_frames
+import cv2
+import streamlit as st
+
 from video_analysis.ai_coach import get_ai_coaching
 from video_analysis.athlete_database import save_analysis_to_db
+from video_analysis.frame_extractor import extract_frames_from_video
 from video_analysis.running_analyzer import RunningAnalysis, generate_running_chart
+from video_analysis.swimmer_detector import detect_swimmer_in_frames
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +22,9 @@ logger = logging.getLogger(__name__)
 def _load_mediapipe_pose():
     """Load and cache MediaPipe Pose model (loaded once per Streamlit session)."""
     import mediapipe as mp
+
     from video_analysis.constants import MIN_DETECTION_CONFIDENCE, MIN_TRACKING_CONFIDENCE
+
     return mp.solutions.pose.Pose(
         static_image_mode=False,
         model_complexity=2,
@@ -34,7 +37,10 @@ def _load_mediapipe_pose():
 def render_running_tab():
     """Render running analysis tab."""
 
-    st.markdown('<div class="section-title">🏃 Аналіз техніки бігу</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="section-title">🏃 Аналіз техніки бігу</div>',
+        unsafe_allow_html=True,
+    )
 
     with st.expander("⚙️ Налаштування", expanded=True):
         col1, col2, col3 = st.columns(3)
@@ -44,9 +50,11 @@ def render_running_tab():
         with col2:
             fps = st.number_input("🎬 FPS відео", min_value=15, max_value=240, value=30, key="run_fps")
         with col3:
-            run_type = st.selectbox("🏃 Тип бігу",
+            run_type = st.selectbox(
+                "🏃 Тип бігу",
                 ["Спринт", "Середня дистанція", "Марафон", "Трейл"],
-                key="run_type")
+                key="run_type",
+            )
 
     with st.expander("🎯 Трекінг персони", expanded=False):
         st.markdown("Налаштування для стабільного відстеження бігуна у кадрі")
@@ -54,29 +62,59 @@ def render_running_tab():
         with col1:
             target_person = st.selectbox(
                 "🎯 Кого аналізувати?",
-                ["Найбільший у кадрі (авто)", "Найближчий до центру", "Вибрати за номером"],
-                key="run_target_person"
+                [
+                    "Найбільший у кадрі (авто)",
+                    "Найближчий до центру",
+                    "Вибрати за номером",
+                ],
+                key="run_target_person",
             )
             if target_person == "Вибрати за номером":
-                person_number = st.number_input("Номер бігуна (зліва направо)", min_value=1, max_value=10, value=1, key="run_person_num")
+                person_number = st.number_input(
+                    "Номер бігуна (зліва направо)",
+                    min_value=1,
+                    max_value=10,
+                    value=1,
+                    key="run_person_num",
+                )
             else:
                 person_number = 1
         with col2:
-            bbox_padding = st.slider("Відступ навколо bbox (%)", min_value=0, max_value=50, value=20, key="run_bbox_pad")
-            max_lost_frames = st.slider("Макс. кадрів інтерполяції", min_value=1, max_value=30, value=10, key="run_max_lost")
+            bbox_padding = st.slider(
+                "Відступ навколо bbox (%)",
+                min_value=0,
+                max_value=50,
+                value=20,
+                key="run_bbox_pad",
+            )
+            max_lost_frames = st.slider(
+                "Макс. кадрів інтерполяції",
+                min_value=1,
+                max_value=30,
+                value=10,
+                key="run_max_lost",
+            )
 
     uploaded_file = st.file_uploader(
         "📹 Завантажте відео бігу (збоку)",
         type=["mp4", "mov", "avi", "mkv"],
-        key="run_upload"
+        key="run_upload",
     )
 
     if uploaded_file:
         st.video(uploaded_file)
 
-        if st.button("🏃 АНАЛІЗУВАТИ БІГ", type="primary", use_container_width=True, key="run_analyze"):
+        if st.button(
+            "🏃 АНАЛІЗУВАТИ БІГ",
+            type="primary",
+            use_container_width=True,
+            key="run_analyze",
+        ):
             analyze_running(
-                uploaded_file, athlete_name, fps, run_type,
+                uploaded_file,
+                athlete_name,
+                fps,
+                run_type,
                 target_person=target_person,
                 person_number=person_number,
                 bbox_padding_pct=bbox_padding,
@@ -84,7 +122,8 @@ def render_running_tab():
             )
 
     with st.expander("📊 Можливості аналізу"):
-        st.markdown("""
+        st.markdown(
+            """
         | Метрика | Опис |
         |---------|------|
         | **Cadence** | Кроків за хвилину (оптимум 170-190) |
@@ -93,12 +132,20 @@ def render_running_tab():
         | **Arm Symmetry** | Симетрія маху руками |
         | **Vertical Oscillation** | Вертикальні коливання |
         | **Ground Contact** | Час контакту з землею |
-        """)
+        """
+        )
 
 
-def analyze_running(uploaded_file, athlete_name, fps, run_type,
-                     target_person="Найбільший у кадрі (авто)",
-                     person_number=1, bbox_padding_pct=20, max_lost_frames=10):
+def analyze_running(
+    uploaded_file,
+    athlete_name,
+    fps,
+    run_type,
+    target_person="Найбільший у кадрі (авто)",
+    person_number=1,
+    bbox_padding_pct=20,
+    max_lost_frames=10,
+):
     """Analyze running video with stable person tracking."""
 
     with st.spinner("🏃 Аналізуємо біг..."):
@@ -123,7 +170,10 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type,
                 fps=float(fps),
             )
             progress_bar.progress(15)
-            st.markdown(f'<div class="status-success">✅ Витягнуто {frame_result["count"]} кадрів</div>', unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="status-success">✅ Витягнуто {frame_result["count"]} кадрів</div>',
+                unsafe_allow_html=True,
+            )
 
             # Step 2: Detect person
             status_text.text("🎯 Детекція бігуна...")
@@ -135,7 +185,10 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type,
                 confidence_threshold=0.25,
             )
             progress_bar.progress(30)
-            st.markdown('<div class="status-success">✅ Детекція завершена</div>', unsafe_allow_html=True)
+            st.markdown(
+                '<div class="status-success">✅ Детекція завершена</div>',
+                unsafe_allow_html=True,
+            )
 
             # Step 3: Pose detection with stable person tracking
             status_text.text("🦴 Аналіз біомеханіки (стабільний трекінг)...")
@@ -147,15 +200,39 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type,
 
             # Full 33-point landmark mapping
             FULL_LANDMARK_MAP = {
-                0: "nose", 1: "left_eye_inner", 2: "left_eye", 3: "left_eye_outer",
-                4: "right_eye_inner", 5: "right_eye", 6: "right_eye_outer",
-                7: "left_ear", 8: "right_ear", 9: "mouth_left", 10: "mouth_right",
-                11: "left_shoulder", 12: "right_shoulder", 13: "left_elbow", 14: "right_elbow",
-                15: "left_wrist", 16: "right_wrist", 17: "left_pinky", 18: "right_pinky",
-                19: "left_index", 20: "right_index", 21: "left_thumb", 22: "right_thumb",
-                23: "left_hip", 24: "right_hip", 25: "left_knee", 26: "right_knee",
-                27: "left_ankle", 28: "right_ankle", 29: "left_heel", 30: "right_heel",
-                31: "left_toe", 32: "right_toe",
+                0: "nose",
+                1: "left_eye_inner",
+                2: "left_eye",
+                3: "left_eye_outer",
+                4: "right_eye_inner",
+                5: "right_eye",
+                6: "right_eye_outer",
+                7: "left_ear",
+                8: "right_ear",
+                9: "mouth_left",
+                10: "mouth_right",
+                11: "left_shoulder",
+                12: "right_shoulder",
+                13: "left_elbow",
+                14: "right_elbow",
+                15: "left_wrist",
+                16: "right_wrist",
+                17: "left_pinky",
+                18: "right_pinky",
+                19: "left_index",
+                20: "right_index",
+                21: "left_thumb",
+                22: "right_thumb",
+                23: "left_hip",
+                24: "right_hip",
+                25: "left_knee",
+                26: "right_knee",
+                27: "left_ankle",
+                28: "right_ankle",
+                29: "left_heel",
+                30: "right_heel",
+                31: "left_toe",
+                32: "right_toe",
             }
 
             # Minimum landmark confidence to accept a detection.
@@ -172,11 +249,11 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type,
 
             # EMA smoothing — responds instantly, no frame-lag.
             # alpha=0.72: 72% current frame, 28% history → snappy + no jitter.
-            EMA_ALPHA  = 0.72
-            ema_state  = {}   # name -> (x, y) running EMA
+            EMA_ALPHA = 0.72
+            ema_state = {}  # name -> (x, y) running EMA
 
-            prev_keypoints   = {}    # track_id -> last good kps
-            lost_frame_count = {}    # track_id -> consecutive lost frames
+            prev_keypoints = {}  # track_id -> last good kps
+            lost_frame_count = {}  # track_id -> consecutive lost frames
 
             def ema_smooth(name, x, y):
                 """Exponential moving average — low latency landmark smoothing."""
@@ -226,33 +303,33 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type,
             # Skeleton connections for drawing
             # ---- Premium minimal skeleton drawing ----
             # Left limbs: cool cyan (BGR)
-            _C_LEFT   = (220, 180, 40)   # warm gold-cyan
+            _C_LEFT = (220, 180, 40)  # warm gold-cyan
             # Right limbs: coral (BGR)
-            _C_RIGHT  = (80,  80, 220)   # coral/red
+            _C_RIGHT = (80, 80, 220)  # coral/red
             # Torso: silver
-            _C_TORSO  = (210, 210, 210)
+            _C_TORSO = (210, 210, 210)
 
             _LEFT_CONN = [
                 ("left_shoulder", "left_elbow"),
-                ("left_elbow",    "left_wrist"),
-                ("left_hip",      "left_knee"),
-                ("left_knee",     "left_ankle"),
-                ("left_ankle",    "left_heel"),
-                ("left_ankle",    "left_toe"),
+                ("left_elbow", "left_wrist"),
+                ("left_hip", "left_knee"),
+                ("left_knee", "left_ankle"),
+                ("left_ankle", "left_heel"),
+                ("left_ankle", "left_toe"),
             ]
             _RIGHT_CONN = [
                 ("right_shoulder", "right_elbow"),
-                ("right_elbow",    "right_wrist"),
-                ("right_hip",      "right_knee"),
-                ("right_knee",     "right_ankle"),
-                ("right_ankle",    "right_heel"),
-                ("right_ankle",    "right_toe"),
+                ("right_elbow", "right_wrist"),
+                ("right_hip", "right_knee"),
+                ("right_knee", "right_ankle"),
+                ("right_ankle", "right_heel"),
+                ("right_ankle", "right_toe"),
             ]
             _TORSO_CONN = [
-                ("left_shoulder",  "right_shoulder"),
-                ("left_shoulder",  "left_hip"),
+                ("left_shoulder", "right_shoulder"),
+                ("left_shoulder", "left_hip"),
                 ("right_shoulder", "right_hip"),
-                ("left_hip",       "right_hip"),
+                ("left_hip", "right_hip"),
             ]
 
             def _dim(color, alpha):
@@ -264,12 +341,12 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type,
                     return
 
                 # Non-target persons drawn very faint
-                alpha   = 0.85 if is_target else 0.25
-                thick   = 2    if is_target else 1
-                j_r     = 2    if is_target else 1   # joint radius — small, precise
+                alpha = 0.85 if is_target else 0.25
+                thick = 2 if is_target else 1
+                j_r = 2 if is_target else 1  # joint radius — small, precise
 
                 groups = [
-                    (_LEFT_CONN,  _dim(_C_LEFT,  alpha)),
+                    (_LEFT_CONN, _dim(_C_LEFT, alpha)),
                     (_RIGHT_CONN, _dim(_C_RIGHT, alpha)),
                     (_TORSO_CONN, _dim(_C_TORSO, alpha)),
                 ]
@@ -326,8 +403,7 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type,
                 """Match detections to tracks using IoU with centroid distance fallback."""
                 matches = {}
                 used_tracks = set()
-                sorted_current = sorted(enumerate(current_bboxes),
-                                        key=lambda x: (x[1][0] + x[1][2]) / 2)
+                sorted_current = sorted(enumerate(current_bboxes), key=lambda x: (x[1][0] + x[1][2]) / 2)
 
                 for curr_idx, curr_box in sorted_current:
                     best_iou = 0
@@ -375,10 +451,11 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type,
             #     different video uploads in the same session
             # ----------------------------------------------------------------
             import mediapipe as _mp
+
             pose_hq = _mp.solutions.pose.Pose(
                 static_image_mode=False,
-                model_complexity=2,          # most accurate model
-                smooth_landmarks=True,       # MediaPipe built-in Kalman
+                model_complexity=2,  # most accurate model
+                smooth_landmarks=True,  # MediaPipe built-in Kalman
                 enable_segmentation=False,
                 # Loose confidences so back-view / distant runners are
                 # not dropped. YOLO bbox + spatial guards downstream
@@ -388,7 +465,7 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type,
             )
 
             # YOLO-based target bbox tracking (IoU + centroid)
-            target_bbox   = None   # current frame's confirmed YOLO bbox
+            target_bbox = None  # current frame's confirmed YOLO bbox
 
             # ---- Main frame processing loop ----
             for i, frame_info in enumerate(frame_result["frames"]):
@@ -419,12 +496,15 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type,
                     # First frame: choose which track is the target
                     if i == 0 and target_track_id is None:
                         if target_person == "Найбільший у кадрі (авто)":
-                            target_track_id = max(range(len(current_bboxes)),
-                                                  key=lambda k: bbox_area(current_bboxes[k]))
+                            target_track_id = max(
+                                range(len(current_bboxes)),
+                                key=lambda k: bbox_area(current_bboxes[k]),
+                            )
                         elif target_person == "Найближчий до центру":
-                            target_track_id = min(range(len(current_bboxes)),
-                                                  key=lambda k: bbox_center_dist_to_frame_center(
-                                                      current_bboxes[k], w, h))
+                            target_track_id = min(
+                                range(len(current_bboxes)),
+                                key=lambda k: bbox_center_dist_to_frame_center(current_bboxes[k], w, h),
+                            )
                         elif target_person == "Вибрати за номером":
                             target_track_id = min(person_number - 1, len(current_bboxes) - 1)
                         else:
@@ -449,9 +529,7 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type,
                     # position and pose detection collapses. Snap target to
                     # the bbox closest to the last known target position so
                     # we keep following the same person until the end.
-                    if (not target_matched_this_frame
-                            and target_bbox is not None
-                            and current_bboxes):
+                    if not target_matched_this_frame and target_bbox is not None and current_bboxes:
                         prev_cx = (target_bbox[0] + target_bbox[2]) / 2
                         prev_cy = (target_bbox[1] + target_bbox[3]) / 2
                         best_idx = min(
@@ -528,18 +606,24 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type,
                                 # runner is shown from the back or far away
                                 # and are not used by the running metrics.
                                 FACE_LANDMARKS = {
-                                    "nose", "left_eye_inner", "left_eye",
-                                    "left_eye_outer", "right_eye_inner",
-                                    "right_eye", "right_eye_outer", "left_ear",
-                                    "right_ear", "mouth_left", "mouth_right",
+                                    "nose",
+                                    "left_eye_inner",
+                                    "left_eye",
+                                    "left_eye_outer",
+                                    "right_eye_inner",
+                                    "right_eye",
+                                    "right_eye_outer",
+                                    "left_ear",
+                                    "right_ear",
+                                    "mouth_left",
+                                    "mouth_right",
                                 }
                                 tol_x = (cx2 - cx1) * 0.3
                                 tol_y = (cy2 - cy1) * 0.3
                                 for _name, (_ax, _ay) in raw_kps.items():
                                     if _name in FACE_LANDMARKS:
                                         continue
-                                    if not (cx1 - tol_x <= _ax <= cx2 + tol_x and
-                                            cy1 - tol_y <= _ay <= cy2 + tol_y):
+                                    if not (cx1 - tol_x <= _ax <= cx2 + tol_x and cy1 - tol_y <= _ay <= cy2 + tol_y):
                                         pose_ok = False
                                         break
 
@@ -557,18 +641,16 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type,
                                 # Hip centroid must not jump > 1× person diagonal.
                                 tid = target_track_id if target_track_id is not None else 0
                                 if pose_ok and tid in prev_keypoints:
-                                    person_diag = (bw ** 2 + bh ** 2) ** 0.5
+                                    person_diag = (bw**2 + bh**2) ** 0.5
                                     # Floor at 80px so the guard does not
                                     # shrink below realistic frame-to-frame
                                     # motion when the runner is far away.
                                     max_jump = max(person_diag, 80.0) * 1.0
                                     for anchor in ("left_hip", "right_hip"):
                                         if anchor in raw_kps and anchor in prev_keypoints[tid]:
-                                            dx = (raw_kps[anchor][0]
-                                                  - prev_keypoints[tid][anchor][0])
-                                            dy = (raw_kps[anchor][1]
-                                                  - prev_keypoints[tid][anchor][1])
-                                            if (dx ** 2 + dy ** 2) ** 0.5 > max_jump:
+                                            dx = raw_kps[anchor][0] - prev_keypoints[tid][anchor][0]
+                                            dy = raw_kps[anchor][1] - prev_keypoints[tid][anchor][1]
+                                            if (dx**2 + dy**2) ** 0.5 > max_jump:
                                                 pose_ok = False
                                                 break
 
@@ -600,16 +682,20 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type,
                 if i % 20 == 0:
                     progress_bar.progress(30 + int(25 * (i / len(frame_result["frames"]))))
 
-            pose_hq.close()   # release fresh instance
+            pose_hq.close()  # release fresh instance
             progress_bar.progress(55)
 
             num_persons = len(persons_detected) if persons_detected else 1
-            st.markdown(f'<div class="status-success">✅ Виявлено {num_persons} бігун(ів) | Поза на {frames_with_pose} кадрах</div>', unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="status-success">✅ Виявлено {num_persons} бігун(ів) | Поза на {frames_with_pose} кадрах</div>',
+                unsafe_allow_html=True,
+            )
 
             # Step 4: Running-specific analysis (multi-person)
             status_text.text("🏃 Аналіз техніки бігу...")
-            from video_analysis.running_analyzer import MultiPersonRunningAnalysis
             from video_analysis.analyzer_factory import get_running_analyzer
+            from video_analysis.running_analyzer import MultiPersonRunningAnalysis
+
             analyzer = get_running_analyzer(fps=float(fps), multi_person=True)
 
             # Convert to format analyzer expects
@@ -623,10 +709,16 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type,
                 if isinstance(running_analysis, MultiPersonRunningAnalysis):
                     # Use best runner for display, but save all
                     main_analysis = running_analysis.get_best_runner()
-                    st.markdown(f'<div class="status-info">📊 Аналізуємо {running_analysis.person_count} бігунів</div>', unsafe_allow_html=True)
+                    st.markdown(
+                        f'<div class="status-info">📊 Аналізуємо {running_analysis.person_count} бігунів</div>',
+                        unsafe_allow_html=True,
+                    )
                     running_analysis = main_analysis if main_analysis else analyzer._empty_analysis()
 
-            st.markdown(f'<div class="status-success">🏃 Cadence: {running_analysis.cadence:.0f} spm | Foot Strike: {running_analysis.foot_strike_type}</div>', unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="status-success">🏃 Cadence: {running_analysis.cadence:.0f} spm | Foot Strike: {running_analysis.foot_strike_type}</div>',
+                unsafe_allow_html=True,
+            )
 
             progress_bar.progress(65)
 
@@ -649,10 +741,24 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type,
                     continue
 
                 # Add running metrics overlay
-                cv2.putText(annotated_frame, f"Cadence: {running_analysis.cadence:.0f} spm",
-                           (10, h - 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
-                cv2.putText(annotated_frame, f"Foot Strike: {running_analysis.foot_strike_type}",
-                           (10, h - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+                cv2.putText(
+                    annotated_frame,
+                    f"Cadence: {running_analysis.cadence:.0f} spm",
+                    (10, h - 60),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.7,
+                    (0, 255, 255),
+                    2,
+                )
+                cv2.putText(
+                    annotated_frame,
+                    f"Foot Strike: {running_analysis.foot_strike_type}",
+                    (10, h - 30),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.7,
+                    (0, 255, 255),
+                    2,
+                )
 
                 video_writer.write(annotated_frame)
 
@@ -660,7 +766,10 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type,
                     progress_bar.progress(65 + int(15 * (i / len(annotated_frames))))
 
             video_writer.release()
-            st.markdown('<div class="status-success">🎬 Відео зі скелетом створено</div>', unsafe_allow_html=True)
+            st.markdown(
+                '<div class="status-success">🎬 Відео зі скелетом створено</div>',
+                unsafe_allow_html=True,
+            )
 
             progress_bar.progress(80)
 
@@ -674,14 +783,16 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type,
             # Step 7: AI Coach
             status_text.text("🤖 AI тренер аналізує...")
             ai_advice = get_ai_coaching(
-                biomechanics={"running": {
-                    "cadence": running_analysis.cadence,
-                    "knee_lift": running_analysis.avg_knee_lift,
-                    "forward_lean": running_analysis.forward_lean,
-                    "arm_symmetry": running_analysis.arm_symmetry,
-                    "foot_strike": running_analysis.foot_strike_type,
-                    "injury_risk": running_analysis.injury_risk_score
-                }},
+                biomechanics={
+                    "running": {
+                        "cadence": running_analysis.cadence,
+                        "knee_lift": running_analysis.avg_knee_lift,
+                        "forward_lean": running_analysis.forward_lean,
+                        "arm_symmetry": running_analysis.arm_symmetry,
+                        "foot_strike": running_analysis.foot_strike_type,
+                        "injury_risk": running_analysis.injury_risk_score,
+                    }
+                },
                 athlete_name=athlete_name,
             )
 
@@ -700,10 +811,10 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type,
                         "cadence": running_analysis.cadence,
                         "foot_strike": running_analysis.foot_strike_type,
                         "efficiency": running_analysis.efficiency_score,
-                        "injury_risk": running_analysis.injury_risk_score
+                        "injury_risk": running_analysis.injury_risk_score,
                     },
                     ai_advice=ai_advice,
-                    video_path=str(video_path)
+                    video_path=str(video_path),
                 )
                 st.success(f"💾 Результати збережено в базу даних (сесія #{session_id})")
             except (sqlite3.Error, ValueError, OSError) as db_error:
@@ -717,14 +828,24 @@ def analyze_running(uploaded_file, athlete_name, fps, run_type,
             logger.exception("Unexpected error in running analysis")
             st.error("❌ Непередбачена помилка. Перевірте логи.")
             import traceback
+
             st.code(traceback.format_exc())
 
 
-def display_running_results(analysis: RunningAnalysis, ai_advice, chart_path, run_type, annotated_video_path=None):
+def display_running_results(
+    analysis: RunningAnalysis,
+    ai_advice,
+    chart_path,
+    run_type,
+    annotated_video_path=None,
+):
     """Display running analysis results."""
 
     st.markdown("---")
-    st.markdown('<div class="success-box" style="text-align: center;">🏃 Аналіз бігу завершено!</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="success-box" style="text-align: center;">🏃 Аналіз бігу завершено!</div>',
+        unsafe_allow_html=True,
+    )
 
     # Show annotated video with skeleton
     if annotated_video_path and Path(annotated_video_path).exists():
@@ -737,38 +858,50 @@ def display_running_results(analysis: RunningAnalysis, ai_advice, chart_path, ru
 
     with col1:
         cadence_color = "#10b981" if 170 <= analysis.cadence <= 190 else "#f59e0b"
-        st.markdown(f"""
+        st.markdown(
+            f"""
         <div class="metric-item">
             <div class="metric-value" style="color: {cadence_color};">{analysis.cadence:.0f}</div>
             <div class="metric-label">Cadence (spm)</div>
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
     with col2:
-        st.markdown(f"""
+        st.markdown(
+            f"""
         <div class="metric-item">
             <div class="metric-value" style="color: #3b82f6;">{analysis.avg_knee_lift:.0f}°</div>
             <div class="metric-label">Knee Lift</div>
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
     with col3:
         lean_color = "#10b981" if 8 <= analysis.forward_lean <= 15 else "#f59e0b"
-        st.markdown(f"""
+        st.markdown(
+            f"""
         <div class="metric-item">
             <div class="metric-value" style="color: {lean_color};">{analysis.forward_lean:.1f}°</div>
             <div class="metric-label">Forward Lean</div>
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
     with col4:
         sym_color = "#10b981" if analysis.arm_symmetry >= 80 else "#f59e0b"
-        st.markdown(f"""
+        st.markdown(
+            f"""
         <div class="metric-item">
             <div class="metric-value" style="color: {sym_color};">{analysis.arm_symmetry:.0f}%</div>
             <div class="metric-label">Arm Symmetry</div>
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
     # NEW: Foot Strike & Injury Prevention
     st.markdown("### 🦶 Foot Strike & Травмопрофілактика")
@@ -776,41 +909,63 @@ def display_running_results(analysis: RunningAnalysis, ai_advice, chart_path, ru
 
     with col1:
         # Foot strike type with color coding
-        fs_color = "#10b981" if analysis.foot_strike_type == "midfoot" else "#f59e0b" if analysis.foot_strike_type == "forefoot" else "#ef4444"
-        st.markdown(f"""
+        fs_color = (
+            "#10b981"
+            if analysis.foot_strike_type == "midfoot"
+            else "#f59e0b" if analysis.foot_strike_type == "forefoot" else "#ef4444"
+        )
+        st.markdown(
+            f"""
         <div class="metric-item">
             <div class="metric-value" style="color: {fs_color};">{analysis.foot_strike_type.upper()}</div>
             <div class="metric-label">Foot Strike</div>
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
     with col2:
         over_color = "#10b981" if not analysis.overstriding_detected else "#ef4444"
         over_text = "❌ ТАК" if analysis.overstriding_detected else "✅ НІ"
-        st.markdown(f"""
+        st.markdown(
+            f"""
         <div class="metric-item">
             <div class="metric-value" style="color: {over_color};">{over_text}</div>
             <div class="metric-label">Overstriding</div>
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
     with col3:
-        hip_color = "#10b981" if analysis.hip_drop_score >= 80 else "#f59e0b" if analysis.hip_drop_score >= 60 else "#ef4444"
-        st.markdown(f"""
+        hip_color = (
+            "#10b981" if analysis.hip_drop_score >= 80 else "#f59e0b" if analysis.hip_drop_score >= 60 else "#ef4444"
+        )
+        st.markdown(
+            f"""
         <div class="metric-item">
             <div class="metric-value" style="color: {hip_color};">{analysis.hip_drop_score:.0f}</div>
             <div class="metric-label">Hip Stability</div>
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
     with col4:
-        risk_color = "#10b981" if analysis.injury_risk_score < 30 else "#f59e0b" if analysis.injury_risk_score < 60 else "#ef4444"
-        st.markdown(f"""
+        risk_color = (
+            "#10b981"
+            if analysis.injury_risk_score < 30
+            else "#f59e0b" if analysis.injury_risk_score < 60 else "#ef4444"
+        )
+        st.markdown(
+            f"""
         <div class="metric-item">
             <div class="metric-value" style="color: {risk_color};">{analysis.injury_risk_score:.0f}</div>
             <div class="metric-label">Injury Risk</div>
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
     # Contact time & efficiency
     st.markdown("### ⏱️ Contact Time & Efficiency")
@@ -818,39 +973,51 @@ def display_running_results(analysis: RunningAnalysis, ai_advice, chart_path, ru
 
     with col1:
         ct_color = "#10b981" if analysis.avg_contact_time_ms < 250 else "#f59e0b"
-        st.markdown(f"""
+        st.markdown(
+            f"""
         <div class="metric-item">
             <div class="metric-value" style="color: {ct_color};">{analysis.avg_contact_time_ms:.0f}</div>
             <div class="metric-label">Contact Time (ms)</div>
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
     with col2:
-        st.markdown(f"""
+        st.markdown(
+            f"""
         <div class="metric-item">
             <div class="metric-value" style="color: #8b5cf6;">{analysis.bounce_score:.0f}</div>
             <div class="metric-label">Bounce Score</div>
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
     with col3:
         eff_color = "#10b981" if analysis.efficiency_score >= 80 else "#f59e0b"
-        st.markdown(f"""
+        st.markdown(
+            f"""
         <div class="metric-item">
             <div class="metric-value" style="color: {eff_color};">{analysis.efficiency_score:.0f}</div>
             <div class="metric-label">Efficiency</div>
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
     with col4:
         cross_color = "#10b981" if not analysis.arm_crossover_detected else "#f59e0b"
         cross_text = "❌ ТАК" if analysis.arm_crossover_detected else "✅ НІ"
-        st.markdown(f"""
+        st.markdown(
+            f"""
         <div class="metric-item">
             <div class="metric-value" style="color: {cross_color};">{cross_text}</div>
             <div class="metric-label">Arm Crossover</div>
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
     # Steps
     st.markdown("### 👟 Кроки")
@@ -870,10 +1037,13 @@ def display_running_results(analysis: RunningAnalysis, ai_advice, chart_path, ru
     if ai_advice:
         st.markdown("### 🤖 AI Тренер")
         score_color = "#10b981" if ai_advice.score >= 70 else "#f59e0b" if ai_advice.score >= 50 else "#ef4444"
-        st.markdown(f"""
+        st.markdown(
+            f"""
         <div style="background: linear-gradient(135deg, rgba(59,130,246,0.2), rgba(139,92,246,0.2));
                     border-radius: 12px; padding: 1rem; border: 1px solid {score_color};">
             <div style="font-size: 2rem; font-weight: bold; color: {score_color};">{ai_advice.score}/100</div>
             <div>{ai_advice.summary}</div>
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )

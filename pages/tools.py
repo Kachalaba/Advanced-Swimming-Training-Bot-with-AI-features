@@ -2,11 +2,16 @@
 Video tools page module.
 """
 
-import streamlit as st
 from pathlib import Path
 
+import streamlit as st
+
 from video_analysis.video_tools import (
-    create_side_by_side, extract_highlight, create_zoom_video, create_tracked_zoom, get_video_info
+    create_side_by_side,
+    create_tracked_zoom,
+    create_zoom_video,
+    extract_highlight,
+    get_video_info,
 )
 
 
@@ -15,11 +20,7 @@ def render_tools_tab():
 
     st.markdown('<div class="section-title">🎬 Відео інструменти</div>', unsafe_allow_html=True)
 
-    tool_tab1, tool_tab2, tool_tab3 = st.tabs([
-        "⚖️ Side-by-Side",
-        "✂️ Highlight",
-        "🔍 Zoom"
-    ])
+    tool_tab1, tool_tab2, tool_tab3 = st.tabs(["⚖️ Side-by-Side", "✂️ Highlight", "🔍 Zoom"])
 
     # ========================================================================
     # SIDE-BY-SIDE
@@ -55,8 +56,10 @@ def render_tools_tab():
 
                     output_path = output_dir / "side_by_side.mp4"
                     result = create_side_by_side(
-                        str(v1_path), str(v2_path), str(output_path),
-                        labels=(label1, label2)
+                        str(v1_path),
+                        str(v2_path),
+                        str(output_path),
+                        labels=(label1, label2),
                     )
 
                     if result:
@@ -68,7 +71,7 @@ def render_tools_tab():
                                 "📥 Завантажити",
                                 f,
                                 file_name="comparison.mp4",
-                                mime="video/mp4"
+                                mime="video/mp4",
                             )
                     else:
                         st.error("❌ Помилка створення відео")
@@ -96,18 +99,30 @@ def render_tools_tab():
 
                 col1, col2 = st.columns(2)
                 with col1:
-                    start_sec = st.number_input("⏱️ Початок (сек)", min_value=0.0,
-                                               max_value=info.duration_sec, value=0.0, step=0.5)
+                    start_sec = st.number_input(
+                        "⏱️ Початок (сек)",
+                        min_value=0.0,
+                        max_value=info.duration_sec,
+                        value=0.0,
+                        step=0.5,
+                    )
                 with col2:
-                    end_sec = st.number_input("⏱️ Кінець (сек)", min_value=0.0,
-                                             max_value=info.duration_sec, value=min(5.0, info.duration_sec), step=0.5)
+                    end_sec = st.number_input(
+                        "⏱️ Кінець (сек)",
+                        min_value=0.0,
+                        max_value=info.duration_sec,
+                        value=min(5.0, info.duration_sec),
+                        step=0.5,
+                    )
 
                 col1, col2 = st.columns(2)
                 with col1:
-                    slow_factor = st.select_slider("🐢 Швидкість",
-                                                  options=[0.25, 0.5, 0.75, 1.0],
-                                                  value=1.0,
-                                                  format_func=lambda x: f"{x}x")
+                    slow_factor = st.select_slider(
+                        "🐢 Швидкість",
+                        options=[0.25, 0.5, 0.75, 1.0],
+                        value=1.0,
+                        format_func=lambda x: f"{x}x",
+                    )
                 with col2:
                     add_text = st.text_input("📝 Текст на відео", value="", key="hl_text")
 
@@ -115,10 +130,12 @@ def render_tools_tab():
                     with st.spinner("Вирізаємо фрагмент..."):
                         output_path = output_dir / "highlight.mp4"
                         result = extract_highlight(
-                            str(temp_path), str(output_path),
-                            start_sec, end_sec,
+                            str(temp_path),
+                            str(output_path),
+                            start_sec,
+                            end_sec,
                             add_text=add_text if add_text else None,
-                            slow_factor=slow_factor
+                            slow_factor=slow_factor,
                         )
 
                         if result:
@@ -130,7 +147,7 @@ def render_tools_tab():
                                     "📥 Завантажити",
                                     f,
                                     file_name="highlight.mp4",
-                                    mime="video/mp4"
+                                    mime="video/mp4",
                                 )
 
     # ========================================================================
@@ -154,7 +171,11 @@ def render_tools_tab():
             if info:
                 st.info(f"📊 Відео: {info.width}x{info.height}")
 
-                zoom_type = st.radio("Тип zoom", ["📍 Фіксована область", "🎯 Трекінг об'єкта"], horizontal=True)
+                zoom_type = st.radio(
+                    "Тип zoom",
+                    ["📍 Фіксована область", "🎯 Трекінг об'єкта"],
+                    horizontal=True,
+                )
 
                 zoom_factor = st.slider("🔍 Zoom", min_value=1.5, max_value=4.0, value=2.0, step=0.5)
 
@@ -171,9 +192,10 @@ def render_tools_tab():
                         with st.spinner("Створюємо zoom відео..."):
                             output_path = output_dir / "zoomed.mp4"
                             result = create_zoom_video(
-                                str(temp_path), str(output_path),
+                                str(temp_path),
+                                str(output_path),
                                 region=(x, y, w, h),
-                                zoom_factor=zoom_factor
+                                zoom_factor=zoom_factor,
                             )
 
                             if result:
@@ -181,12 +203,20 @@ def render_tools_tab():
                                 st.video(str(output_path))
 
                                 with open(output_path, "rb") as f:
-                                    st.download_button("📥 Завантажити", f,
-                                                      file_name="zoomed.mp4", mime="video/mp4")
+                                    st.download_button(
+                                        "📥 Завантажити",
+                                        f,
+                                        file_name="zoomed.mp4",
+                                        mime="video/mp4",
+                                    )
                 else:
                     st.info("🎯 Трекінг автоматично слідкує за виявленим спортсменом. Спочатку проведіть аналіз відео.")
 
-                    if st.button("🔍 Створити Tracking Zoom", type="primary", use_container_width=True):
+                    if st.button(
+                        "🔍 Створити Tracking Zoom",
+                        type="primary",
+                        use_container_width=True,
+                    ):
                         with st.spinner("Виявляємо та zoom..."):
                             # Quick detection for tracking
                             from video_analysis.frame_extractor import extract_frames_from_video
@@ -198,9 +228,10 @@ def render_tools_tab():
 
                             output_path = output_dir / "tracked_zoom.mp4"
                             result = create_tracked_zoom(
-                                str(temp_path), str(output_path),
+                                str(temp_path),
+                                str(output_path),
                                 detection_result["detections"],
-                                zoom_factor=zoom_factor
+                                zoom_factor=zoom_factor,
                             )
 
                             if result:
@@ -208,5 +239,9 @@ def render_tools_tab():
                                 st.video(str(output_path))
 
                                 with open(output_path, "rb") as f:
-                                    st.download_button("📥 Завантажити", f,
-                                                      file_name="tracked_zoom.mp4", mime="video/mp4")
+                                    st.download_button(
+                                        "📥 Завантажити",
+                                        f,
+                                        file_name="tracked_zoom.mp4",
+                                        mime="video/mp4",
+                                    )

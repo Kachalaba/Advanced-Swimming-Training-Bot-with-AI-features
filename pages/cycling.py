@@ -4,16 +4,17 @@ Cycling analysis page module.
 
 import logging
 import sqlite3
-import streamlit as st
-import cv2
 from pathlib import Path
 
-from video_analysis.frame_extractor import extract_frames_from_video
-from video_analysis.swimmer_detector import detect_swimmer_in_frames
+import cv2
+import streamlit as st
+
 from video_analysis.ai_coach import get_ai_coaching
+from video_analysis.analyzer_factory import get_cycling_analyzer
 from video_analysis.athlete_database import save_analysis_to_db
 from video_analysis.cycling_analyzer import CyclingAnalysis, generate_cycling_chart
-from video_analysis.analyzer_factory import get_cycling_analyzer
+from video_analysis.frame_extractor import extract_frames_from_video
+from video_analysis.swimmer_detector import detect_swimmer_in_frames
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +23,9 @@ logger = logging.getLogger(__name__)
 def _load_mediapipe_pose_cycling():
     """Load and cache MediaPipe Pose model for cycling (loaded once per session)."""
     import mediapipe as mp
+
     from video_analysis.constants import MIN_DETECTION_CONFIDENCE, MIN_TRACKING_CONFIDENCE
+
     return mp.solutions.pose.Pose(
         static_image_mode=False,
         model_complexity=2,
@@ -35,7 +38,10 @@ def _load_mediapipe_pose_cycling():
 def render_cycling_tab():
     """Render cycling analysis tab."""
 
-    st.markdown('<div class="section-title">🚴 Аналіз техніки велосипеда</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="section-title">🚴 Аналіз техніки велосипеда</div>',
+        unsafe_allow_html=True,
+    )
 
     with st.expander("⚙️ Налаштування", expanded=True):
         col1, col2, col3 = st.columns(3)
@@ -45,9 +51,7 @@ def render_cycling_tab():
         with col2:
             fps = st.number_input("🎬 FPS відео", min_value=15, max_value=240, value=30, key="bike_fps")
         with col3:
-            bike_type = st.selectbox("🚴 Тип їзди",
-                ["Шосе", "Триатлон TT", "MTB", "Трек"],
-                key="bike_type")
+            bike_type = st.selectbox("🚴 Тип їзди", ["Шосе", "Триатлон TT", "MTB", "Трек"], key="bike_type")
 
     with st.expander("🎯 Трекінг персони", expanded=False):
         st.markdown("Налаштування для стабільного відстеження велосипедиста у кадрі")
@@ -55,29 +59,59 @@ def render_cycling_tab():
         with col1:
             target_person = st.selectbox(
                 "🎯 Кого аналізувати?",
-                ["Найбільший у кадрі (авто)", "Найближчий до центру", "Вибрати за номером"],
-                key="bike_target_person"
+                [
+                    "Найбільший у кадрі (авто)",
+                    "Найближчий до центру",
+                    "Вибрати за номером",
+                ],
+                key="bike_target_person",
             )
             if target_person == "Вибрати за номером":
-                person_number = st.number_input("Номер (зліва направо)", min_value=1, max_value=10, value=1, key="bike_person_num")
+                person_number = st.number_input(
+                    "Номер (зліва направо)",
+                    min_value=1,
+                    max_value=10,
+                    value=1,
+                    key="bike_person_num",
+                )
             else:
                 person_number = 1
         with col2:
-            bbox_padding = st.slider("Відступ навколо bbox (%)", min_value=0, max_value=50, value=20, key="bike_bbox_pad")
-            max_lost_frames = st.slider("Макс. кадрів інтерполяції", min_value=1, max_value=30, value=10, key="bike_max_lost")
+            bbox_padding = st.slider(
+                "Відступ навколо bbox (%)",
+                min_value=0,
+                max_value=50,
+                value=20,
+                key="bike_bbox_pad",
+            )
+            max_lost_frames = st.slider(
+                "Макс. кадрів інтерполяції",
+                min_value=1,
+                max_value=30,
+                value=10,
+                key="bike_max_lost",
+            )
 
     uploaded_file = st.file_uploader(
         "📹 Завантажте відео (вид збоку на тренажері або дорозі)",
         type=["mp4", "mov", "avi", "mkv"],
-        key="bike_upload"
+        key="bike_upload",
     )
 
     if uploaded_file:
         st.video(uploaded_file)
 
-        if st.button("🚴 АНАЛІЗУВАТИ ВЕЛОСИПЕД", type="primary", use_container_width=True, key="bike_analyze"):
+        if st.button(
+            "🚴 АНАЛІЗУВАТИ ВЕЛОСИПЕД",
+            type="primary",
+            use_container_width=True,
+            key="bike_analyze",
+        ):
             analyze_cycling(
-                uploaded_file, athlete_name, fps, bike_type,
+                uploaded_file,
+                athlete_name,
+                fps,
+                bike_type,
                 target_person=target_person,
                 person_number=person_number,
                 bbox_padding_pct=bbox_padding,
@@ -85,7 +119,8 @@ def render_cycling_tab():
             )
 
     with st.expander("📊 Можливості аналізу"):
-        st.markdown("""
+        st.markdown(
+            """
         | Метрика | Опис |
         |---------|------|
         | **Cadence** | Обертів на хвилину (оптимум 80-100) |
@@ -94,12 +129,20 @@ def render_cycling_tab():
         | **Stability** | Стабільність верхньої частини тіла |
         | **L/R Balance** | Баланс лівої/правої ноги |
         | **Saddle Height** | Оцінка висоти сідла |
-        """)
+        """
+        )
 
 
-def analyze_cycling(uploaded_file, athlete_name, fps, bike_type,
-                    target_person="Найбільший у кадрі (авто)",
-                    person_number=1, bbox_padding_pct=20, max_lost_frames=10):
+def analyze_cycling(
+    uploaded_file,
+    athlete_name,
+    fps,
+    bike_type,
+    target_person="Найбільший у кадрі (авто)",
+    person_number=1,
+    bbox_padding_pct=20,
+    max_lost_frames=10,
+):
     """Analyze cycling video with stable person tracking."""
 
     with st.spinner("🚴 Аналізуємо велосипед..."):
@@ -122,7 +165,10 @@ def analyze_cycling(uploaded_file, athlete_name, fps, bike_type,
                 fps=float(fps),
             )
             progress_bar.progress(15)
-            st.markdown(f'<div class="status-success">✅ Витягнуто {frame_result["count"]} кадрів</div>', unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="status-success">✅ Витягнуто {frame_result["count"]} кадрів</div>',
+                unsafe_allow_html=True,
+            )
 
             # Step 2: Detect person
             status_text.text("🎯 Детекція велосипедиста...")
@@ -133,7 +179,10 @@ def analyze_cycling(uploaded_file, athlete_name, fps, bike_type,
                 enable_tracking=True,
             )
             progress_bar.progress(30)
-            st.markdown('<div class="status-success">✅ Детекція завершена</div>', unsafe_allow_html=True)
+            st.markdown(
+                '<div class="status-success">✅ Детекція завершена</div>',
+                unsafe_allow_html=True,
+            )
 
             # Step 3: Pose detection with stable IoU tracking
             status_text.text("🦴 Аналіз біомеханіки (стабільний трекінг)...")
@@ -144,10 +193,19 @@ def analyze_cycling(uploaded_file, athlete_name, fps, bike_type,
             h, w = first_frame.shape[:2]
 
             CYCLING_LANDMARK_MAP = {
-                0: "nose", 11: "left_shoulder", 12: "right_shoulder",
-                13: "left_elbow", 14: "right_elbow", 15: "left_wrist", 16: "right_wrist",
-                23: "left_hip", 24: "right_hip", 25: "left_knee", 26: "right_knee",
-                27: "left_ankle", 28: "right_ankle",
+                0: "nose",
+                11: "left_shoulder",
+                12: "right_shoulder",
+                13: "left_elbow",
+                14: "right_elbow",
+                15: "left_wrist",
+                16: "right_wrist",
+                23: "left_hip",
+                24: "right_hip",
+                25: "left_knee",
+                26: "right_knee",
+                27: "left_ankle",
+                28: "right_ankle",
             }
             MIN_LANDMARK_VISIBILITY = 0.5
 
@@ -166,9 +224,13 @@ def analyze_cycling(uploaded_file, athlete_name, fps, bike_type,
                     return current
                 return {
                     name: (
-                        prev[name][0] * factor + current[name][0] * (1 - factor),
-                        prev[name][1] * factor + current[name][1] * (1 - factor),
-                    ) if name in prev else current[name]
+                        (
+                            prev[name][0] * factor + current[name][0] * (1 - factor),
+                            prev[name][1] * factor + current[name][1] * (1 - factor),
+                        )
+                        if name in prev
+                        else current[name]
+                    )
                     for name in current
                 }
 
@@ -176,23 +238,28 @@ def analyze_cycling(uploaded_file, athlete_name, fps, bike_type,
                 x1, y1, x2, y2 = bbox[:4]
                 pw = (x2 - x1) * pct / 100
                 ph = (y2 - y1) * pct / 100
-                return [max(0, x1 - pw), max(0, y1 - ph), min(iw, x2 + pw), min(ih, y2 + ph)]
+                return [
+                    max(0, x1 - pw),
+                    max(0, y1 - ph),
+                    min(iw, x2 + pw),
+                    min(ih, y2 + ph),
+                ]
 
             def calc_iou(b1, b2):
                 ix1, iy1 = max(b1[0], b2[0]), max(b1[1], b2[1])
                 ix2, iy2 = min(b1[2], b2[2]), min(b1[3], b2[3])
                 inter = max(0, ix2 - ix1) * max(0, iy2 - iy1)
-                return inter / ((b1[2]-b1[0])*(b1[3]-b1[1]) + (b2[2]-b2[0])*(b2[3]-b2[1]) - inter + 1e-6)
+                return inter / ((b1[2] - b1[0]) * (b1[3] - b1[1]) + (b2[2] - b2[0]) * (b2[3] - b2[1]) - inter + 1e-6)
 
             def centroid_dist(b1, b2):
-                c1 = ((b1[0]+b1[2])/2, (b1[1]+b1[3])/2)
-                c2 = ((b2[0]+b2[2])/2, (b2[1]+b2[3])/2)
-                return ((c1[0]-c2[0])**2 + (c1[1]-c2[1])**2)**0.5
+                c1 = ((b1[0] + b1[2]) / 2, (b1[1] + b1[3]) / 2)
+                c2 = ((b2[0] + b2[2]) / 2, (b2[1] + b2[3]) / 2)
+                return ((c1[0] - c2[0]) ** 2 + (c1[1] - c2[1]) ** 2) ** 0.5
 
             def match_tracks(curr_bboxes, prev_bboxes_dict, iou_thr=0.2):
                 matches = {}
                 used = set()
-                for ci, cb in sorted(enumerate(curr_bboxes), key=lambda x: (x[1][0]+x[1][2])/2):
+                for ci, cb in sorted(enumerate(curr_bboxes), key=lambda x: (x[1][0] + x[1][2]) / 2):
                     best_iou, best_id = 0, None
                     for tid, pb in prev_bboxes_dict.items():
                         if tid in used:
@@ -213,14 +280,26 @@ def analyze_cycling(uploaded_file, athlete_name, fps, bike_type,
                         used.add(best_id)
                 return matches
 
-            COLORS = [(255, 165, 0), (0, 255, 0), (255, 0, 255), (0, 255, 255), (255, 255, 0)]
+            COLORS = [
+                (255, 165, 0),
+                (0, 255, 0),
+                (255, 0, 255),
+                (0, 255, 255),
+                (255, 255, 0),
+            ]
             CONNECTIONS = [
-                ("left_shoulder", "right_shoulder"), ("left_shoulder", "left_hip"),
-                ("right_shoulder", "right_hip"), ("left_hip", "right_hip"),
-                ("left_shoulder", "left_elbow"), ("left_elbow", "left_wrist"),
-                ("right_shoulder", "right_elbow"), ("right_elbow", "right_wrist"),
-                ("left_hip", "left_knee"), ("left_knee", "left_ankle"),
-                ("right_hip", "right_knee"), ("right_knee", "right_ankle"),
+                ("left_shoulder", "right_shoulder"),
+                ("left_shoulder", "left_hip"),
+                ("right_shoulder", "right_hip"),
+                ("left_hip", "right_hip"),
+                ("left_shoulder", "left_elbow"),
+                ("left_elbow", "left_wrist"),
+                ("right_shoulder", "right_elbow"),
+                ("right_elbow", "right_wrist"),
+                ("left_hip", "left_knee"),
+                ("left_knee", "left_ankle"),
+                ("right_hip", "right_knee"),
+                ("right_knee", "right_ankle"),
             ]
 
             def draw_skeleton(frame, kps, tid=0, faded=False, is_target=False):
@@ -232,8 +311,13 @@ def analyze_cycling(uploaded_file, athlete_name, fps, bike_type,
                 thick = 3 if is_target else 2
                 for s, e in CONNECTIONS:
                     if s in kps and e in kps:
-                        cv2.line(frame, (int(kps[s][0]), int(kps[s][1])),
-                                 (int(kps[e][0]), int(kps[e][1])), color, thick)
+                        cv2.line(
+                            frame,
+                            (int(kps[s][0]), int(kps[s][1])),
+                            (int(kps[e][0]), int(kps[e][1])),
+                            color,
+                            thick,
+                        )
                 for name, (x, y) in kps.items():
                     r = 6 if is_target else 4
                     if "knee" in name or "ankle" in name or "hip" in name:
@@ -242,8 +326,15 @@ def analyze_cycling(uploaded_file, athlete_name, fps, bike_type,
                         cv2.circle(frame, (int(x), int(y)), r, color, -1)
                 if "nose" in kps:
                     label = f"#{tid+1}" + (" [T]" if is_target else "")
-                    cv2.putText(frame, label, (int(kps["nose"][0])-25, int(kps["nose"][1])-20),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.55, color, 2)
+                    cv2.putText(
+                        frame,
+                        label,
+                        (int(kps["nose"][0]) - 25, int(kps["nose"][1]) - 20),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.55,
+                        color,
+                        2,
+                    )
 
             prev_bboxes = {}
             track_id_counter = 0
@@ -262,7 +353,7 @@ def analyze_cycling(uploaded_file, athlete_name, fps, bike_type,
                 if i < len(detection_result["detections"]):
                     det = detection_result["detections"][i]
                     bboxes = det.get("all_boxes", [det.get("bbox")] if det.get("bbox") else [])
-                    current_bboxes = sorted([b for b in bboxes if b], key=lambda b: (b[0]+b[2])/2)
+                    current_bboxes = sorted([b for b in bboxes if b], key=lambda b: (b[0] + b[2]) / 2)
 
                 if prev_bboxes:
                     matches = match_tracks(current_bboxes, prev_bboxes)
@@ -273,11 +364,17 @@ def analyze_cycling(uploaded_file, athlete_name, fps, bike_type,
                 # Select target on first frame
                 if i == 0 and current_bboxes and target_track_id is None:
                     if target_person == "Найбільший у кадрі (авто)":
-                        target_track_id = max(range(len(current_bboxes)),
-                                              key=lambda idx: (current_bboxes[idx][2]-current_bboxes[idx][0])*(current_bboxes[idx][3]-current_bboxes[idx][1]))
+                        target_track_id = max(
+                            range(len(current_bboxes)),
+                            key=lambda idx: (current_bboxes[idx][2] - current_bboxes[idx][0])
+                            * (current_bboxes[idx][3] - current_bboxes[idx][1]),
+                        )
                     elif target_person == "Найближчий до центру":
-                        target_track_id = min(range(len(current_bboxes)),
-                                              key=lambda idx: ((current_bboxes[idx][0]+current_bboxes[idx][2])/2 - w/2)**2 + ((current_bboxes[idx][1]+current_bboxes[idx][3])/2 - h/2)**2)
+                        target_track_id = min(
+                            range(len(current_bboxes)),
+                            key=lambda idx: ((current_bboxes[idx][0] + current_bboxes[idx][2]) / 2 - w / 2) ** 2
+                            + ((current_bboxes[idx][1] + current_bboxes[idx][3]) / 2 - h / 2) ** 2,
+                        )
                     else:
                         target_track_id = min(person_number - 1, len(current_bboxes) - 1)
 
@@ -292,7 +389,7 @@ def analyze_cycling(uploaded_file, athlete_name, fps, bike_type,
 
                     pb = pad_bbox(bbox, bbox_padding_pct, w, h)
                     x1, y1, x2, y2 = int(pb[0]), int(pb[1]), int(pb[2]), int(pb[3])
-                    crop = frame[max(0, y1):min(h, y2), max(0, x1):min(w, x2)]
+                    crop = frame[max(0, y1) : min(h, y2), max(0, x1) : min(w, x2)]
                     if crop.size == 0:
                         continue
 
@@ -314,7 +411,13 @@ def analyze_cycling(uploaded_file, athlete_name, fps, bike_type,
                     elif tid in prev_keypoints and lost_frame_count.get(tid, 0) < max_lost_frames:
                         kps = prev_keypoints[tid]
                         lost_frame_count[tid] = lost_frame_count.get(tid, 0) + 1
-                        draw_skeleton(annotated, kps, tid, faded=True, is_target=(tid == target_track_id))
+                        draw_skeleton(
+                            annotated,
+                            kps,
+                            tid,
+                            faded=True,
+                            is_target=(tid == target_track_id),
+                        )
 
                     if tid == target_track_id and kps:
                         target_kps = kps
@@ -322,7 +425,9 @@ def analyze_cycling(uploaded_file, athlete_name, fps, bike_type,
                 prev_bboxes = new_prev
 
                 # Fallback: full frame if target lost
-                if not target_kps and (target_track_id is None or lost_frame_count.get(target_track_id, 0) <= max_lost_frames):
+                if not target_kps and (
+                    target_track_id is None or lost_frame_count.get(target_track_id, 0) <= max_lost_frames
+                ):
                     results = pose.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
                     if results.pose_landmarks:
                         frames_with_pose += 1
@@ -341,10 +446,19 @@ def analyze_cycling(uploaded_file, athlete_name, fps, bike_type,
                             target_track_id = 0
                         lost_frame_count[target_track_id] = 0
                         draw_skeleton(annotated, kps, target_track_id, is_target=True)
-                    elif target_track_id in prev_keypoints and lost_frame_count.get(target_track_id, 0) <= max_lost_frames:
+                    elif (
+                        target_track_id in prev_keypoints
+                        and lost_frame_count.get(target_track_id, 0) <= max_lost_frames
+                    ):
                         target_kps = prev_keypoints[target_track_id]
                         lost_frame_count[target_track_id] = lost_frame_count.get(target_track_id, 0) + 1
-                        draw_skeleton(annotated, target_kps, target_track_id, faded=True, is_target=True)
+                        draw_skeleton(
+                            annotated,
+                            target_kps,
+                            target_track_id,
+                            faded=True,
+                            is_target=True,
+                        )
 
                 keypoints_list.append(target_kps)
                 annotated_frames.append(annotated)
@@ -354,14 +468,20 @@ def analyze_cycling(uploaded_file, athlete_name, fps, bike_type,
 
             # NOTE: do NOT call pose.close() — cached via @st.cache_resource
             progress_bar.progress(55)
-            st.markdown(f'<div class="status-success">✅ Поза виявлена на {frames_with_pose}/{len(frame_result["frames"])} кадрах</div>', unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="status-success">✅ Поза виявлена на {frames_with_pose}/{len(frame_result["frames"])} кадрах</div>',
+                unsafe_allow_html=True,
+            )
 
             # Step 4: Cycling-specific analysis
             status_text.text("🚴 Аналіз техніки педалювання...")
             analyzer = get_cycling_analyzer(fps=float(fps))
             cycling_analysis = analyzer.analyze(keypoints_list, fps=float(fps))
 
-            st.markdown(f'<div class="status-success">🚴 Cadence: {cycling_analysis.cadence:.0f} RPM | Bike Fit: {cycling_analysis.bike_fit_score:.0f}</div>', unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="status-success">🚴 Cadence: {cycling_analysis.cadence:.0f} RPM | Bike Fit: {cycling_analysis.bike_fit_score:.0f}</div>',
+                unsafe_allow_html=True,
+            )
 
             progress_bar.progress(65)
 
@@ -384,12 +504,33 @@ def analyze_cycling(uploaded_file, athlete_name, fps, bike_type,
                     continue
 
                 # Add cycling metrics overlay
-                cv2.putText(annotated_frame, f"Cadence: {cycling_analysis.cadence:.0f} RPM",
-                           (10, h - 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 165, 0), 2)
-                cv2.putText(annotated_frame, f"Knee Range: {cycling_analysis.knee_range:.0f} deg",
-                           (10, h - 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 165, 0), 2)
-                cv2.putText(annotated_frame, f"Bike Fit: {cycling_analysis.bike_fit_score:.0f}/100",
-                           (10, h - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 165, 0), 2)
+                cv2.putText(
+                    annotated_frame,
+                    f"Cadence: {cycling_analysis.cadence:.0f} RPM",
+                    (10, h - 90),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.7,
+                    (255, 165, 0),
+                    2,
+                )
+                cv2.putText(
+                    annotated_frame,
+                    f"Knee Range: {cycling_analysis.knee_range:.0f} deg",
+                    (10, h - 60),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.7,
+                    (255, 165, 0),
+                    2,
+                )
+                cv2.putText(
+                    annotated_frame,
+                    f"Bike Fit: {cycling_analysis.bike_fit_score:.0f}/100",
+                    (10, h - 30),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.7,
+                    (255, 165, 0),
+                    2,
+                )
 
                 video_writer.write(annotated_frame)
 
@@ -397,7 +538,10 @@ def analyze_cycling(uploaded_file, athlete_name, fps, bike_type,
                     progress_bar.progress(65 + int(15 * (i / len(annotated_frames))))
 
             video_writer.release()
-            st.markdown('<div class="status-success">🎬 Відео зі скелетом створено</div>', unsafe_allow_html=True)
+            st.markdown(
+                '<div class="status-success">🎬 Відео зі скелетом створено</div>',
+                unsafe_allow_html=True,
+            )
 
             progress_bar.progress(80)
 
@@ -411,14 +555,16 @@ def analyze_cycling(uploaded_file, athlete_name, fps, bike_type,
             # Step 7: AI Coach
             status_text.text("🤖 AI тренер аналізує...")
             ai_advice = get_ai_coaching(
-                biomechanics={"cycling": {
-                    "cadence": cycling_analysis.cadence,
-                    "knee_range": cycling_analysis.knee_range,
-                    "hip_angle": cycling_analysis.avg_hip_angle,
-                    "stability": cycling_analysis.upper_body_stability,
-                    "bike_fit": cycling_analysis.bike_fit_score,
-                    "pedal_smoothness": cycling_analysis.pedal_smoothness
-                }},
+                biomechanics={
+                    "cycling": {
+                        "cadence": cycling_analysis.cadence,
+                        "knee_range": cycling_analysis.knee_range,
+                        "hip_angle": cycling_analysis.avg_hip_angle,
+                        "stability": cycling_analysis.upper_body_stability,
+                        "bike_fit": cycling_analysis.bike_fit_score,
+                        "pedal_smoothness": cycling_analysis.pedal_smoothness,
+                    }
+                },
                 athlete_name=athlete_name,
             )
 
@@ -437,10 +583,10 @@ def analyze_cycling(uploaded_file, athlete_name, fps, bike_type,
                         "cadence": cycling_analysis.cadence,
                         "knee_range": cycling_analysis.knee_range,
                         "bike_fit": cycling_analysis.bike_fit_score,
-                        "efficiency": cycling_analysis.efficiency_score
+                        "efficiency": cycling_analysis.efficiency_score,
                     },
                     ai_advice=ai_advice,
-                    video_path=str(video_path)
+                    video_path=str(video_path),
                 )
                 st.success(f"💾 Результати збережено в базу даних (сесія #{session_id})")
             except (sqlite3.Error, ValueError, OSError) as db_error:
@@ -454,14 +600,24 @@ def analyze_cycling(uploaded_file, athlete_name, fps, bike_type,
             logger.exception("Unexpected error in cycling analysis")
             st.error("❌ Непередбачена помилка. Перевірте логи.")
             import traceback
+
             st.code(traceback.format_exc())
 
 
-def display_cycling_results(analysis: CyclingAnalysis, ai_advice, chart_path, bike_type, annotated_video_path=None):
+def display_cycling_results(
+    analysis: CyclingAnalysis,
+    ai_advice,
+    chart_path,
+    bike_type,
+    annotated_video_path=None,
+):
     """Display cycling analysis results."""
 
     st.markdown("---")
-    st.markdown('<div class="success-box" style="text-align: center;">🚴 Аналіз велосипеда завершено!</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="success-box" style="text-align: center;">🚴 Аналіз велосипеда завершено!</div>',
+        unsafe_allow_html=True,
+    )
 
     # Show annotated video with skeleton
     if annotated_video_path and Path(annotated_video_path).exists():
@@ -474,37 +630,49 @@ def display_cycling_results(analysis: CyclingAnalysis, ai_advice, chart_path, bi
 
     with col1:
         cadence_color = "#10b981" if 80 <= analysis.cadence <= 100 else "#f59e0b"
-        st.markdown(f"""
+        st.markdown(
+            f"""
         <div class="metric-item">
             <div class="metric-value" style="color: {cadence_color};">{analysis.cadence:.0f}</div>
             <div class="metric-label">Cadence (RPM)</div>
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
     with col2:
-        st.markdown(f"""
+        st.markdown(
+            f"""
         <div class="metric-item">
             <div class="metric-value" style="color: #3b82f6;">{analysis.knee_range:.0f}°</div>
             <div class="metric-label">Knee Range</div>
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
     with col3:
-        st.markdown(f"""
+        st.markdown(
+            f"""
         <div class="metric-item">
             <div class="metric-value" style="color: #8b5cf6;">{analysis.avg_hip_angle:.0f}°</div>
             <div class="metric-label">Hip Angle</div>
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
     with col4:
         stab_color = "#10b981" if analysis.upper_body_stability >= 70 else "#f59e0b"
-        st.markdown(f"""
+        st.markdown(
+            f"""
         <div class="metric-item">
             <div class="metric-value" style="color: {stab_color};">{analysis.upper_body_stability:.0f}%</div>
             <div class="metric-label">Stability</div>
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
     # NEW: Advanced metrics
     st.markdown("### ⚙️ Техніка педалювання")
@@ -512,77 +680,101 @@ def display_cycling_results(analysis: CyclingAnalysis, ai_advice, chart_path, bi
 
     with col1:
         ank_color = "#10b981" if analysis.ankling_score >= 80 else "#f59e0b"
-        st.markdown(f"""
+        st.markdown(
+            f"""
         <div class="metric-item">
             <div class="metric-value" style="color: {ank_color};">{analysis.ankling_score:.0f}</div>
             <div class="metric-label">Ankling Score</div>
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
     with col2:
         ds_color = "#10b981" if analysis.dead_spot_score >= 80 else "#f59e0b"
-        st.markdown(f"""
+        st.markdown(
+            f"""
         <div class="metric-item">
             <div class="metric-value" style="color: {ds_color};">{analysis.dead_spot_score:.0f}</div>
             <div class="metric-label">Dead Spot Score</div>
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
     with col3:
         smooth_color = "#10b981" if analysis.pedal_smoothness >= 80 else "#f59e0b"
-        st.markdown(f"""
+        st.markdown(
+            f"""
         <div class="metric-item">
             <div class="metric-value" style="color: {smooth_color};">{analysis.pedal_smoothness:.0f}</div>
             <div class="metric-label">Smoothness</div>
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
     with col4:
         rock_color = "#10b981" if not analysis.rock_detected else "#ef4444"
         rock_text = "❌ ТАК" if analysis.rock_detected else "✅ НІ"
-        st.markdown(f"""
+        st.markdown(
+            f"""
         <div class="metric-item">
             <div class="metric-value" style="color: {rock_color};">{rock_text}</div>
             <div class="metric-label">Rock/Sway</div>
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
     # Bike fit scores
     st.markdown("### 🔧 Bike Fit")
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         saddle_color = "#10b981" if analysis.saddle_height_score >= 80 else "#f59e0b"
-        st.markdown(f"""
+        st.markdown(
+            f"""
         <div class="metric-item">
             <div class="metric-value" style="color: {saddle_color};">{analysis.saddle_height_score:.0f}</div>
             <div class="metric-label">Saddle Height</div>
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
     with col2:
         aero_color = "#10b981" if analysis.aero_score >= 80 else "#f59e0b"
-        st.markdown(f"""
+        st.markdown(
+            f"""
         <div class="metric-item">
             <div class="metric-value" style="color: {aero_color};">{analysis.aero_score:.0f}</div>
             <div class="metric-label">Aero Score</div>
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
     with col3:
         fit_color = "#10b981" if analysis.bike_fit_score >= 80 else "#f59e0b"
-        st.markdown(f"""
+        st.markdown(
+            f"""
         <div class="metric-item">
             <div class="metric-value" style="color: {fit_color};">{analysis.bike_fit_score:.0f}</div>
             <div class="metric-label">Overall Fit</div>
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
     with col4:
         balance_delta = abs(analysis.left_right_balance - 50)
         balance_color = "#10b981" if balance_delta < 5 else "#f59e0b"
-        st.markdown(f"""
+        st.markdown(
+            f"""
         <div class="metric-item">
             <div class="metric-value" style="color: {balance_color};">{analysis.left_right_balance:.0f}%</div>
             <div class="metric-label">L/R Balance</div>
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
     # Chart
     if chart_path.exists():
@@ -592,10 +784,13 @@ def display_cycling_results(analysis: CyclingAnalysis, ai_advice, chart_path, bi
     if ai_advice:
         st.markdown("### 🤖 AI Тренер")
         score_color = "#10b981" if ai_advice.score >= 70 else "#f59e0b" if ai_advice.score >= 50 else "#ef4444"
-        st.markdown(f"""
+        st.markdown(
+            f"""
         <div style="background: linear-gradient(135deg, rgba(255,165,0,0.2), rgba(139,92,246,0.2));
                     border-radius: 12px; padding: 1rem; border: 1px solid {score_color};">
             <div style="font-size: 2rem; font-weight: bold; color: {score_color};">{ai_advice.score}/100</div>
             <div>{ai_advice.summary}</div>
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )

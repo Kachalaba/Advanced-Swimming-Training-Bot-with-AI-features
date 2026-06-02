@@ -12,11 +12,11 @@ import matplotlib
 
 matplotlib.use("Agg")  # noqa: E402
 from matplotlib import pyplot as plt  # noqa: E402
-
-from i18n import t  # noqa: E402
 from services.pb_service import get_latest_attempt  # noqa: E402
 from services.pb_service import get_sob, get_total_pb_attempt
 from sprint_bot.domain.analytics import pace_per_100, segment_speeds  # noqa: E402
+
+from i18n import t  # noqa: E402
 from utils import fmt_time, get_segments  # noqa: E402
 
 logger = logging.getLogger(__name__)
@@ -157,15 +157,9 @@ def _build_footer(ax: plt.Axes, payload: AttemptReport) -> None:
             total=t("report.footer.total"),
             time=fmt_time(payload.total_time),
             pr=t("report.footer.pr"),
-            pr_status=(
-                t("report.status.yes") if payload.total_is_pr else t("report.status.no")
-            ),
+            pr_status=(t("report.status.yes") if payload.total_is_pr else t("report.status.no")),
             sob=t("report.footer.sob"),
-            sob_status=(
-                t("report.status.yes")
-                if payload.sob_improved
-                else t("report.status.no")
-            ),
+            sob_status=(t("report.status.yes") if payload.sob_improved else t("report.status.no")),
         ),
     ]
     ax.text(
@@ -277,9 +271,7 @@ def plot_pace_graph(
 
     indices = list(range(1, len(latest.segments) + 1))
     current_pace = _calculate_pace_series(latest.segments, distance)
-    pb_pace = (
-        _calculate_pace_series(pb_attempt.segments, distance) if pb_attempt else []
-    )
+    pb_pace = _calculate_pace_series(pb_attempt.segments, distance) if pb_attempt else []
     sob_pace = _calculate_pace_series(sob_result.segments, distance)
 
     fig, ax = plt.subplots(figsize=(9, 5), dpi=120)
@@ -291,20 +283,12 @@ def plot_pace_graph(
         marker="o",
     )
     if pb_pace:
-        ax.plot(
-            indices, pb_pace, label=t("report.pace.pb"), color=_PB_COLOR, marker="o"
-        )
+        ax.plot(indices, pb_pace, label=t("report.pace.pb"), color=_PB_COLOR, marker="o")
     if sob_pace:
-        ax.plot(
-            indices, sob_pace, label=t("report.pace.sob"), color=_SOB_COLOR, marker="o"
-        )
+        ax.plot(indices, sob_pace, label=t("report.pace.sob"), color=_SOB_COLOR, marker="o")
 
     for idx, current_value in zip(indices, latest.segments):
-        pb_value = (
-            pb_attempt.segments[idx - 1]
-            if pb_attempt and idx - 1 < len(pb_attempt.segments)
-            else None
-        )
+        pb_value = pb_attempt.segments[idx - 1] if pb_attempt and idx - 1 < len(pb_attempt.segments) else None
         if pb_value is None:
             continue
         delta = current_value - pb_value

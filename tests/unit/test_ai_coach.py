@@ -1,14 +1,13 @@
 """Unit tests for AICoach — provider fallback chain and offline analysis."""
 
-import sys
 import json
+import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from video_analysis.ai_coach import AICoach, CoachingAdvice, get_ai_coaching
-
 
 SAMPLE_BIOMECHANICS = {
     "average_metrics": {
@@ -75,8 +74,8 @@ class TestAICoachProviderFallback:
         with patch.dict("os.environ", {}, clear=True):
             # Remove any existing API keys from env
             import os
-            env = {k: v for k, v in os.environ.items()
-                   if k not in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY")}
+
+            env = {k: v for k, v in os.environ.items() if k not in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY")}
             with patch.dict("os.environ", env, clear=True):
                 coach = AICoach(provider="auto")
                 assert coach.provider == "offline"
@@ -99,14 +98,16 @@ class TestAICoachParseResponse:
 
     def test_parse_valid_json_response(self):
         coach = AICoach(provider="offline")
-        valid_json = json.dumps({
-            "summary": "Good swimmer",
-            "strengths": ["Fast", "Streamlined"],
-            "improvements": ["Work on kick"],
-            "drills": ["Kick drill"],
-            "priority": "technique",
-            "score": 80,
-        })
+        valid_json = json.dumps(
+            {
+                "summary": "Good swimmer",
+                "strengths": ["Fast", "Streamlined"],
+                "improvements": ["Work on kick"],
+                "drills": ["Kick drill"],
+                "priority": "technique",
+                "score": 80,
+            }
+        )
         result = coach._parse_response(valid_json)
         assert result.summary == "Good swimmer"
         assert result.score == 80
@@ -138,19 +139,25 @@ class TestMockedAnthropicProvider:
     def test_claude_success_path(self):
         mock_client = MagicMock()
         mock_message = MagicMock()
-        mock_message.content = [MagicMock(text=json.dumps({
-            "summary": "Claude analysis",
-            "strengths": ["Good technique"],
-            "improvements": ["Improve turns"],
-            "drills": ["Wall drill"],
-            "priority": "technique",
-            "score": 78,
-        }))]
+        mock_message.content = [
+            MagicMock(
+                text=json.dumps(
+                    {
+                        "summary": "Claude analysis",
+                        "strengths": ["Good technique"],
+                        "improvements": ["Improve turns"],
+                        "drills": ["Wall drill"],
+                        "priority": "technique",
+                        "score": 78,
+                    }
+                )
+            )
+        ]
         mock_client.messages.create.return_value = mock_message
 
         coach = AICoach(provider="offline")  # Start offline
-        coach.provider = "anthropic"          # Manually set
-        coach.client = mock_client            # Inject mock
+        coach.provider = "anthropic"  # Manually set
+        coach.client = mock_client  # Inject mock
 
         result = coach.analyze(biomechanics=SAMPLE_BIOMECHANICS)
         assert result.score == 78

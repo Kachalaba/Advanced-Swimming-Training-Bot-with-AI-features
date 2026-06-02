@@ -10,9 +10,9 @@ Features:
 import json
 import logging
 import os
-from typing import Dict, List, Optional
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ChatMessage:
     """Chat message."""
+
     role: str  # "user" or "assistant"
     content: str
     timestamp: str = ""
@@ -28,6 +29,7 @@ class ChatMessage:
 @dataclass
 class TrainingPlan:
     """Weekly training plan."""
+
     athlete_name: str
     goal: str
     level: str
@@ -63,7 +65,7 @@ SWIMMING_KNOWLEDGE = {
         "flat_body": "Плоске тіло - відсутній body roll. Обертайтеся 30-50° в кожен бік.",
         "head_lift": "Підняття голови - порушує баланс. Тримайте голову нейтрально, дивіться на дно.",
         "scissor_kick": "Ножиці ногами - широкий удар. Тримайте ноги близько, удар від стегна.",
-    }
+    },
 }
 
 DRYLAND_KNOWLEDGE = {
@@ -79,7 +81,7 @@ DRYLAND_KNOWLEDGE = {
         "tricep": "Розтяжка трицепса: рука за головою, притисніть лікоть вниз.",
         "hip_flexor": "Розтяжка hip flexor: випад вперед, заднє коліно на підлозі.",
         "ankle": "Розтяжка гомілковостопу: сидячи, тягніть носок на себе.",
-    }
+    },
 }
 
 
@@ -126,6 +128,7 @@ class AIChat:
         if api_key:
             try:
                 import anthropic
+
                 self._client = anthropic.Anthropic(api_key=api_key)
                 self._use_llm = True
             except ImportError:
@@ -136,19 +139,13 @@ class AIChat:
         self.athlete_data = analysis_results
 
         def _is_heavy(v) -> bool:
-            return isinstance(v, (bytes, bytearray)) or (
-                isinstance(v, (list, tuple)) and len(v) > 10
-            )
+            return isinstance(v, (bytes, bytearray)) or (isinstance(v, (list, tuple)) and len(v) > 10)
 
         def _clean(obj):
             if isinstance(obj, dict):
                 return {k: _clean(v) for k, v in obj.items() if not _is_heavy(v)}
             if hasattr(obj, "__dataclass_fields__"):
-                return {
-                    f: _clean(getattr(obj, f))
-                    for f in obj.__dataclass_fields__
-                    if not _is_heavy(getattr(obj, f))
-                }
+                return {f: _clean(getattr(obj, f)) for f in obj.__dataclass_fields__ if not _is_heavy(getattr(obj, f))}
             if isinstance(obj, (int, float, str, bool)) or obj is None:
                 return obj
             return None
@@ -157,8 +154,11 @@ class AIChat:
         for key, val in analysis_results.items():
             if key == "recent_sessions" and isinstance(val, list):
                 sections[key] = [
-                    {k: v for k, v in (s.items() if isinstance(s, dict) else vars(s).items())
-                     if k in ("date", "type", "ai_score")}
+                    {
+                        k: v
+                        for k, v in (s.items() if isinstance(s, dict) else vars(s).items())
+                        if k in ("date", "type", "ai_score")
+                    }
                     for s in val[-5:]
                 ]
             else:
@@ -170,20 +170,12 @@ class AIChat:
 
     def chat(self, user_message: str) -> str:
         """Process user message and return response."""
-        self.history.append(ChatMessage(
-            role="user",
-            content=user_message,
-            timestamp=datetime.now().isoformat()
-        ))
+        self.history.append(ChatMessage(role="user", content=user_message, timestamp=datetime.now().isoformat()))
         if self._use_llm:
             response = self._llm_response(user_message)
         else:
             response = self._keyword_response(user_message.lower())
-        self.history.append(ChatMessage(
-            role="assistant",
-            content=response,
-            timestamp=datetime.now().isoformat()
-        ))
+        self.history.append(ChatMessage(role="assistant", content=response, timestamp=datetime.now().isoformat()))
         return response
 
     def _build_system(self) -> str:
@@ -251,9 +243,9 @@ class AIChat:
         recs = []
         stroke = self.athlete_data.get("stroke_analysis")
         if stroke:
-            if getattr(stroke, 'symmetry_score', 100) < 80:
+            if getattr(stroke, "symmetry_score", 100) < 80:
                 recs.append("• **Симетрія**: single arm drill")
-            roll = getattr(stroke, 'avg_body_roll', 40)
+            roll = getattr(stroke, "avg_body_roll", 40)
             if roll < 30:
                 recs.append("• **Body roll**: збільшіть до 30-50°")
             elif roll > 50:
@@ -268,6 +260,7 @@ class AIChat:
 # TRAINING PLAN GENERATOR
 # ============================================================================
 
+
 def generate_training_plan(
     athlete_name: str,
     level: str = "intermediate",  # beginner, intermediate, advanced
@@ -276,82 +269,170 @@ def generate_training_plan(
     weeks: int = 4,
 ) -> TrainingPlan:
     """Generate personalized training plan."""
-    
+
     plan = TrainingPlan(
         athlete_name=athlete_name,
         goal=goal,
         level=level,
         weeks=weeks,
     )
-    
+
     # Templates based on level and goal
     templates = {
         "beginner": {
             "general": [
-                {"day": "Пн", "type": "Плавання", "duration": 45, "focus": "Техніка", 
-                 "workout": "200м розминка | 4x50м catch-up drill | 4x50м fingertip drag | 200м спокійно"},
-                {"day": "Ср", "type": "Суходіл", "duration": 30, "focus": "Core + Плечі",
-                 "workout": "Планка 3x30с | Lat pulldown 3x12 | Flutter kicks 3x20 | Розтяжка"},
-                {"day": "Пт", "type": "Плавання", "duration": 45, "focus": "Витривалість",
-                 "workout": "200м розминка | 8x50м (відпочинок 20с) | 200м заминка"},
+                {
+                    "day": "Пн",
+                    "type": "Плавання",
+                    "duration": 45,
+                    "focus": "Техніка",
+                    "workout": "200м розминка | 4x50м catch-up drill | 4x50м fingertip drag | 200м спокійно",
+                },
+                {
+                    "day": "Ср",
+                    "type": "Суходіл",
+                    "duration": 30,
+                    "focus": "Core + Плечі",
+                    "workout": "Планка 3x30с | Lat pulldown 3x12 | Flutter kicks 3x20 | Розтяжка",
+                },
+                {
+                    "day": "Пт",
+                    "type": "Плавання",
+                    "duration": 45,
+                    "focus": "Витривалість",
+                    "workout": "200м розминка | 8x50м (відпочинок 20с) | 200м заминка",
+                },
             ],
         },
         "intermediate": {
             "general": [
-                {"day": "Пн", "type": "Плавання", "duration": 60, "focus": "Техніка + Швидкість",
-                 "workout": "400м розминка | 4x100м техніка | 8x25м спринт | 200м заминка"},
-                {"day": "Вт", "type": "Суходіл", "duration": 45, "focus": "Сила",
-                 "workout": "Lat pulldown 4x10 | Tricep ext 3x12 | Band pull 3x15 | Core circuit"},
-                {"day": "Чт", "type": "Плавання", "duration": 60, "focus": "Витривалість",
-                 "workout": "300м розминка | 10x100м (відпочинок 15с) | 200м заминка"},
-                {"day": "Сб", "type": "Плавання", "duration": 45, "focus": "Відновлення",
-                 "workout": "500м спокійно різними стилями | Drills на вибір | Розтяжка у воді"},
+                {
+                    "day": "Пн",
+                    "type": "Плавання",
+                    "duration": 60,
+                    "focus": "Техніка + Швидкість",
+                    "workout": "400м розминка | 4x100м техніка | 8x25м спринт | 200м заминка",
+                },
+                {
+                    "day": "Вт",
+                    "type": "Суходіл",
+                    "duration": 45,
+                    "focus": "Сила",
+                    "workout": "Lat pulldown 4x10 | Tricep ext 3x12 | Band pull 3x15 | Core circuit",
+                },
+                {
+                    "day": "Чт",
+                    "type": "Плавання",
+                    "duration": 60,
+                    "focus": "Витривалість",
+                    "workout": "300м розминка | 10x100м (відпочинок 15с) | 200м заминка",
+                },
+                {
+                    "day": "Сб",
+                    "type": "Плавання",
+                    "duration": 45,
+                    "focus": "Відновлення",
+                    "workout": "500м спокійно різними стилями | Drills на вибір | Розтяжка у воді",
+                },
             ],
             "speed": [
-                {"day": "Пн", "type": "Плавання", "duration": 60, "focus": "Швидкісна витривалість",
-                 "workout": "400м розминка | 12x50м (80% max, відпочинок 30с) | 200м заминка"},
-                {"day": "Вт", "type": "Суходіл", "duration": 45, "focus": "Вибухова сила",
-                 "workout": "Medicine ball throws 4x8 | Box jumps 4x6 | Band sprints 3x10"},
-                {"day": "Чт", "type": "Плавання", "duration": 60, "focus": "Спринт",
-                 "workout": "300м розминка | 16x25м max (відпочинок 45с) | 200м заминка"},
-                {"day": "Сб", "type": "Плавання", "duration": 50, "focus": "Темпова робота",
-                 "workout": "400м розминка | 4x200м race pace | 200м заминка"},
+                {
+                    "day": "Пн",
+                    "type": "Плавання",
+                    "duration": 60,
+                    "focus": "Швидкісна витривалість",
+                    "workout": "400м розминка | 12x50м (80% max, відпочинок 30с) | 200м заминка",
+                },
+                {
+                    "day": "Вт",
+                    "type": "Суходіл",
+                    "duration": 45,
+                    "focus": "Вибухова сила",
+                    "workout": "Medicine ball throws 4x8 | Box jumps 4x6 | Band sprints 3x10",
+                },
+                {
+                    "day": "Чт",
+                    "type": "Плавання",
+                    "duration": 60,
+                    "focus": "Спринт",
+                    "workout": "300м розминка | 16x25м max (відпочинок 45с) | 200м заминка",
+                },
+                {
+                    "day": "Сб",
+                    "type": "Плавання",
+                    "duration": 50,
+                    "focus": "Темпова робота",
+                    "workout": "400м розминка | 4x200м race pace | 200м заминка",
+                },
             ],
         },
         "advanced": {
             "general": [
-                {"day": "Пн", "type": "Плавання", "duration": 90, "focus": "Техніка + Швидкість",
-                 "workout": "600м розминка | 6x100м drill | 10x50м sprint | 400м заминка"},
-                {"day": "Вт", "type": "Суходіл", "duration": 60, "focus": "Сила максимальна",
-                 "workout": "Bench pull 5x5 | Lat pulldown 4x8 | Core 3 раунди"},
-                {"day": "Ср", "type": "Плавання", "duration": 75, "focus": "Поріг",
-                 "workout": "400м розминка | 5x400м threshold | 400м заминка"},
-                {"day": "Чт", "type": "Суходіл", "duration": 45, "focus": "Відновлення",
-                 "workout": "Легка йога | Foam rolling | Розтяжка 30хв"},
-                {"day": "Пт", "type": "Плавання", "duration": 90, "focus": "Спринт",
-                 "workout": "500м розминка | 20x25м all-out | 4x100м easy | 300м заминка"},
-                {"day": "Сб", "type": "Плавання", "duration": 60, "focus": "Дистанційна",
-                 "workout": "2000м безперервно помірний темп"},
+                {
+                    "day": "Пн",
+                    "type": "Плавання",
+                    "duration": 90,
+                    "focus": "Техніка + Швидкість",
+                    "workout": "600м розминка | 6x100м drill | 10x50м sprint | 400м заминка",
+                },
+                {
+                    "day": "Вт",
+                    "type": "Суходіл",
+                    "duration": 60,
+                    "focus": "Сила максимальна",
+                    "workout": "Bench pull 5x5 | Lat pulldown 4x8 | Core 3 раунди",
+                },
+                {
+                    "day": "Ср",
+                    "type": "Плавання",
+                    "duration": 75,
+                    "focus": "Поріг",
+                    "workout": "400м розминка | 5x400м threshold | 400м заминка",
+                },
+                {
+                    "day": "Чт",
+                    "type": "Суходіл",
+                    "duration": 45,
+                    "focus": "Відновлення",
+                    "workout": "Легка йога | Foam rolling | Розтяжка 30хв",
+                },
+                {
+                    "day": "Пт",
+                    "type": "Плавання",
+                    "duration": 90,
+                    "focus": "Спринт",
+                    "workout": "500м розминка | 20x25м all-out | 4x100м easy | 300м заминка",
+                },
+                {
+                    "day": "Сб",
+                    "type": "Плавання",
+                    "duration": 60,
+                    "focus": "Дистанційна",
+                    "workout": "2000м безперервно помірний темп",
+                },
             ],
         },
     }
-    
+
     # Get template
     level_templates = templates.get(level, templates["intermediate"])
     goal_sessions = level_templates.get(goal, level_templates.get("general", []))
-    
+
     # Generate weeks
     for week_num in range(1, weeks + 1):
         for session in goal_sessions[:sessions_per_week]:
-            plan.sessions.append({
-                "week": week_num,
-                **session,
-                "intensity": "Помірна" if week_num % 4 == 0 else "Стандартна"  # Deload every 4th week
-            })
-    
-    plan.notes = f"План на {weeks} тижнів для {level} рівня. Мета: {goal}. " \
-                 f"Кожен 4-й тиждень - полегшений для відновлення."
-    
+            plan.sessions.append(
+                {
+                    "week": week_num,
+                    **session,
+                    "intensity": ("Помірна" if week_num % 4 == 0 else "Стандартна"),  # Deload every 4th week
+                }
+            )
+
+    plan.notes = (
+        f"План на {weeks} тижнів для {level} рівня. Мета: {goal}. " f"Кожен 4-й тиждень - полегшений для відновлення."
+    )
+
     return plan
 
 
@@ -359,13 +440,15 @@ def generate_training_plan(
 # TEXT-TO-SPEECH
 # ============================================================================
 
+
 def text_to_speech(text: str, output_path: str = None) -> Optional[str]:
     """Convert text to speech using pyttsx3 or gTTS."""
     try:
         # Try pyttsx3 first (offline)
         import pyttsx3
+
         engine = pyttsx3.init()
-        
+
         if output_path:
             engine.save_to_file(text, output_path)
             engine.runAndWait()
@@ -374,23 +457,24 @@ def text_to_speech(text: str, output_path: str = None) -> Optional[str]:
             engine.say(text)
             engine.runAndWait()
             return None
-            
+
     except ImportError:
         try:
             # Fallback to gTTS (online)
-            from gtts import gTTS
             import tempfile
-            
-            tts = gTTS(text=text, lang='uk')
-            
+
+            from gtts import gTTS
+
+            tts = gTTS(text=text, lang="uk")
+
             if output_path:
                 tts.save(output_path)
                 return output_path
             else:
-                with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as f:
+                with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
                     tts.save(f.name)
                     return f.name
-                    
+
         except ImportError:
             logger.warning("No TTS library available. Install pyttsx3 or gTTS.")
             return None

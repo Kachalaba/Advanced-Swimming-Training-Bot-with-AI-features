@@ -4,6 +4,7 @@ Single-process / single-server only. When we move to a real worker
 queue this whole module gets replaced; until then it keeps the API
 surface tiny and lets the frontend poll or subscribe to events.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -26,9 +27,7 @@ class Job:
     events: list[dict[str, Any]] = field(default_factory=list)
     result: dict[str, Any] | None = None
     error: str | None = None
-    queue: asyncio.Queue[dict[str, Any]] = field(
-        default_factory=lambda: asyncio.Queue()
-    )
+    queue: asyncio.Queue[dict[str, Any]] = field(default_factory=lambda: asyncio.Queue())
     _lock: threading.Lock = field(default_factory=threading.Lock)
 
     def push_event(self, event: dict[str, Any]) -> None:

@@ -1,21 +1,27 @@
 """Integration tests for the video analysis pipeline using synthetic frames."""
 
 import sys
-import numpy as np
 from pathlib import Path
+
+import numpy as np
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-import pytest
 import cv2
-
+import pytest
 
 # ---------------------------------------------------------------------------
 # Helpers to generate synthetic test frames
 # ---------------------------------------------------------------------------
 
-def _create_synthetic_pool_frame(output_path: str, width: int = 640, height: int = 480,
-                                  person_x: int = 320, person_y: int = 240) -> str:
+
+def _create_synthetic_pool_frame(
+    output_path: str,
+    width: int = 640,
+    height: int = 480,
+    person_x: int = 320,
+    person_y: int = 240,
+) -> str:
     """Create a synthetic swimming pool frame with a rectangular 'person'."""
     frame = np.zeros((height, width, 3), dtype=np.uint8)
     # Blue pool background
@@ -39,11 +45,13 @@ def _create_frame_sequence(frames_dir: Path, n_frames: int = 10) -> list:
         frame_path = str(frames_dir / f"frame_{i:04d}.jpg")
         person_x = 100 + i * 40  # Swimmer moving right
         _create_synthetic_pool_frame(frame_path, person_x=person_x)
-        frame_infos.append({
-            "path": frame_path,
-            "timestamp": i / 10.0,
-            "video_frame": i,
-        })
+        frame_infos.append(
+            {
+                "path": frame_path,
+                "timestamp": i / 10.0,
+                "video_frame": i,
+            }
+        )
     return frame_infos
 
 
@@ -51,11 +59,12 @@ def _create_frame_sequence(frames_dir: Path, n_frames: int = 10) -> list:
 # SwimmerDetector tests (requires YOLO — skipped if not available)
 # ---------------------------------------------------------------------------
 
+
 class TestSwimmerDetector:
 
     @pytest.mark.skipif(
         not __import__("importlib").util.find_spec("ultralytics"),
-        reason="ultralytics not installed"
+        reason="ultralytics not installed",
     )
     def test_detect_on_synthetic_frame(self, tmp_path):
         """SwimmerDetector must not raise on a valid image."""
@@ -74,7 +83,7 @@ class TestSwimmerDetector:
 
     @pytest.mark.skipif(
         not __import__("importlib").util.find_spec("ultralytics"),
-        reason="ultralytics not installed"
+        reason="ultralytics not installed",
     )
     def test_detect_batch_tracking(self, tmp_path):
         """detect_batch with tracking must return one result per frame."""
@@ -93,7 +102,7 @@ class TestSwimmerDetector:
 
     @pytest.mark.skipif(
         not __import__("importlib").util.find_spec("ultralytics"),
-        reason="ultralytics not installed"
+        reason="ultralytics not installed",
     )
     def test_yolo_model_cached(self, tmp_path):
         """YOLO model cache should reuse the same instance."""
@@ -108,6 +117,7 @@ class TestSwimmerDetector:
 # StrokeAnalyzer pipeline integration
 # ---------------------------------------------------------------------------
 
+
 class TestStrokeAnalyzerPipeline:
 
     def test_analyze_returns_valid_structure(self):
@@ -118,26 +128,29 @@ class TestStrokeAnalyzerPipeline:
         frames = []
         for i in range(60):
             import math
+
             t = i / 10.0
             left_y = 0.5 + 0.3 * math.sin(2 * math.pi * 0.5 * t)
             right_y = 0.5 + 0.3 * math.sin(2 * math.pi * 0.5 * t + math.pi)
-            frames.append({
-                11: {"x": 0.3, "y": 0.5, "visibility": 0.9},
-                12: {"x": 0.7, "y": 0.5, "visibility": 0.9},
-                13: {"x": 0.25, "y": 0.5, "visibility": 0.9},
-                14: {"x": 0.75, "y": 0.5, "visibility": 0.9},
-                15: {"x": 0.2, "y": left_y, "visibility": 0.9},
-                16: {"x": 0.8, "y": right_y, "visibility": 0.9},
-                23: {"x": 0.35, "y": 0.7, "visibility": 0.9},
-                24: {"x": 0.65, "y": 0.7, "visibility": 0.9},
-                27: {"x": 0.35, "y": 0.9, "visibility": 0.9},
-                28: {"x": 0.65, "y": 0.9, "visibility": 0.9},
-                25: {"x": 0.35, "y": 0.8, "visibility": 0.9},
-                26: {"x": 0.65, "y": 0.8, "visibility": 0.9},
-                0:  {"x": 0.5, "y": 0.1, "visibility": 0.9},
-                7:  {"x": 0.45, "y": 0.1, "visibility": 0.9},
-                8:  {"x": 0.55, "y": 0.1, "visibility": 0.9},
-            })
+            frames.append(
+                {
+                    11: {"x": 0.3, "y": 0.5, "visibility": 0.9},
+                    12: {"x": 0.7, "y": 0.5, "visibility": 0.9},
+                    13: {"x": 0.25, "y": 0.5, "visibility": 0.9},
+                    14: {"x": 0.75, "y": 0.5, "visibility": 0.9},
+                    15: {"x": 0.2, "y": left_y, "visibility": 0.9},
+                    16: {"x": 0.8, "y": right_y, "visibility": 0.9},
+                    23: {"x": 0.35, "y": 0.7, "visibility": 0.9},
+                    24: {"x": 0.65, "y": 0.7, "visibility": 0.9},
+                    27: {"x": 0.35, "y": 0.9, "visibility": 0.9},
+                    28: {"x": 0.65, "y": 0.9, "visibility": 0.9},
+                    25: {"x": 0.35, "y": 0.8, "visibility": 0.9},
+                    26: {"x": 0.65, "y": 0.8, "visibility": 0.9},
+                    0: {"x": 0.5, "y": 0.1, "visibility": 0.9},
+                    7: {"x": 0.45, "y": 0.1, "visibility": 0.9},
+                    8: {"x": 0.55, "y": 0.1, "visibility": 0.9},
+                }
+            )
 
         analyzer = StrokeAnalyzer(fps=10.0)
         result = analyzer.analyze(frames, fps=10.0)
@@ -152,15 +165,17 @@ class TestStrokeAnalyzerPipeline:
 # AthleteDatabase + save_analysis_to_db pipeline
 # ---------------------------------------------------------------------------
 
+
 class TestDatabasePipeline:
 
     def test_save_analysis_creates_session(self, tmp_path):
         """save_analysis_to_db must create athlete and session records."""
-        from video_analysis.athlete_database import save_analysis_to_db, AthleteDatabase
+        from video_analysis.athlete_database import AthleteDatabase, save_analysis_to_db
 
         db_path = str(tmp_path / "pipeline_test.db")
         # Patch the DB path by using the module directly
         import video_analysis.athlete_database as adb
+
         original_instance = adb._db_instance
         adb._db_instance = AthleteDatabase(db_path=db_path)
 
@@ -175,6 +190,7 @@ class TestDatabasePipeline:
             }
 
             from video_analysis.ai_coach import CoachingAdvice
+
             ai_advice = CoachingAdvice(
                 summary="Good session",
                 strengths=["Fast"],
@@ -209,8 +225,8 @@ class TestDatabasePipeline:
 
     def test_duplicate_athlete_pipeline_idempotent(self, tmp_path):
         """Calling save_analysis_to_db twice for same athlete must not duplicate athlete."""
-        from video_analysis.athlete_database import save_analysis_to_db, AthleteDatabase
         import video_analysis.athlete_database as adb
+        from video_analysis.athlete_database import AthleteDatabase, save_analysis_to_db
 
         db_path = str(tmp_path / "dedup_test.db")
         original_instance = adb._db_instance
