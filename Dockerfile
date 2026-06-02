@@ -14,9 +14,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt ./
-# Install runtime-only packages (skip dev/test tools) into an isolated prefix
-RUN pip install --no-cache-dir --prefix=/install \
-        $(grep -vE '^\s*(#|pytest|factory_boy|Faker|black|isort|ruff|mypy|pre-commit)' requirements.txt | tr '\n' ' ')
+# Install runtime-only packages (skip dev/test tools, strip comments) into an
+# isolated prefix. Use CPU-only torch wheels; the default PyPI torch packages
+# pull large CUDA dependencies that this Streamlit image does not need.
+RUN sed -E 's/[[:space:]]+#.*$//' requirements.txt \
+    | grep -vE '^\s*#' \
+    | grep -vE '^\s*$' \
+    | grep -vE '^(pytest|pytest-asyncio|pytest-cov|factory_boy|Faker|black|isort|ruff|mypy|pre-commit)([=<>!~ ]|$)' \
+    | sed -E 's/^torch==2\.1\.2$/torch==2.1.2+cpu/' \
+    | sed -E 's/^torchvision==0\.16\.2$/torchvision==0.16.2+cpu/' \
+    > /tmp/runtime-requirements.txt \
+    && pip install --no-cache-dir --prefix=/install \
+        --extra-index-url https://download.pytorch.org/whl/cpu \
+        -r /tmp/runtime-requirements.txt
 
 # ── Stage 2: runtime ──────────────────────────────────────────────────────────
 FROM python:3.11-slim AS runtime
