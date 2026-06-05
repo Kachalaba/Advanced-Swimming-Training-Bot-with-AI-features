@@ -53,13 +53,47 @@ def test_shoulder_flexion_counts_only_reps_reaching_target_completion():
     assert len(result["rep_rom_history"]["left"]) == 2
 
 
+def test_shoulder_abduction_uses_distinct_target_from_flexion():
+    frames = make_rehab_shoulder_flexion_frames(cycles=1)
+
+    flex = RehabAnalyzer(fps=10.0).analyze(frames, protocol="shoulder_flexion")
+    abd = RehabAnalyzer(fps=10.0).analyze(frames, protocol="shoulder_abduction")
+
+    # Same 2D geometry, but the two protocols are no longer silent aliases:
+    # abduction carries a stricter clinical target ROM.
+    assert flex["target_rom"] == 150.0
+    assert abd["target_rom"] == 160.0
+    assert abd["target_metrics"]["left"]["target_rom"] == 160.0
+    # Identical motion therefore leaves a larger remaining deficit under abduction.
+    assert abd["target_metrics"]["left"]["deficit_deg"] >= flex["target_metrics"]["left"]["deficit_deg"]
+
+
+def test_rep_duration_tracks_real_frames_through_dropped_poses():
+    frames = make_rehab_shoulder_flexion_frames(cycles=1)
+    # Interleave dropped-pose frames so the same motion spans twice as many frames.
+    gappy = []
+    for frame in frames:
+        gappy.append(frame)
+        gappy.append({})
+
+    base = RehabAnalyzer(fps=10.0).analyze(frames, protocol="shoulder_flexion")
+    spaced = RehabAnalyzer(fps=10.0).analyze(gappy, protocol="shoulder_flexion")
+
+    base_reps = base["target_metrics"]["left"]["rep_details"]
+    spaced_reps = spaced["target_metrics"]["left"]["rep_details"]
+    assert base_reps and spaced_reps
+    # Durations follow real elapsed frames, not compacted sample positions, so the
+    # spread-out recording reports a proportionally longer repetition.
+    assert spaced_reps[0]["duration_sec"] > base_reps[0]["duration_sec"] * 1.5
+
+
 def test_report_contains_all_tracked_joint_families():
     frames = make_rehab_shoulder_flexion_frames(cycles=1)
 
     result = RehabAnalyzer(fps=10.0).analyze(frames, protocol="shoulder_flexion")
 
     assert set(result["joint_metrics"]) == {
-        "shoulder_flexion",
+        "shoulder",
         "elbow_flexion",
         "hip_abduction",
         "knee_extension",

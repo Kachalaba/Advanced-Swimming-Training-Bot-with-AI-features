@@ -165,8 +165,13 @@ REHAB_ASYMMETRY_WARNING_PCT = 20.0
 REHAB_LIVE_WINDOW_FRAMES = 300
 REHAB_LIVE_ANALYSIS_INTERVAL_FRAMES = 5
 
+# NOTE: with a single 2D camera, shoulder flexion (sagittal plane) and shoulder
+# abduction (frontal plane) are measured by the same elbow-shoulder-hip angle —
+# they differ only in the recording plane / patient instruction. Both protocols
+# therefore map to the neutral "shoulder" joint family below and are
+# distinguished by their clinical target ROM, not by the geometry.
 REHAB_JOINTS = {
-    "shoulder_flexion": {
+    "shoulder": {
         "points": ("elbow", "shoulder", "hip"),
         "target_rom": 150.0,
         "rest_threshold": 35.0,
@@ -198,12 +203,12 @@ REHAB_JOINTS = {
 
 REHAB_PROTOCOLS = {
     "shoulder_flexion": {
-        "joint_metric": "shoulder_flexion",
+        "joint_metric": "shoulder",
         "target_rom": 150.0,
     },
     "shoulder_abduction": {
-        "joint_metric": "shoulder_flexion",
-        "target_rom": 150.0,
+        "joint_metric": "shoulder",
+        "target_rom": 160.0,
     },
     "elbow_flexion": {
         "joint_metric": "elbow_flexion",

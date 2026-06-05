@@ -1,10 +1,17 @@
 """Unit tests for the stateful WebRTC rehabilitation processor."""
 
-import av
-import numpy as np
+import pytest
 
-from tests.fixtures.mock_keypoints import make_rehab_shoulder_flexion_frames
-from video_analysis.live_rehab import LiveRehabProcessor
+# PyAV and streamlit-webrtc are heavy, optional dependencies. Skip gracefully
+# (rather than aborting the whole unit-test session on a collection error) when
+# they are absent — matching the cv2 importorskip convention in the other tests.
+av = pytest.importorskip("av")
+pytest.importorskip("streamlit_webrtc")
+
+import numpy as np  # noqa: E402
+
+from tests.fixtures.mock_keypoints import make_rehab_shoulder_flexion_frames  # noqa: E402
+from video_analysis.live_rehab import LiveRehabProcessor  # noqa: E402
 
 
 class _FakeVisualizer:

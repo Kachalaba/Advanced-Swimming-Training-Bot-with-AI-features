@@ -378,16 +378,20 @@ def display_rehabilitation_results(
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
     history = report["angle_history"]
+    frames = report.get("angle_frames", {"left": [], "right": []})
     if history["left"] or history["right"]:
         st.markdown(f"### {t('rehab_angle_chart')}")
-        st.line_chart(
-            pd.DataFrame(
-                {
-                    t("rehab_left"): pd.Series(history["left"]),
-                    t("rehab_right"): pd.Series(history["right"]),
-                }
-            )
-        )
+        # Index each side by its real frame number so left/right stay aligned on a
+        # shared time axis even when the two sides were sampled on different frames.
+        left_series = pd.Series(history["left"], index=(frames.get("left") or None))
+        right_series = pd.Series(history["right"], index=(frames.get("right") or None))
+        chart_df = pd.DataFrame(
+            {
+                t("rehab_left"): left_series,
+                t("rehab_right"): right_series,
+            }
+        ).sort_index()
+        st.line_chart(chart_df)
 
     rep_history = report["rep_rom_history"]
     if rep_history["left"] or rep_history["right"]:

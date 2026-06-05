@@ -76,13 +76,22 @@ class RehabAnalyzer(BaseAnalyzer):
             1,
         )
 
+        # Angles and their real video-frame indices for the target joint. Left and
+        # right are sampled independently (a side is recorded only when all three of
+        # its landmarks are visible), so the frame indices let consumers align the
+        # two series on a shared time axis instead of by list position.
+        target_angle_history = {side: list(angle_histories[target_joint][side]["angles"]) for side in ("left", "right")}
+        target_angle_frames = {
+            side: [int(f) for f in angle_histories[target_joint][side]["frames"]] for side in ("left", "right")
+        }
+
         return {
             "protocol": protocol,
             "target_joint": target_joint,
             "target_rom": target_rom,
             "valid_frames": max(
-                len(angle_histories[target_joint]["left"]),
-                len(angle_histories[target_joint]["right"]),
+                len(target_angle_history["left"]),
+                len(target_angle_history["right"]),
             ),
             "joint_metrics": joint_metrics,
             "target_metrics": target_metrics,
@@ -92,22 +101,31 @@ class RehabAnalyzer(BaseAnalyzer):
                 int(target_metrics["left"]["correct_reps"]),
                 int(target_metrics["right"]["correct_reps"]),
             ),
-            "angle_history": angle_histories[target_joint],
+            "angle_history": target_angle_history,
+            "angle_frames": target_angle_frames,
             "rep_rom_history": {
                 side: [rep["rom"] for rep in target_metrics[side]["rep_details"]] for side in ("left", "right")
             },
             "feedback": self._build_feedback(
-                angle_histories[target_joint],
+                target_angle_history,
                 target_metrics,
                 symmetry,
             ),
         }
 
-    def _collect_joint_angles(self, keypoints_list: List[Dict]) -> Dict[str, Dict[str, List[float]]]:
-        histories: Dict[str, Dict[str, List[float]]] = {
-            joint_name: {"left": [], "right": []} for joint_name in REHAB_JOINTS
+    def _collect_joint_angles(self, keypoints_list: List[Dict]) -> Dict[str, Dict[str, Dict[str, List[float]]]]:
+        # Per joint/side we keep the smoothed angle series plus the real frame index
+        # each sample came from. Frames without a full landmark triple are dropped
+        # rather than carried as gaps, so the parallel "frames" list is what keeps
+        # rep durations tied to wall-clock time instead of sample position.
+        histories: Dict[str, Dict[str, Dict[str, List[float]]]] = {
+            joint_name: {
+                "left": {"angles": [], "frames": []},
+                "right": {"angles": [], "frames": []},
+            }
+            for joint_name in REHAB_JOINTS
         }
-        for keypoints in keypoints_list:
+        for frame_idx, keypoints in enumerate(keypoints_list):
             if not keypoints:
                 continue
             for joint_name, raw_config in REHAB_JOINTS.items():
@@ -127,18 +145,24 @@ class RehabAnalyzer(BaseAnalyzer):
                         continue
                     angle = self._calculate_angle(p1, p2, p3)
                     if angle > 0:
-                        histories[joint_name][side].append(self._ema(f"{joint_name}:{side}", angle))
+                        side_history = histories[joint_name][side]
+                        side_history["angles"].append(self._ema(f"{joint_name}:{side}", angle))
+                        side_history["frames"].append(frame_idx)
         return histories
 
     def _summarize_joint(
         self,
         joint_name: str,
-        side_histories: Dict[str, List[float]],
+        side_histories: Dict[str, Dict[str, List[float]]],
     ) -> Dict[str, Any]:
         config = cast(Dict[str, Any], REHAB_JOINTS[joint_name])
         target_rom = cast(float, config["target_rom"])
-        left = self._summarize_side(joint_name, side_histories["left"], target_rom)
-        right = self._summarize_side(joint_name, side_histories["right"], target_rom)
+        left = self._summarize_side(
+            joint_name, side_histories["left"]["angles"], side_histories["left"]["frames"], target_rom
+        )
+        right = self._summarize_side(
+            joint_name, side_histories["right"]["angles"], side_histories["right"]["frames"], target_rom
+        )
         symmetry = self._symmetry(left["rom"], right["rom"])
         return {
             "left": left,
@@ -151,6 +175,7 @@ class RehabAnalyzer(BaseAnalyzer):
         self,
         joint_name: str,
         angles: List[float],
+        frames: List[float],
         target_rom: float,
     ) -> Dict[str, Any]:
         if not angles:
@@ -161,7 +186,7 @@ class RehabAnalyzer(BaseAnalyzer):
         if edge:
             smoothed[:edge] = angles[:edge]
             smoothed[-edge:] = angles[-edge:]
-        reps = self._detect_reps(smoothed, joint_name, target_rom)
+        reps = self._detect_reps(smoothed, frames, joint_name, target_rom)
         minimum = min(smoothed)
         maximum = max(smoothed)
         achieved_rom = maximum - minimum
@@ -182,6 +207,7 @@ class RehabAnalyzer(BaseAnalyzer):
     def _detect_reps(
         self,
         angles: List[float],
+        frames: List[float],
         joint_name: str,
         target_rom: float,
     ) -> List[Dict[str, Any]]:
@@ -202,26 +228,28 @@ class RehabAnalyzer(BaseAnalyzer):
 
         reps: List[Dict[str, Any]] = []
         state = "waiting_for_rest"
-        start_frame = 0
-        active_frame = 0
-        for frame_idx, angle in enumerate(angles):
+        # Positions index into the (compacted) angle series; frames[pos] maps each
+        # position back to the originating video frame so durations reflect real time.
+        start_pos = 0
+        active_pos = 0
+        for pos, angle in enumerate(angles):
             if state == "waiting_for_rest" and at_rest(angle):
-                start_frame = frame_idx
+                start_pos = pos
                 state = "moving"
             elif state == "moving" and at_active(angle):
-                active_frame = frame_idx
+                active_pos = pos
                 state = "returning"
             elif state == "returning" and at_rest(angle):
-                segment = angles[start_frame : frame_idx + 1]
-                duration = (frame_idx - start_frame) / self.fps
+                segment = angles[start_pos : pos + 1]
+                duration = (frames[pos] - frames[start_pos]) / self.fps
                 achieved_rom = max(segment) - min(segment)
                 duration_ok = REHAB_MIN_REP_DURATION_SEC <= duration <= REHAB_MAX_REP_DURATION_SEC
                 reps.append(
                     {
                         "rep_number": len(reps) + 1,
-                        "start_frame": start_frame,
-                        "active_frame": active_frame,
-                        "end_frame": frame_idx,
+                        "start_frame": int(frames[start_pos]),
+                        "active_frame": int(frames[active_pos]),
+                        "end_frame": int(frames[pos]),
                         "duration_sec": round(duration, 2),
                         "min_angle": round(min(segment), 1),
                         "max_angle": round(max(segment), 1),
@@ -229,7 +257,7 @@ class RehabAnalyzer(BaseAnalyzer):
                         "correct": (achieved_rom >= target_rom * REHAB_CORRECT_REP_COMPLETION_RATIO and duration_ok),
                     }
                 )
-                start_frame = frame_idx
+                start_pos = pos
                 state = "moving"
         return reps
 
