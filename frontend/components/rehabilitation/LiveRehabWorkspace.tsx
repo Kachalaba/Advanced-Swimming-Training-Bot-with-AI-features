@@ -6,6 +6,7 @@ import {
   Maximize2,
   Minimize2,
   Power,
+  Save,
   ScanLine,
 } from "lucide-react";
 import {
@@ -19,6 +20,7 @@ import { createFrameScheduler, type FrameScheduler } from "@/lib/frameScheduler"
 import {
   createLiveRehabSession,
   deleteLiveRehabSession,
+  saveLiveRehabSession,
   sendLiveRehabFrame,
   type LiveRehabUpdate,
   type RehabProtocol,
@@ -48,6 +50,7 @@ export function LiveRehabWorkspace({
   const [update, setUpdate] = useState<LiveRehabUpdate | null>(null);
   const [transportError, setTransportError] = useState<string | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
+  const [savedSessionId, setSavedSessionId] = useState<number | null>(null);
   const { status, error: cameraError, start: startCamera, stop: stopCamera } =
     useCameraSource(videoRef);
 
@@ -81,10 +84,12 @@ export function LiveRehabWorkspace({
     }
     stopCamera();
     setUpdate(null);
+    setSavedSessionId(null);
   }, [stopCamera]);
 
   const start = useCallback(async () => {
     setTransportError(null);
+    setSavedSessionId(null);
     try {
       await startCamera();
       const session = await createLiveRehabSession(protocol, 5);
@@ -117,6 +122,15 @@ export function LiveRehabWorkspace({
   }, []);
 
   useEffect(() => {
+    if (!fullscreen || document.fullscreenElement) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setFullscreen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [fullscreen]);
+
+  useEffect(() => {
     return () => {
       void stop();
     };
@@ -125,9 +139,22 @@ export function LiveRehabWorkspace({
   const toggleFullscreen = async () => {
     if (document.fullscreenElement) {
       await document.exitFullscreen?.();
-    } else {
-      await workspaceRef.current?.requestFullscreen();
+      return;
     }
+    if (fullscreen) {
+      setFullscreen(false);
+      return;
+    }
+    const workspace = workspaceRef.current;
+    if (workspace && typeof workspace.requestFullscreen === "function") {
+      try {
+        await workspace.requestFullscreen();
+        return;
+      } catch {
+        // Fall back to an app-level fullscreen surface when browser policy blocks the API.
+      }
+    }
+    setFullscreen(true);
   };
 
   const isLive = status === "live" && sessionIdRef.current !== null;
@@ -144,7 +171,9 @@ export function LiveRehabWorkspace({
   return (
     <div
       ref={workspaceRef}
-      className="group relative min-h-[610px] overflow-hidden rounded-2xl border border-white/[0.08] bg-[#070b10] shadow-2xl shadow-black/30 fullscreen:min-h-screen fullscreen:rounded-none"
+      className={`group relative min-h-[790px] overflow-hidden rounded-2xl border border-white/[0.08] bg-[#070b10] shadow-2xl shadow-black/30 md:min-h-[690px] xl:min-h-[610px] fullscreen:min-h-screen fullscreen:rounded-none ${
+        fullscreen ? "fixed inset-0 z-[100] min-h-screen rounded-none" : ""
+      }`}
     >
       <div
         className="absolute inset-0 opacity-50"
@@ -200,6 +229,26 @@ export function LiveRehabWorkspace({
           </button>
           <button
             type="button"
+            disabled={!isLive || !update?.report}
+            onClick={async () => {
+              const sessionId = sessionIdRef.current;
+              if (!sessionId) return;
+              try {
+                const saved = await saveLiveRehabSession(sessionId);
+                setSavedSessionId(saved.sessionId);
+              } catch (cause) {
+                setTransportError(
+                  cause instanceof Error ? cause.message : "Не удалось сохранить сессию",
+                );
+              }
+            }}
+            className="flex h-9 items-center gap-2 rounded-lg border border-white/10 bg-black/45 px-3 text-xs font-medium text-slate-200 backdrop-blur-xl transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Save className="h-3.5 w-3.5 text-cyan-300" />
+            {savedSessionId ? `Сохранено #${savedSessionId}` : "Сохранить"}
+          </button>
+          <button
+            type="button"
             onClick={() => {
               calibrateNextRef.current = true;
               capture();
@@ -215,7 +264,7 @@ export function LiveRehabWorkspace({
         <div className="flex gap-2">
           <button
             type="button"
-            aria-label="Полный экран"
+            aria-label={fullscreen ? "Выйти из полного экрана" : "Полный экран"}
             onClick={() => void toggleFullscreen()}
             className="flex h-9 items-center gap-2 rounded-lg border border-white/10 bg-black/45 px-3 text-xs font-medium text-slate-200 backdrop-blur-xl transition hover:bg-white/10"
           >

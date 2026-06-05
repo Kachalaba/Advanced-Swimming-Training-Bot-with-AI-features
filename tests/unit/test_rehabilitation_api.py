@@ -97,3 +97,24 @@ def test_live_frame_rejects_bad_image_and_unknown_session(monkeypatch):
 
     assert bad_image.status_code == 400
     assert missing.status_code == 404
+
+
+def test_live_report_can_be_saved_to_history(monkeypatch):
+    client = _client(monkeypatch)
+    saved = {}
+
+    def fake_save(**kwargs):
+        saved.update(kwargs)
+        return 42
+
+    monkeypatch.setattr(rehabilitation, "save_analysis_to_db", fake_save)
+
+    response = client.post(
+        "/api/analysis/rehabilitation/live/session-123/save",
+        json={"athlete_name": "Nikita K."},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"session_id": 42}
+    assert saved["session_type"] == "rehab"
+    assert saved["analysis"]["rehab_analysis"]["protocol"] == "shoulder_flexion"

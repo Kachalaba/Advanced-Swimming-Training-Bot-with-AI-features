@@ -19,6 +19,7 @@ from video_analysis.rehab_analyzer import RehabAnalyzer
 
 MAX_LIVE_WINDOW_FRAMES = 180
 DEFAULT_ANALYSIS_INTERVAL = 3
+_POSE_PROCESSING_LOCK = threading.Lock()
 
 
 def _normalize_keypoints(
@@ -36,6 +37,27 @@ def _normalize_keypoints(
         for name, point in keypoints.items()
         if "x" in point and "y" in point
     }
+
+
+def _keypoint_bbox(
+    keypoints: Dict[str, Dict[str, float]],
+    width: int,
+    height: int,
+) -> Optional[tuple]:
+    if not keypoints:
+        return None
+    xs = [float(point["x"]) for point in keypoints.values() if "x" in point and "y" in point]
+    ys = [float(point["y"]) for point in keypoints.values() if "x" in point and "y" in point]
+    if not xs or not ys:
+        return None
+    pad_x = width * 0.08
+    pad_y = height * 0.08
+    return (
+        max(0, int(min(xs) - pad_x)),
+        max(0, int(min(ys) - pad_y)),
+        min(width, int(max(xs) + pad_x)),
+        min(height, int(max(ys) + pad_y)),
+    )
 
 
 class LiveRehabSession:
@@ -72,7 +94,8 @@ class LiveRehabSession:
         """Analyze one frame and return the latest live UI payload."""
         with self._lock:
             self.frame_count += 1
-            _, pose_data = self.pose_processor.process_frame(frame, self.frame_count)
+            with _POSE_PROCESSING_LOCK:
+                _, pose_data = self.pose_processor.process_frame(frame, self.frame_count)
             height, width = frame.shape[:2]
             raw_keypoints = pose_data.get("keypoints", {}) if pose_data.get("has_pose") else {}
             normalized = _normalize_keypoints(raw_keypoints, width, height)
@@ -87,10 +110,11 @@ class LiveRehabSession:
                 )
 
             posture = calculate_posture(normalized)
+            athlete_bbox = _keypoint_bbox(raw_keypoints, width, height)
             level = (
-                self.camera_level.calibrate(frame)
+                self.camera_level.calibrate(frame, athlete_bbox=athlete_bbox)
                 if calibrate
-                else self.camera_level.measure(frame)
+                else self.camera_level.measure(frame, athlete_bbox=athlete_bbox)
             )
             self.latest_update = {
                 "session_id": self.id,
@@ -189,7 +213,8 @@ def analyze_rehabilitation_video(
             continue
         if frame_size is None:
             frame_size = (frame.shape[1], frame.shape[0])
-        annotated, pose_data = visualizer.process_frame(frame, index)
+        with _POSE_PROCESSING_LOCK:
+            annotated, pose_data = visualizer.process_frame(frame, index)
         annotated_frames.append(annotated)
         keypoint_frames.append(pose_data.get("keypoints", {}) if pose_data.get("has_pose") else {})
         if index % 10 == 0:

@@ -16,6 +16,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
+from video_analysis.athlete_database import save_analysis_to_db
 from video_analysis.constants import REHAB_PROTOCOLS
 
 from ..services.jobs import Job, registry as job_registry
@@ -38,6 +39,10 @@ MAX_LIVE_FRAME_BYTES = 2 * 1024 * 1024
 class LiveSessionRequest(BaseModel):
     protocol: str = "shoulder_flexion"
     fps: float = Field(default=5.0, ge=1.0, le=15.0)
+
+
+class SaveLiveSessionRequest(BaseModel):
+    athlete_name: str = Field(default="Athlete", min_length=1, max_length=120)
 
 
 def _validate_protocol(protocol: str) -> None:
@@ -76,7 +81,11 @@ async def analyze_live_frame(
     if frame is None:
         raise HTTPException(status_code=400, detail="Could not decode live frame")
     try:
-        return session.process_frame(frame, calibrate=calibrate)
+        return await asyncio.to_thread(
+            session.process_frame,
+            frame,
+            calibrate,
+        )
     except (ValueError, TypeError, AttributeError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -87,6 +96,27 @@ async def get_live_session(session_id: str) -> dict:
     if session is None:
         raise HTTPException(status_code=404, detail="Live session not found")
     return session.snapshot()
+
+
+@router.post("/rehabilitation/live/{session_id}/save")
+async def save_live_session(
+    session_id: str,
+    request: SaveLiveSessionRequest,
+) -> dict[str, int]:
+    session = live_registry.get(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Live session not found")
+    report = session.snapshot().get("report")
+    if not report:
+        raise HTTPException(status_code=409, detail="Live report is not ready")
+    saved_session_id = await asyncio.to_thread(
+        save_analysis_to_db,
+        athlete_name=request.athlete_name,
+        session_type="rehab",
+        analysis={"rehab_analysis": report},
+        video_path="",
+    )
+    return {"session_id": saved_session_id}
 
 
 @router.delete("/rehabilitation/live/{session_id}")

@@ -208,17 +208,7 @@ export function PostureOverlay({
             Корпус {signed(posture.trunk_lean_deg)}
           </text>
         </g>
-      ) : (
-        <text
-          x="500"
-          y="520"
-          textAnchor="middle"
-          fill="#94a3b8"
-          className="text-[24px] font-medium"
-        >
-          Встаньте в полный рост в центре кадра
-        </text>
-      )}
+      ) : null}
     </svg>
   );
 }

@@ -120,6 +120,22 @@ export async function deleteLiveRehabSession(sessionId: string): Promise<void> {
   });
 }
 
+export async function saveLiveRehabSession(
+  sessionId: string,
+  athleteName = "Nikita K.",
+): Promise<{ sessionId: number }> {
+  const response = await fetch(
+    `${BACKEND_URL}/api/analysis/rehabilitation/live/${sessionId}/save`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ athlete_name: athleteName }),
+    },
+  );
+  const data = await readJson<{ session_id: number }>(response);
+  return { sessionId: data.session_id };
+}
+
 export async function uploadRehabVideo(
   file: File,
   protocol: RehabProtocol,

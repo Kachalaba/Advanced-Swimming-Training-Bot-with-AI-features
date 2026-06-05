@@ -25,6 +25,10 @@ describe("LiveRehabWorkspace", () => {
     getUserMedia.mockResolvedValue({
       getTracks: () => [{ stop: vi.fn() }],
     });
+    Object.defineProperty(HTMLElement.prototype, "requestFullscreen", {
+      configurable: true,
+      value: undefined,
+    });
     Object.defineProperty(navigator, "mediaDevices", {
       configurable: true,
       value: { getUserMedia },
@@ -58,5 +62,23 @@ describe("LiveRehabWorkspace", () => {
     await user.click(screen.getByRole("button", { name: "Полный экран" }));
 
     expect(requestFullscreen).toHaveBeenCalledTimes(1);
+  });
+
+  it("falls back to an app-level fullscreen surface and exits with Escape", async () => {
+    const user = userEvent.setup();
+    const { container } = render(
+      <LiveRehabWorkspace protocol="shoulder_flexion" />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Полный экран" }));
+
+    expect(container.firstElementChild).toHaveClass("fixed", "inset-0");
+    expect(
+      screen.getByRole("button", { name: "Выйти из полного экрана" }),
+    ).toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+
+    expect(container.firstElementChild).not.toHaveClass("fixed");
   });
 });

@@ -41,10 +41,15 @@ class _FakeAnalyzer:
 
 
 class _FakeLevel:
+    def __init__(self):
+        self.last_bbox = None
+
     def calibrate(self, frame, athlete_bbox=None):
+        self.last_bbox = athlete_bbox
         return {"angle_deg": 0.0, "confidence": 1.0, "status": "level", "relative": True}
 
     def measure(self, frame, athlete_bbox=None):
+        self.last_bbox = athlete_bbox
         return {"angle_deg": 0.4, "confidence": 0.9, "status": "level", "relative": True}
 
 
@@ -93,3 +98,24 @@ def test_registry_creates_and_deletes_sessions():
     assert registry.get(session.id) is session
     assert registry.delete(session.id) is True
     assert registry.get(session.id) is None
+
+
+def test_live_session_excludes_detected_body_from_camera_level():
+    level = _FakeLevel()
+    session = LiveRehabSession(
+        protocol="shoulder_flexion",
+        fps=5.0,
+        pose_processor=_FakePoseProcessor(),
+        analyzer=_FakeAnalyzer(),
+        camera_level=level,
+        analysis_interval=1,
+    )
+
+    session.process_frame(np.zeros((100, 100, 3), dtype=np.uint8), calibrate=True)
+
+    assert level.last_bbox is not None
+    x1, y1, x2, y2 = level.last_bbox
+    assert x1 < 25
+    assert y1 < 30
+    assert x2 > 75
+    assert y2 > 95
