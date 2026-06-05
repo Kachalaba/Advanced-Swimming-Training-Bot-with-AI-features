@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+import time
 import uuid
 from collections import deque
 from pathlib import Path
@@ -19,6 +20,11 @@ from video_analysis.rehab_analyzer import RehabAnalyzer
 
 MAX_LIVE_WINDOW_FRAMES = 180
 DEFAULT_ANALYSIS_INTERVAL = 3
+# A browser tab can close without calling DELETE, so abandoned sessions must
+# expire on their own — otherwise each one leaks a pose model + analyzer +
+# rolling frame buffer for the lifetime of the process.
+LIVE_SESSION_TTL_SECONDS = 600.0
+MAX_LIVE_SESSIONS = 32
 _POSE_PROCESSING_LOCK = threading.Lock()
 
 
@@ -83,6 +89,7 @@ class LiveRehabSession:
         self.analysis_interval = max(1, analysis_interval)
         self.frame_count = 0
         self.latest_update: Optional[Dict[str, Any]] = None
+        self.last_active = time.monotonic()
         self._report: Optional[Dict[str, Any]] = None
         self._lock = threading.Lock()
 
@@ -94,6 +101,7 @@ class LiveRehabSession:
         """Analyze one frame and return the latest live UI payload."""
         with self._lock:
             self.frame_count += 1
+            self.last_active = time.monotonic()
             with _POSE_PROCESSING_LOCK:
                 _, pose_data = self.pose_processor.process_frame(frame, self.frame_count)
             height, width = frame.shape[:2]
@@ -127,6 +135,7 @@ class LiveRehabSession:
 
     def snapshot(self) -> Dict[str, Any]:
         with self._lock:
+            self.last_active = time.monotonic()
             if self.latest_update is not None:
                 return dict(self.latest_update)
             return {
@@ -151,14 +160,32 @@ class LiveRehabRegistry:
     def __init__(
         self,
         session_factory: Optional[Callable[[str, float], LiveRehabSession]] = None,
+        ttl_seconds: float = LIVE_SESSION_TTL_SECONDS,
+        max_sessions: int = MAX_LIVE_SESSIONS,
     ) -> None:
         self._session_factory = session_factory or (lambda protocol, fps: LiveRehabSession(protocol=protocol, fps=fps))
         self._sessions: Dict[str, LiveRehabSession] = {}
+        self._ttl = ttl_seconds
+        self._max = max(1, max_sessions)
         self._lock = threading.Lock()
+
+    def _purge_locked(self) -> int:
+        """Drop idle sessions. Caller must hold ``self._lock``."""
+        now = time.monotonic()
+        stale = [sid for sid, session in self._sessions.items() if now - session.last_active > self._ttl]
+        for sid in stale:
+            self._sessions.pop(sid, None)
+        return len(stale)
 
     def create(self, protocol: str, fps: float) -> LiveRehabSession:
         session = self._session_factory(protocol, fps)
         with self._lock:
+            self._purge_locked()
+            # Even after purging, bound memory by evicting the least-recently
+            # active session if we are still at capacity.
+            while len(self._sessions) >= self._max:
+                oldest = min(self._sessions.values(), key=lambda item: item.last_active)
+                self._sessions.pop(oldest.id, None)
             self._sessions[session.id] = session
         return session
 
@@ -169,6 +196,15 @@ class LiveRehabRegistry:
     def delete(self, session_id: str) -> bool:
         with self._lock:
             return self._sessions.pop(session_id, None) is not None
+
+    def purge_expired(self) -> int:
+        """Public hook for a scheduler/health check to reap idle sessions."""
+        with self._lock:
+            return self._purge_locked()
+
+    def active_count(self) -> int:
+        with self._lock:
+            return len(self._sessions)
 
 
 def analyze_rehabilitation_video(
@@ -233,7 +269,23 @@ def analyze_rehabilitation_video(
                 break
             candidate.release()
         if writer is not None:
+            target = report.get("target_metrics", {})
+            left_rom = float(target.get("left", {}).get("rom", 0.0))
+            right_rom = float(target.get("right", {}).get("rom", 0.0))
+            asymmetry = float(report.get("symmetry", {}).get("asymmetry_index", 0.0))
+            overlay = f"ROM  L {left_rom:.0f} / R {right_rom:.0f} deg   Asymmetry {asymmetry:.0f}%"
+            overlay_y = max(20, frame_size[1] - 16)
             for annotated in annotated_frames:
+                cv2.putText(
+                    annotated,
+                    overlay,
+                    (12, overlay_y),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.6,
+                    (0, 255, 180),
+                    2,
+                    cv2.LINE_AA,
+                )
                 writer.write(annotated)
             writer.release()
     progress(100, "Done")

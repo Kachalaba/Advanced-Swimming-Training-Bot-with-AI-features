@@ -122,7 +122,7 @@ export async function deleteLiveRehabSession(sessionId: string): Promise<void> {
 
 export async function saveLiveRehabSession(
   sessionId: string,
-  athleteName = "Nikita K.",
+  athleteName = "Athlete",
 ): Promise<{ sessionId: number }> {
   const response = await fetch(
     `${BACKEND_URL}/api/analysis/rehabilitation/live/${sessionId}/save`,
@@ -161,7 +161,12 @@ export function subscribeRehabAnalysis(
     `${BACKEND_URL}/api/analysis/rehabilitation/${jobId}/events`,
   );
   source.onmessage = (message) => {
-    const event = JSON.parse(message.data) as RehabAnalysisEvent;
+    let event: RehabAnalysisEvent;
+    try {
+      event = JSON.parse(message.data) as RehabAnalysisEvent;
+    } catch {
+      return; // ignore malformed / partial SSE payloads instead of throwing
+    }
     onEvent(event);
     if (event.type === "result" || event.type === "error") source.close();
   };

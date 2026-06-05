@@ -23,15 +23,21 @@ def _midpoint(first: Point, second: Point) -> Dict[str, float]:
 
 
 def _axis_angle(left: Point, right: Point) -> float:
-    return round(
-        math.degrees(
-            math.atan2(
-                float(right["y"]) - float(left["y"]),
-                float(right["x"]) - float(left["x"]),
-            )
-        ),
-        1,
+    angle = math.degrees(
+        math.atan2(
+            float(right["y"]) - float(left["y"]),
+            float(right["x"]) - float(left["x"]),
+        )
     )
+    # Fold into [-90, 90] so the tilt reading is independent of which image half
+    # each landmark lands on. MediaPipe "left_*" is the subject's left, which
+    # sits on the right of a non-mirrored frame (left.x > right.x); without this
+    # a perfectly level line would read ~180 deg and always trip the warning.
+    if angle > 90.0:
+        angle -= 180.0
+    elif angle < -90.0:
+        angle += 180.0
+    return round(angle, 1)
 
 
 def _severity(value: float, good_limit: float, warning_limit: float) -> str:

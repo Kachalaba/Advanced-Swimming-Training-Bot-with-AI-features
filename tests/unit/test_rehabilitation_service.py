@@ -1,5 +1,7 @@
 """Tests for stateful web rehabilitation sessions."""
 
+import time
+
 import numpy as np
 
 from backend.app.services.rehabilitation import LiveRehabRegistry, LiveRehabSession
@@ -98,6 +100,36 @@ def test_registry_creates_and_deletes_sessions():
     assert registry.get(session.id) is session
     assert registry.delete(session.id) is True
     assert registry.get(session.id) is None
+
+
+def test_registry_purges_idle_sessions():
+    registry = LiveRehabRegistry(
+        session_factory=lambda protocol, fps: _session(),
+        ttl_seconds=10.0,
+    )
+
+    session = registry.create("shoulder_flexion", 5.0)
+    session.last_active = time.monotonic() - 999.0
+
+    assert registry.purge_expired() == 1
+    assert registry.get(session.id) is None
+
+
+def test_registry_evicts_oldest_when_at_capacity():
+    registry = LiveRehabRegistry(
+        session_factory=lambda protocol, fps: _session(),
+        max_sessions=2,
+    )
+
+    first = registry.create("shoulder_flexion", 5.0)
+    first.last_active = time.monotonic() - 100.0  # mark as least-recently active
+    second = registry.create("shoulder_flexion", 5.0)
+    third = registry.create("shoulder_flexion", 5.0)
+
+    assert registry.active_count() == 2
+    assert registry.get(first.id) is None
+    assert registry.get(second.id) is second
+    assert registry.get(third.id) is third
 
 
 def test_live_session_excludes_detected_body_from_camera_level():
