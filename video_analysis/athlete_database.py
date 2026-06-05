@@ -42,7 +42,7 @@ class TrainingSession:
 
     id: Optional[int] = None
     athlete_id: int = 0
-    session_type: str = "swimming"  # swimming, dryland
+    session_type: str = "swimming"  # swimming, running, cycling, dryland, rehab
     date: str = ""
     duration_sec: float = 0
     distance_m: float = 0
@@ -595,6 +595,13 @@ def save_analysis_to_db(
             session.avg_tempo = getattr(exercise_stats, "avg_tempo", 0)
             session.stability_score = getattr(exercise_stats, "stability_score", 0)
         session.exercise_type = analysis.get("main_movement", "")
+
+    elif session_type == "rehab":
+        rehab = analysis.get("rehab_analysis", analysis)
+        session.exercise_type = rehab.get("protocol", "")
+        session.reps = rehab.get("total_correct_reps", 0)
+        session.symmetry_score = rehab.get("symmetry", {}).get("score", 0)
+        session.stability_score = rehab.get("completion_score", 0)
 
     if ai_advice:
         session.ai_score = getattr(ai_advice, "score", 0)

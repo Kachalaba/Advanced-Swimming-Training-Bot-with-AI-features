@@ -169,6 +169,40 @@ class TestTrainingSessions:
         assert stats["total_distance_m"] == pytest.approx(1100.0, abs=0.1)
 
 
+class TestSaveAnalysis:
+
+    def test_rehab_analysis_populates_existing_session_fields(self, tmp_path):
+        import json
+
+        import video_analysis.athlete_database as athlete_database
+
+        original_instance = athlete_database._db_instance
+        athlete_database._db_instance = AthleteDatabase(str(tmp_path / "rehab.db"))
+        try:
+            report = {
+                "protocol": "shoulder_flexion",
+                "total_correct_reps": 3,
+                "completion_score": 87.5,
+                "symmetry": {"score": 91.0},
+            }
+            session_id = athlete_database.save_analysis_to_db(
+                athlete_name="Rehab Athlete",
+                session_type="rehab",
+                analysis={"rehab_analysis": report},
+            )
+
+            session = athlete_database._db_instance.get_session(session_id)
+            assert session is not None
+            assert session.session_type == "rehab"
+            assert session.exercise_type == "shoulder_flexion"
+            assert session.reps == 3
+            assert session.symmetry_score == 91.0
+            assert session.stability_score == 87.5
+            assert json.loads(session.full_analysis)["rehab_analysis"]["protocol"] == "shoulder_flexion"
+        finally:
+            athlete_database._db_instance = original_instance
+
+
 class TestContextManagerBehavior:
     """Verify that the DB connection context manager handles errors correctly."""
 

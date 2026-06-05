@@ -28,6 +28,7 @@ Pillow==10.2.0
 
 # === WEB UI ===
 streamlit==1.31.1
+streamlit-webrtc==0.63.11
 
 # === REPORT GENERATION ===
 reportlab==4.1.0

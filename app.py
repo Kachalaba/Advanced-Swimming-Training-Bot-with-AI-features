@@ -360,6 +360,7 @@ from pages.ai_assistant import render_ai_tab  # noqa: E402
 from pages.cycling import render_cycling_tab  # noqa: E402
 from pages.dryland import render_dryland_tab  # noqa: E402
 from pages.history import render_history_tab  # noqa: E402
+from pages.rehabilitation import render_rehabilitation_tab  # noqa: E402
 from pages.running import render_running_tab  # noqa: E402
 
 # ============================================================================
@@ -380,6 +381,7 @@ def main():
         tab_running,
         tab_cycling,
         tab_dryland,
+        tab_rehab,
         tab_history,
         tab_ai,
         tab_tools,
@@ -389,6 +391,7 @@ def main():
             t("tab_running"),
             t("tab_cycling"),
             t("tab_dryland"),
+            t("tab_rehab"),
             t("tab_history"),
             t("tab_ai"),
             t("tab_tools"),
@@ -420,19 +423,25 @@ def main():
         render_dryland_tab()
 
     # ========================================================================
-    # TAB 5: HISTORY
+    # TAB 5: REHABILITATION
+    # ========================================================================
+    with tab_rehab:
+        render_rehabilitation_tab()
+
+    # ========================================================================
+    # TAB 6: HISTORY
     # ========================================================================
     with tab_history:
         render_history_tab()
 
     # ========================================================================
-    # TAB 6: AI ASSISTANT
+    # TAB 7: AI ASSISTANT
     # ========================================================================
     with tab_ai:
         render_ai_tab()
 
     # ========================================================================
-    # TAB 7: VIDEO TOOLS
+    # TAB 8: VIDEO TOOLS
     # ========================================================================
     with tab_tools:
         render_tools_tab()

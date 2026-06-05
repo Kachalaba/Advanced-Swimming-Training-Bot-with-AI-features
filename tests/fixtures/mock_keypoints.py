@@ -101,3 +101,59 @@ def make_cycling_frames(n: int = 90, fps: float = 30.0) -> List[Dict]:
             }
         )
     return frames
+
+
+def make_rehab_shoulder_flexion_frames(
+    cycles: int = 2,
+    frames_per_cycle: int = 30,
+    left_max_angle: float = 160.0,
+    right_max_angle: float = 130.0,
+) -> List[Dict]:
+    """Return bilateral shoulder-flexion cycles with configurable peak angles."""
+
+    def arm_points(
+        shoulder_x: float,
+        shoulder_y: float,
+        angle_deg: float,
+        side_sign: float,
+    ) -> tuple[Dict, Dict]:
+        angle_rad = math.radians(angle_deg)
+        elbow_length = 0.16
+        wrist_length = 0.30
+        elbow = _lm(
+            shoulder_x + side_sign * elbow_length * math.sin(angle_rad),
+            shoulder_y + elbow_length * math.cos(angle_rad),
+        )
+        wrist = _lm(
+            shoulder_x + side_sign * wrist_length * math.sin(angle_rad),
+            shoulder_y + wrist_length * math.cos(angle_rad),
+        )
+        return elbow, wrist
+
+    frames = []
+    for _ in range(cycles):
+        for frame_idx in range(frames_per_cycle):
+            phase = frame_idx / (frames_per_cycle - 1)
+            triangular = 1.0 - abs(2.0 * phase - 1.0)
+            left_angle = 20.0 + (left_max_angle - 20.0) * triangular
+            right_angle = 20.0 + (right_max_angle - 20.0) * triangular
+
+            left_elbow, left_wrist = arm_points(0.40, 0.30, left_angle, -1.0)
+            right_elbow, right_wrist = arm_points(0.60, 0.30, right_angle, 1.0)
+            frames.append(
+                {
+                    "left_shoulder": _lm(0.40, 0.30),
+                    "right_shoulder": _lm(0.60, 0.30),
+                    "left_elbow": left_elbow,
+                    "right_elbow": right_elbow,
+                    "left_wrist": left_wrist,
+                    "right_wrist": right_wrist,
+                    "left_hip": _lm(0.43, 0.62),
+                    "right_hip": _lm(0.57, 0.62),
+                    "left_knee": _lm(0.43, 0.78),
+                    "right_knee": _lm(0.57, 0.78),
+                    "left_ankle": _lm(0.43, 0.94),
+                    "right_ankle": _lm(0.57, 0.94),
+                }
+            )
+    return frames

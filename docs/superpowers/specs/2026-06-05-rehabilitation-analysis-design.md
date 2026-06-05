@@ -64,6 +64,10 @@ This follows the state-machine concept from the MIT-licensed
 
 ## UI And Data Flow
 
+The athlete can choose an uploaded video or a live browser webcam stream.
+
+For uploaded video:
+
 1. The athlete selects a rehabilitation protocol and FPS.
 2. The page extracts frames and runs the existing person/pose pipeline.
 3. Named keypoints are passed to the cached `get_rehab_analyzer()` instance.
@@ -71,6 +75,11 @@ This follows the state-machine concept from the MIT-licensed
    repetition ROM charts, deterministic feedback, and optional AI coaching.
 5. The annotated video and report are displayed.
 6. `save_analysis_to_db()` stores the session as `session_type="rehab"`.
+
+For live webcam analysis, `streamlit-webrtc` sends browser frames to a stateful
+processor. It keeps a bounded rolling window, updates the rehabilitation report
+at a fixed frame interval, and overlays current ROM, repetitions, and asymmetry
+on the returned stream. The athlete can inspect or save the current live report.
 
 All visible page text uses `t()` with Ukrainian and English entries.
 
@@ -101,4 +110,3 @@ NumPy/pytest. They cover bilateral ROM, asymmetry, repetition counting, deficit
 calculation, empty input, invalid protocols, and raw dictionary keypoint
 extraction. Database tests verify that rehab aggregates are stored without a
 schema change.
-

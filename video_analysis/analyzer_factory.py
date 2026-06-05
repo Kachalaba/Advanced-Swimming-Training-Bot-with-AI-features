@@ -65,6 +65,15 @@ def get_exercise_analyzer(fps: float = 30.0):
 
 
 @st.cache_resource
+def get_rehab_analyzer(fps: float = 30.0):
+    """Return a cached RehabAnalyzer instance."""
+    from video_analysis.rehab_analyzer import RehabAnalyzer
+
+    logger.info("Creating RehabAnalyzer (fps=%.1f)", fps)
+    return RehabAnalyzer(fps=fps)
+
+
+@st.cache_resource
 def get_biomechanics_analyzer():
     """Return a cached BiomechanicsAnalyzer instance."""
     from video_analysis.biomechanics_analyzer import BiomechanicsAnalyzer

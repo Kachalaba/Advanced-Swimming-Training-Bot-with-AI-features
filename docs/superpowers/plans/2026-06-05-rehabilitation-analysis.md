@@ -88,3 +88,20 @@ legacy database stores searchable aggregates plus the full JSON report.
 - [ ] Commit implementation with a focused message.
 - [ ] Push `claude/compassionate-rubin-gyhNU` to `origin`.
 
+### Task 6: Add Live Webcam Analysis
+
+**Files:**
+- Create: `video_analysis/live_rehab.py`
+- Create: `tests/unit/test_live_rehab.py`
+- Modify: `pages/rehabilitation.py`
+- Modify: `i18n/translations.py`
+- Modify: `requirements.txt`
+- Modify: `video_analysis/requirements.txt`
+
+- [ ] Add a failing test for bounded frame collection and periodic rolling
+  analysis without MediaPipe.
+- [ ] Add a stateful `streamlit-webrtc` video processor that overlays current
+  ROM, repetitions, and asymmetry.
+- [ ] Add upload/live source selection, localized WebRTC controls, current
+  report display, and live-session persistence.
+- [ ] Re-run unit tests and the complete lint gate.
