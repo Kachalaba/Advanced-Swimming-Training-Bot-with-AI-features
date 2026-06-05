@@ -29,16 +29,24 @@
 Преміальний темний інтерфейс (Next.js 16 / React 19), що відкривається на
 **http://localhost:3000** після `docker compose up`:
 
-| Жива камера реабілітації | Розбір завантаженого відео |
-|:---:|:---:|
-| Постуральна карта + ROM у реальному часі | Скелет, графіки амплітуди, симетрія |
-
-<!-- 📷 Додай реальні скриншоти у docs/screenshots/ і розкоментуй:
-<p align="center">
-  <img src="docs/screenshots/rehab-live.png" width="49%" />
-  <img src="docs/screenshots/running-result.png" width="49%" />
-</p>
--->
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/screenshots/rehab-live.png" width="100%" /><br/>
+      <b>🩺 Жива реабілітація</b> — постуральна карта, ROM L/R, симетрія та відносне калібрування кута камери у реальному часі.
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/screenshots/ai-assistant.png" width="100%" /><br/>
+      <b>🤖 AI-тренер</b> — чат на базі Claude з контекстом усіх сесій атлета; дані анонімізуються перед відправкою.
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2" valign="top">
+      <img src="docs/screenshots/dryland.png" width="100%" /><br/>
+      <b>🤸 Суходіл</b> — обсяг, темп, амплітуда, оцінка техніки та AI-інсайти з виявленням патернів.
+    </td>
+  </tr>
+</table>
 
 ---
 
