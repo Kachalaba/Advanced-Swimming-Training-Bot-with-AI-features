@@ -9,6 +9,7 @@ ignore = ["E501"]
 [tool.ruff.lint.per-file-ignores]
 "backend/app/services/running.py" = ["E402"]
 "tests/unit/test_cycling_analyzer.py" = ["E402"]
+"tests/unit/test_rehabilitation_api.py" = ["E402"]
 "tests/unit/test_running_analyzer.py" = ["E402"]
 
 [tool.isort]

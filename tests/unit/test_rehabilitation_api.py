@@ -1,5 +1,12 @@
 """API contract tests for web rehabilitation analysis."""
 
+import pytest
+
+# FastAPI ships in backend/requirements.txt, not the lean root requirements that
+# the tests.yml job installs. Skip cleanly when it is absent instead of aborting
+# the whole unit-test collection (matches the cv2/av importorskip convention).
+pytest.importorskip("fastapi")
+
 import cv2
 import numpy as np
 from fastapi import FastAPI
