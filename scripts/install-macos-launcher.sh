@@ -72,5 +72,5 @@ fi
 
 touch "$APP"  # nudge Finder to pick up the new bundle/icon
 echo "✅  Done! Desktop shortcut: \"$APP_NAME\""
-echo "   Double-click it — Sprint AI opens in your browser at http://localhost:8501"
+echo "   Double-click it — Sprint AI opens in your browser at http://localhost:3000"
 echo "   (First launch may show a Gatekeeper prompt: right-click → Open once.)"

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Sprint AI — local launcher for the Streamlit app.
+# Sprint AI — local launcher for the Next.js + FastAPI app (docker compose).
 # Used by the desktop "Sprint AI.app", or run directly from a terminal:
 #     bash scripts/sprint-ai-run.sh
 set -euo pipefail
@@ -7,10 +7,11 @@ set -euo pipefail
 # --- locate the project root -------------------------------------------------
 # The desktop .app bakes the path into SPRINT_AI_HOME; otherwise derive it from
 # this script's location so the launcher works wherever the repo is cloned.
-if [ -n "${SPRINT_AI_HOME:-}" ] && [ -f "${SPRINT_AI_HOME}/app.py" ]; then
+if [ -n "${SPRINT_AI_HOME:-}" ] && [ -f "${SPRINT_AI_HOME}/docker-compose.yml" ]; then
   ROOT="${SPRINT_AI_HOME}"
 else
-  ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 fi
 cd "$ROOT"
 
@@ -18,54 +19,60 @@ echo "🏊  Sprint AI"
 echo "📂  $ROOT"
 echo ""
 
-# --- pick a Python / virtualenv ---------------------------------------------
-if [ -f ".venv/bin/activate" ]; then
-  # shellcheck disable=SC1091
-  source ".venv/bin/activate"
-elif [ -f "venv/bin/activate" ]; then
-  # shellcheck disable=SC1091
-  source "venv/bin/activate"
-fi
-PY="$(command -v python3 || command -v python || true)"
-if [ -z "$PY" ]; then
-  echo "❌  Python 3 not found. Install Python 3.10+ and try again."
+# --- check Docker is available -----------------------------------------------
+if ! command -v docker >/dev/null 2>&1; then
+  echo "❌  Docker not found. Install Docker Desktop and try again."
   read -r -p "Press Enter to close…" _ || true
   exit 1
 fi
 
-# --- make sure Streamlit is available ---------------------------------------
-if ! "$PY" -c "import streamlit" >/dev/null 2>&1; then
-  echo "📦  Streamlit is not installed — installing…"
-  if ! "$PY" -m pip install --quiet streamlit; then
-    echo "❌  Could not install Streamlit. See SETUP.md (a virtualenv is recommended)."
-    read -r -p "Press Enter to close…" _ || true
+if ! docker info >/dev/null 2>&1; then
+  echo "❌  Docker daemon is not running. Start Docker Desktop and try again."
+  read -r -p "Press Enter to close…" _ || true
+  exit 1
+fi
+
+# --- stop containers on exit -------------------------------------------------
+cleanup() {
+  echo ""
+  echo "🛑  Stopping containers…"
+  docker compose down
+}
+trap cleanup EXIT INT TERM
+
+# --- start containers in the background so we can poll the port --------------
+URL="http://localhost:3000"
+echo "🚀  Starting containers (this may take a minute on first launch)…"
+docker compose up &
+COMPOSE_PID=$!
+
+# --- wait for port 3000 to become available (up to 60 s) --------------------
+echo "⏳  Waiting for $URL to become available (up to 60 s)…"
+TIMEOUT=60
+ELAPSED=0
+until curl -sf "$URL" >/dev/null 2>&1; do
+  if [ "$ELAPSED" -ge "$TIMEOUT" ]; then
+    echo "❌  Timed out waiting for $URL after ${TIMEOUT}s."
+    echo "   Check 'docker compose logs' for errors."
     exit 1
   fi
+  sleep 2
+  ELAPSED=$((ELAPSED + 2))
+done
+
+echo "✅  App is ready at $URL"
+echo ""
+
+# --- open the browser --------------------------------------------------------
+if command -v open >/dev/null 2>&1; then
+  open "$URL"           # macOS
+elif command -v xdg-open >/dev/null 2>&1; then
+  xdg-open "$URL"       # Linux
 fi
 
-# Heavy CV deps power the actual analysis (~2 GB). Warn, but don't auto-install.
-if ! "$PY" -c "import mediapipe, cv2" >/dev/null 2>&1; then
-  echo "⚠️   Analysis dependencies (mediapipe / opencv) are not fully installed."
-  echo "     For full functionality run:  $PY -m pip install -r requirements.txt"
-  echo ""
-fi
-
-# --- open the browser shortly after the server boots ------------------------
-URL="http://localhost:8501"
-(
-  sleep 4
-  if command -v open >/dev/null 2>&1; then
-    open "$URL"            # macOS
-  elif command -v xdg-open >/dev/null 2>&1; then
-    xdg-open "$URL"        # Linux
-  fi
-) >/dev/null 2>&1 &
-
-echo "🚀  Starting… it will open in your browser at: $URL"
+echo "🌐  Opened: $URL"
 echo "🛑  To stop: close this window or press Ctrl+C."
 echo ""
 
-exec "$PY" -m streamlit run app.py \
-  --server.port=8501 \
-  --server.headless=true \
-  --browser.gatherUsageStats=false
+# Keep running until docker compose stops or user interrupts
+wait "$COMPOSE_PID"
