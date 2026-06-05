@@ -2,6 +2,7 @@ import {
   Bike,
   Dumbbell,
   Footprints,
+  HeartPulse,
   History,
   Sparkles,
   Waves,
@@ -14,6 +15,7 @@ export type SectionId =
   | "running"
   | "cycling"
   | "dryland"
+  | "rehabilitation"
   | "history"
   | "assistant"
   | "tools";
@@ -30,6 +32,7 @@ export const sections: Section[] = [
   { id: "running", label: "Running", href: "/running", icon: Footprints },
   { id: "cycling", label: "Cycling", href: "/cycling", icon: Bike },
   { id: "dryland", label: "Dryland", href: "/dryland", icon: Dumbbell },
+  { id: "rehabilitation", label: "Rehab", href: "/rehabilitation", icon: HeartPulse },
   { id: "history", label: "History", href: "/history", icon: History },
   { id: "assistant", label: "AI Assistant", href: "/assistant", icon: Sparkles },
   { id: "tools", label: "Tools", href: "/tools", icon: Wrench },
