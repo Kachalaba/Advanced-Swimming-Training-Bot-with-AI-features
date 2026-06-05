@@ -161,6 +161,16 @@ python3 -m streamlit run app.py
 
 Відкрийте: **http://localhost:8501**
 
+#### 🖥️ Ярлик на робочому столі (macOS)
+
+Щоб запускати застосунок подвійним кліком (з іконкою на Робочому столі):
+
+```bash
+bash scripts/install-macos-launcher.sh
+```
+
+Деталі та налаштування — у [`docs/macos-launcher.md`](docs/macos-launcher.md).
+
 ---
 
 ## Архітектура проекту
