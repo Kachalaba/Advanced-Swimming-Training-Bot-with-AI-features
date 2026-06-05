@@ -101,9 +101,7 @@ class LiveRehabSession:
             normalized = _normalize_keypoints(raw_keypoints, width, height)
             if raw_keypoints:
                 self.keypoint_frames.append(raw_keypoints)
-            if self.keypoint_frames and (
-                self._report is None or self.frame_count % self.analysis_interval == 0
-            ):
+            if self.keypoint_frames and (self._report is None or self.frame_count % self.analysis_interval == 0):
                 self._report = self.analyzer.analyze(
                     list(self.keypoint_frames),
                     protocol=self.protocol,
@@ -154,9 +152,7 @@ class LiveRehabRegistry:
         self,
         session_factory: Optional[Callable[[str, float], LiveRehabSession]] = None,
     ) -> None:
-        self._session_factory = session_factory or (
-            lambda protocol, fps: LiveRehabSession(protocol=protocol, fps=fps)
-        )
+        self._session_factory = session_factory or (lambda protocol, fps: LiveRehabSession(protocol=protocol, fps=fps))
         self._sessions: Dict[str, LiveRehabSession] = {}
         self._lock = threading.Lock()
 

@@ -19,16 +19,11 @@ from pydantic import BaseModel, Field
 from video_analysis.athlete_database import save_analysis_to_db
 from video_analysis.constants import REHAB_PROTOCOLS
 
-from ..services.jobs import Job, registry as job_registry
-from ..services.rehabilitation import (
-    analyze_rehabilitation_video,
-    registry as live_registry,
-)
-from .upload_validation import (
-    UploadValidationError,
-    copy_upload_with_limit,
-    validate_video_upload,
-)
+from ..services.jobs import Job
+from ..services.jobs import registry as job_registry
+from ..services.rehabilitation import analyze_rehabilitation_video
+from ..services.rehabilitation import registry as live_registry
+from .upload_validation import UploadValidationError, copy_upload_with_limit, validate_video_upload
 
 logger = logging.getLogger(__name__)
 
