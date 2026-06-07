@@ -107,19 +107,19 @@ export function DashboardView({ athleteName }: { athleteName: string }) {
           <div>
             <div className="flex items-center gap-2 mb-2">
               <StatusBadge variant="info" icon={Activity}>
-                Race block · Week 3 of 8
+                Demo dashboard
               </StatusBadge>
-              <StatusBadge variant="success" icon={TrendingUp}>
-                Form trending up
+              <StatusBadge variant="warn" icon={TrendingUp}>
+                Sample metrics
               </StatusBadge>
             </div>
             <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-50">
               Good morning, {athleteName.split(" ")[0]}.
             </h1>
             <p className="text-sm text-slate-400 mt-1.5 max-w-xl">
-              Three sessions analysed this week. Your running technique score is
-              up <span className="text-cyan-400 font-medium">+8%</span> —
-              strongest gains in mid-stance stability.
+              This overview uses sample planning data. Open Running,
+              Rehabilitation, or History for live analysis and persisted
+              sessions.
             </p>
           </div>
           <div className="flex items-center gap-2">

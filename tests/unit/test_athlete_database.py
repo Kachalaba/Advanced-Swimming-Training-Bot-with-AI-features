@@ -202,6 +202,63 @@ class TestSaveAnalysis:
         finally:
             athlete_database._db_instance = original_instance
 
+    def test_tool_analysis_populates_history_fields(self, tmp_path):
+        import video_analysis.athlete_database as athlete_database
+
+        original_instance = athlete_database._db_instance
+        athlete_database._db_instance = AthleteDatabase(str(tmp_path / "tools.db"))
+        try:
+            session_id = athlete_database.save_analysis_to_db(
+                athlete_name="Tool Athlete",
+                session_type="tool",
+                analysis={
+                    "tool": {
+                        "operation": "trim",
+                        "artifact_name": "trim.mp4",
+                        "metadata": {
+                            "start_sec": 1.0,
+                            "end_sec": 4.0,
+                            "duration_sec": 3.0,
+                        },
+                    }
+                },
+                video_path="/data/session-artifacts/tools/job/trim.mp4",
+            )
+
+            session = athlete_database._db_instance.get_session(session_id)
+            assert session is not None
+            assert session.exercise_type == "trim"
+            assert session.duration_sec == 3.0
+            assert session.ai_summary == "Trim 1.0s-4.0s"
+            assert session.video_path.endswith("trim.mp4")
+        finally:
+            athlete_database._db_instance = original_instance
+
+    def test_frame_tool_analysis_uses_frame_count_as_reps(self, tmp_path):
+        import video_analysis.athlete_database as athlete_database
+
+        original_instance = athlete_database._db_instance
+        athlete_database._db_instance = AthleteDatabase(str(tmp_path / "frames.db"))
+        try:
+            session_id = athlete_database.save_analysis_to_db(
+                athlete_name="Tool Athlete",
+                session_type="tool",
+                analysis={
+                    "tool": {
+                        "operation": "frame_extractor",
+                        "metadata": {"frame_count": 5},
+                    }
+                },
+            )
+
+            session = athlete_database._db_instance.get_session(session_id)
+            assert session is not None
+            assert session.exercise_type == "frame_extractor"
+            assert session.reps == 5
+            assert session.ai_summary == "Extracted 5 frames"
+        finally:
+            athlete_database._db_instance = original_instance
+
 
 class TestContextManagerBehavior:
     """Verify that the DB connection context manager handles errors correctly."""

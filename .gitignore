@@ -57,6 +57,8 @@ test_overlay_demo/
 test_results/
 test_results2/
 test_videos/
+data/session-artifacts/
+data/session-videos/
 
 # Media files
 *.mp4

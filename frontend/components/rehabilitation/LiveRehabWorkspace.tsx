@@ -229,7 +229,7 @@ export function LiveRehabWorkspace({
           </button>
           <button
             type="button"
-            disabled={!isLive || !update?.report}
+            disabled={!isLive || !update?.report || savedSessionId !== null}
             onClick={async () => {
               const sessionId = sessionIdRef.current;
               if (!sessionId) return;

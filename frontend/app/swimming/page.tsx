@@ -12,6 +12,7 @@ export default function SwimmingPage() {
       badges={[
         { icon: Waves, label: "Pool · Open water" },
         { variant: "success", label: "Detection rate 96%" },
+        { variant: "warn", label: "Demo metrics" },
       ]}
       hint="Upload a side-on or overhead video. SPRINT detects stroke phases (catch, pull, recovery), measures symmetry per arm, and flags timing breaks at 1/30s resolution."
       accentRgb="34,211,238"

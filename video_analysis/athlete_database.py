@@ -10,6 +10,7 @@ Features:
 
 import json
 import logging
+import os
 import sqlite3
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
@@ -20,7 +21,12 @@ from typing import Any, Dict, List, Optional
 logger = logging.getLogger(__name__)
 
 # Database path
-DB_PATH = Path(__file__).parent.parent / "data" / "athletes.db"
+DB_PATH = Path(
+    os.environ.get(
+        "ATHLETE_DB_PATH",
+        str(Path(__file__).parent.parent / "data" / "athletes.db"),
+    )
+)
 
 
 @dataclass
@@ -602,6 +608,20 @@ def save_analysis_to_db(
         session.reps = rehab.get("total_correct_reps", 0)
         session.symmetry_score = rehab.get("symmetry", {}).get("score", 0)
         session.stability_score = rehab.get("completion_score", 0)
+
+    elif session_type == "tool":
+        tool = analysis.get("tool", analysis)
+        metadata = tool.get("metadata", {})
+        operation = tool.get("operation", "")
+        session.exercise_type = operation
+        if operation == "trim":
+            start_sec = float(metadata.get("start_sec", 0))
+            end_sec = float(metadata.get("end_sec", 0))
+            session.duration_sec = float(metadata.get("duration_sec", max(0.0, end_sec - start_sec)))
+            session.ai_summary = f"Trim {start_sec:.1f}s-{end_sec:.1f}s"
+        elif operation == "frame_extractor":
+            session.reps = int(metadata.get("frame_count", 0))
+            session.ai_summary = f"Extracted {session.reps} frames"
 
     if ai_advice:
         session.ai_score = getattr(ai_advice, "score", 0)

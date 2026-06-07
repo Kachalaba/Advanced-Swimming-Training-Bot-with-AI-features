@@ -7,6 +7,9 @@ import pytest
 # the whole unit-test collection (matches the cv2/av importorskip convention).
 pytest.importorskip("fastapi")
 
+from pathlib import Path
+from types import SimpleNamespace
+
 import cv2
 import numpy as np
 from fastapi import FastAPI
@@ -125,3 +128,61 @@ def test_live_report_can_be_saved_to_history(monkeypatch):
     assert response.json() == {"session_id": 42}
     assert saved["session_type"] == "rehab"
     assert saved["analysis"]["rehab_analysis"]["protocol"] == "shoulder_flexion"
+
+
+def test_uploaded_report_can_be_saved_once(monkeypatch, tmp_path):
+    client = _client(monkeypatch)
+    saved = {}
+
+    class FakeJob:
+        id = "job-123"
+        kind = "rehabilitation"
+        workspace = Path(tmp_path)
+        status = "done"
+        result = {
+            "type": "result",
+            "report": {"protocol": "shoulder_flexion"},
+        }
+        saved_session_id = None
+
+    class FakeJobRegistry:
+        job = FakeJob()
+
+        def get(self, job_id):
+            return self.job if job_id == self.job.id else None
+
+    def fake_save(**kwargs):
+        saved.update(kwargs)
+        return 84
+
+    monkeypatch.setattr(rehabilitation, "job_registry", FakeJobRegistry())
+    monkeypatch.setattr(rehabilitation, "save_analysis_to_db", fake_save)
+    monkeypatch.setattr(rehabilitation, "_persist_job_video", lambda job: "/data/session-videos/rehab-job-123.mp4")
+
+    first = client.post(
+        "/api/analysis/rehabilitation/job-123/save",
+        json={"athlete_name": "Nikita K."},
+    )
+    second = client.post(
+        "/api/analysis/rehabilitation/job-123/save",
+        json={"athlete_name": "Nikita K."},
+    )
+
+    assert first.json() == {"session_id": 84}
+    assert second.json() == {"session_id": 84}
+    assert saved["analysis"]["rehab_analysis"]["protocol"] == "shoulder_flexion"
+    assert saved["video_path"] == "/data/session-videos/rehab-job-123.mp4"
+
+
+def test_uploaded_video_is_copied_to_persistent_storage(monkeypatch, tmp_path):
+    workspace = tmp_path / "job"
+    workspace.mkdir()
+    (workspace / "annotated.mp4").write_bytes(b"h264-video")
+    target_dir = tmp_path / "persistent-videos"
+    monkeypatch.setenv("SESSION_VIDEO_DIR", str(target_dir))
+
+    job = SimpleNamespace(id="job-456", workspace=Path(workspace))
+    saved_path = rehabilitation._persist_job_video(job)
+
+    assert Path(saved_path).read_bytes() == b"h264-video"
+    assert Path(saved_path).parent == target_dir

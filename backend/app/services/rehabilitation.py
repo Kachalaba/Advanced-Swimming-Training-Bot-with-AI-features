@@ -12,11 +12,13 @@ from typing import Any, Callable, Deque, Dict, Optional
 import cv2
 import numpy as np
 
-from backend.app.services.camera_level import CameraLevelEstimator
-from backend.app.services.posture import calculate_posture
 from video_analysis.biomechanics_visualizer import BiomechanicsVisualizer
 from video_analysis.frame_extractor import extract_frames_from_video
 from video_analysis.rehab_analyzer import RehabAnalyzer
+
+from .camera_level import CameraLevelEstimator
+from .posture import calculate_posture
+from .video_encoding import finalize_browser_video, open_intermediate_writer
 
 MAX_LIVE_WINDOW_FRAMES = 180
 DEFAULT_ANALYSIS_INTERVAL = 3
@@ -256,38 +258,31 @@ def analyze_rehabilitation_video(
     report = analyzer.analyze(keypoint_frames, protocol=protocol)
     annotated_path = output_dir / "annotated.mp4"
     if frame_size and annotated_frames:
-        writer = None
-        for codec in ("avc1", "mp4v"):
-            candidate = cv2.VideoWriter(
-                str(annotated_path),
-                cv2.VideoWriter_fourcc(*codec),
-                fps,
-                frame_size,
+        writer, intermediate_path = open_intermediate_writer(
+            annotated_path,
+            fps=fps,
+            frame_size=frame_size,
+        )
+        target = report.get("target_metrics", {})
+        left_rom = float(target.get("left", {}).get("rom", 0.0))
+        right_rom = float(target.get("right", {}).get("rom", 0.0))
+        asymmetry = float(report.get("symmetry", {}).get("asymmetry_index", 0.0))
+        overlay = f"ROM  L {left_rom:.0f} / R {right_rom:.0f} deg   Asymmetry {asymmetry:.0f}%"
+        overlay_y = max(20, frame_size[1] - 16)
+        for annotated in annotated_frames:
+            cv2.putText(
+                annotated,
+                overlay,
+                (12, overlay_y),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                (0, 255, 180),
+                2,
+                cv2.LINE_AA,
             )
-            if candidate.isOpened():
-                writer = candidate
-                break
-            candidate.release()
-        if writer is not None:
-            target = report.get("target_metrics", {})
-            left_rom = float(target.get("left", {}).get("rom", 0.0))
-            right_rom = float(target.get("right", {}).get("rom", 0.0))
-            asymmetry = float(report.get("symmetry", {}).get("asymmetry_index", 0.0))
-            overlay = f"ROM  L {left_rom:.0f} / R {right_rom:.0f} deg   Asymmetry {asymmetry:.0f}%"
-            overlay_y = max(20, frame_size[1] - 16)
-            for annotated in annotated_frames:
-                cv2.putText(
-                    annotated,
-                    overlay,
-                    (12, overlay_y),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.6,
-                    (0, 255, 180),
-                    2,
-                    cv2.LINE_AA,
-                )
-                writer.write(annotated)
-            writer.release()
+            writer.write(annotated)
+        writer.release()
+        finalize_browser_video(intermediate_path, annotated_path)
     progress(100, "Done")
     return {
         "report": report,

@@ -143,9 +143,9 @@ export default function RunningResultPage() {
                   { label: "Forward lean", value: num(a.forward_lean, 1), unit: "°" },
                   { label: "Arm symmetry", value: pct(a.arm_symmetry) },
                   {
-                    label: "Vertical oscillation",
-                    value: num(a.vertical_oscillation, 1),
-                    unit: "cm",
+                    label: "Vertical movement",
+                    value: num(a.vertical_oscillation_px, 1),
+                    unit: "px",
                   },
                   { label: "Total steps", value: num(a.total_steps) },
                 ].map((m, i) => (

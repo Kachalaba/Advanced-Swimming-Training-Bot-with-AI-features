@@ -53,7 +53,7 @@ def make_running_frames(n: int = 90, fps: float = 30.0) -> List[Dict]:
     frames = []
     for i in range(n):
         t = i / fps
-        freq = 2.8  # ~168 steps/min
+        freq = 1.4  # 84 cycles/min per leg = ~168 total steps/min
         phase = 2 * math.pi * freq * t
         left_ankle_y = 0.90 + 0.05 * math.sin(phase)
         right_ankle_y = 0.90 + 0.05 * math.sin(phase + math.pi)

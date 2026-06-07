@@ -149,6 +149,10 @@ OPTIMAL_CADENCE_RPM_MAX = 100
 # ---------------------------------------------------------------------------
 OPTIMAL_CADENCE_SPM_MIN = 170
 OPTIMAL_CADENCE_SPM_MAX = 190
+RUN_MIN_SAME_SIDE_STEP_INTERVAL_SEC = 0.4
+RUN_MAX_SAME_SIDE_STEP_INTERVAL_SEC = 1.5
+RUN_MIN_ANKLE_EXCURSION_BODY_RATIO = 0.02
+RUN_MIN_ANKLE_EXCURSION_PX = 3.0
 
 # ---------------------------------------------------------------------------
 # Rehabilitation / kinesiotherapy

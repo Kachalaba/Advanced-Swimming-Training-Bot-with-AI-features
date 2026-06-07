@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
+import os
 import shutil
 import threading
 from pathlib import Path
@@ -21,6 +21,7 @@ from video_analysis.constants import REHAB_PROTOCOLS
 
 from ..services.jobs import Job
 from ..services.jobs import registry as job_registry
+from ..services.jobs import stream_job_events
 from ..services.rehabilitation import analyze_rehabilitation_video
 from ..services.rehabilitation import registry as live_registry
 from .upload_validation import UploadValidationError, copy_upload_with_limit, validate_video_upload
@@ -43,6 +44,18 @@ class SaveLiveSessionRequest(BaseModel):
 def _validate_protocol(protocol: str) -> None:
     if protocol not in REHAB_PROTOCOLS:
         raise HTTPException(status_code=400, detail="Unknown rehabilitation protocol")
+
+
+def _persist_job_video(job: Job) -> str:
+    source = job.workspace / "annotated.mp4"
+    if not source.exists():
+        return ""
+    default_dir = Path(os.environ.get("ATHLETE_DB_PATH", "data/athletes.db")).parent / "session-videos"
+    video_dir = Path(os.environ.get("SESSION_VIDEO_DIR", str(default_dir)))
+    video_dir.mkdir(parents=True, exist_ok=True)
+    target = video_dir / f"rehab-{job.id}.mp4"
+    shutil.copy2(source, target)
+    return str(target)
 
 
 @router.post("/rehabilitation/live")
@@ -142,13 +155,13 @@ def _run_upload_job(
         )
         event = {"type": "result", **result}
         job.result = event
-        job.status = "done"
         job.push_event(event)
+        job.status = "done"
     except Exception as exc:
         logger.exception("Rehabilitation job %s failed", job.id)
-        job.status = "error"
         job.error = str(exc)
         job.push_event({"type": "error", "message": str(exc)})
+        job.status = "error"
 
 
 @router.post("/rehabilitation")
@@ -195,7 +208,32 @@ async def get_rehabilitation_job(job_id: str) -> dict[str, Any]:
         "result": job.result,
         "error": job.error,
         "event_count": len(job.events),
+        "saved_session_id": job.saved_session_id,
     }
+
+
+@router.post("/rehabilitation/{job_id}/save")
+async def save_rehabilitation_job(
+    job_id: str,
+    request: SaveLiveSessionRequest,
+) -> dict[str, int]:
+    job = job_registry.get(job_id)
+    if job is None or job.kind != "rehabilitation":
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job.status != "done" or not job.result:
+        raise HTTPException(status_code=409, detail="Rehabilitation report is not ready")
+    if job.saved_session_id is None:
+        report = job.result.get("report")
+        if not report:
+            raise HTTPException(status_code=409, detail="Rehabilitation report is not ready")
+        job.saved_session_id = await asyncio.to_thread(
+            save_analysis_to_db,
+            athlete_name=request.athlete_name,
+            session_type="rehab",
+            analysis={"rehab_analysis": report},
+            video_path=_persist_job_video(job),
+        )
+    return {"session_id": job.saved_session_id}
 
 
 @router.get("/rehabilitation/{job_id}/events")
@@ -204,25 +242,8 @@ async def stream_rehabilitation_events(job_id: str):
     if job is None or job.kind != "rehabilitation":
         raise HTTPException(status_code=404, detail="Job not found")
 
-    async def event_generator():
-        for event in list(job.events):
-            yield f"data: {json.dumps(event)}\n\n"
-            if event["type"] in ("result", "error"):
-                return
-        while True:
-            try:
-                event = await asyncio.wait_for(job.queue.get(), timeout=30.0)
-            except asyncio.TimeoutError:
-                yield ": heartbeat\n\n"
-                if job.status in ("done", "error"):
-                    return
-                continue
-            yield f"data: {json.dumps(event)}\n\n"
-            if event["type"] in ("result", "error"):
-                return
-
     return StreamingResponse(
-        event_generator(),
+        stream_job_events(job),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

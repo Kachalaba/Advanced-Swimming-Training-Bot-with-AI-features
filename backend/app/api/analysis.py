@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
-import json
 import logging
 import shutil
 import threading
@@ -14,7 +12,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 
 from app.api.upload_validation import UploadValidationError, copy_upload_with_limit, validate_video_upload
 from app.services import running as running_pipeline
-from app.services.jobs import Job, registry
+from app.services.jobs import Job, registry, stream_job_events
 
 logger = logging.getLogger(__name__)
 
@@ -42,9 +40,9 @@ def _run_pipeline_in_thread(job: Job, video_path: Path, fps: float) -> None:
             job.status = "done"
     except Exception as exc:
         logger.exception("Job %s failed", job.id)
-        job.status = "error"
         job.error = str(exc)
         job.push_event({"type": "error", "message": str(exc)})
+        job.status = "error"
 
 
 @router.post("/running")
@@ -103,29 +101,8 @@ async def stream_events(job_id: str):
     if job is None:
         raise HTTPException(404, "Job not found")
 
-    async def event_generator():
-        # Replay any events that arrived before this client connected
-        for ev in list(job.events):
-            yield f"data: {json.dumps(ev)}\n\n"
-            if ev["type"] in ("result", "error"):
-                return
-
-        # Then stream new ones until the job is finished
-        while True:
-            try:
-                ev = await asyncio.wait_for(job.queue.get(), timeout=30.0)
-            except asyncio.TimeoutError:
-                # Heartbeat so proxies don't close the connection
-                yield ": heartbeat\n\n"
-                if job.status in ("done", "error"):
-                    return
-                continue
-            yield f"data: {json.dumps(ev)}\n\n"
-            if ev["type"] in ("result", "error"):
-                return
-
     return StreamingResponse(
-        event_generator(),
+        stream_job_events(job),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

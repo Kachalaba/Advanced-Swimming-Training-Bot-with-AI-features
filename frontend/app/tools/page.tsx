@@ -1,26 +1,23 @@
 import {
-  ArrowUpRight,
   Crop,
   Download,
-  FileVideo,
   Layers,
   ScanLine,
   Scissors,
   Sparkles,
-  Upload,
   Wrench,
   type LucideIcon,
 } from "lucide-react";
 
 import { ChartContainer } from "@/components/ui/ChartContainer";
-import { FileDropZone } from "@/components/ui/FileDropZone";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { VideoToolsWorkspace } from "@/components/tools/VideoToolsWorkspace";
 
 type Tool = {
   icon: LucideIcon;
   title: string;
   description: string;
-  status: "ready" | "beta" | "soon";
+  status: "ready" | "prototype";
 };
 
 const tools: Tool[] = [
@@ -43,35 +40,34 @@ const tools: Tool[] = [
     title: "Stabilise & crop",
     description:
       "Gyroscope-style stabilisation plus auto-crop around the detected athlete.",
-    status: "beta",
+    status: "prototype",
   },
   {
     icon: Layers,
     title: "Multi-angle merger",
     description:
       "Sync side + front cameras into one timeline for richer biomechanics.",
-    status: "beta",
+    status: "prototype",
   },
   {
     icon: Sparkles,
     title: "Slow-motion remaster",
     description:
       "Frame-interpolation up to 240fps so subtle technique details stay readable.",
-    status: "soon",
+    status: "prototype",
   },
   {
     icon: Download,
     title: "Bulk export",
     description:
       "Package all sessions in a date range as a single zip with reports + clips.",
-    status: "soon",
+    status: "prototype",
   },
 ];
 
-const statusStyles: Record<Tool["status"], { variant: "success" | "info" | "neutral"; label: string }> = {
+const statusStyles: Record<Tool["status"], { variant: "success" | "neutral"; label: string }> = {
   ready: { variant: "success", label: "Ready" },
-  beta: { variant: "info", label: "Beta" },
-  soon: { variant: "neutral", label: "Soon" },
+  prototype: { variant: "neutral", label: "Prototype" },
 };
 
 export default function ToolsPage() {
@@ -82,7 +78,7 @@ export default function ToolsPage() {
           <StatusBadge variant="info" icon={Wrench}>
             Utilities
           </StatusBadge>
-          <StatusBadge variant="neutral">No quotas</StatusBadge>
+          <StatusBadge variant="success">2 tools ready · local processing</StatusBadge>
         </div>
         <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
           Video tools
@@ -94,24 +90,23 @@ export default function ToolsPage() {
       </div>
 
       <ChartContainer
-        title="Drop a video"
-        subtitle="Pick a tool below — we apply it to whatever you upload here"
+        title="Process a video"
+        subtitle="Choose a utility, configure it, then download or save the result"
       >
-        <FileDropZone />
+        <VideoToolsWorkspace />
       </ChartContainer>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {tools.map((t, i) => {
           const Icon = t.icon;
           const cfg = statusStyles[t.status];
-          const interactive = t.status !== "soon";
+          const interactive = t.status === "ready";
           return (
-            <button
+            <div
               key={i}
-              disabled={!interactive}
               className={`text-left bg-surface border border-white/[0.06] rounded-xl p-5 transition-all duration-200 group ${
                 interactive
-                  ? "hover:border-white/[0.12] hover:bg-elevated active:scale-[0.99]"
+                  ? "hover:border-white/[0.12] hover:bg-elevated"
                   : "opacity-70 cursor-not-allowed"
               }`}
             >
@@ -127,46 +122,28 @@ export default function ToolsPage() {
               <p className="text-xs text-slate-500 leading-relaxed">
                 {t.description}
               </p>
-              {interactive ? (
-                <div className="mt-4 flex items-center gap-1 text-xs text-cyan-400 opacity-0 group-hover:opacity-100 transition-opacity">
-                  Open <ArrowUpRight className="w-3 h-3" />
-                </div>
-              ) : null}
-            </button>
+            </div>
           );
         })}
       </div>
 
       <ChartContainer
-        title="Recent exports"
-        subtitle="Last 24 hours"
+        title="Processing notes"
+        subtitle="Artifacts stay local until you explicitly save them"
       >
-        <div className="space-y-2">
-          {[
-            { name: "tempo-run-may9_annotated.mp4", size: "248 MB", time: "2h ago" },
-            { name: "freestyle-drills-may8.zip", size: "1.4 GB", time: "Yesterday" },
-            { name: "frame-export-cycling.zip", size: "84 MB", time: "2 days ago" },
-          ].map((f) => (
-            <div
-              key={f.name}
-              className="flex items-center justify-between p-3 rounded-lg bg-white/[0.02] border border-white/[0.04] hover:border-white/[0.08] transition-colors"
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-8 h-8 rounded-lg bg-white/5 text-slate-300 flex items-center justify-center shrink-0">
-                  <FileVideo className="w-4 h-4" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm text-slate-100 truncate">{f.name}</p>
-                  <p className="text-[11px] text-slate-500">
-                    {f.size} · {f.time}
-                  </p>
-                </div>
-              </div>
-              <button className="flex items-center gap-1 px-2.5 h-7 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] rounded-lg text-xs text-slate-200 transition-colors">
-                <Download className="w-3 h-3" /> Download
-              </button>
-            </div>
-          ))}
+        <div className="grid gap-3 text-xs leading-relaxed text-slate-400 sm:grid-cols-3">
+          <div className="rounded-lg border border-white/[0.05] bg-white/[0.02] p-4">
+            <p className="font-semibold text-slate-200">Temporary by default</p>
+            <p className="mt-1">Download immediately or save the artifact to History.</p>
+          </div>
+          <div className="rounded-lg border border-white/[0.05] bg-white/[0.02] p-4">
+            <p className="font-semibold text-slate-200">Presentation-safe video</p>
+            <p className="mt-1">Trimmed clips use H.264, AAC and fast-start metadata.</p>
+          </div>
+          <div className="rounded-lg border border-white/[0.05] bg-white/[0.02] p-4">
+            <p className="font-semibold text-slate-200">Auditable frame exports</p>
+            <p className="mt-1">Every ZIP includes timestamps in a JSON manifest.</p>
+          </div>
         </div>
       </ChartContainer>
     </div>

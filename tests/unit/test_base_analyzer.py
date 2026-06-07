@@ -11,7 +11,7 @@ from video_analysis.base_analyzer import BaseAnalyzer
 class ConcreteAnalyzer(BaseAnalyzer):
     """Minimal concrete subclass used only in tests."""
 
-    pass
+    LANDMARKS = {"left_knee": 25}
 
 
 class TestCalculateAngle:
@@ -73,6 +73,10 @@ class TestGetPoint:
         kps = {"L.knee": (0.4, 0.7)}
         alt = {"left_knee": ["L.knee"]}
         assert self.a._get_point(kps, "left_knee", alt) == (0.4, 0.7)
+
+    def test_integer_landmark_index(self):
+        kps = {25: {"x": 0.4, "y": 0.7, "visibility": 0.9}}
+        assert self.a._get_point(kps, "left_knee") == (0.4, 0.7)
 
 
 class TestSmooth:

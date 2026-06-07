@@ -98,6 +98,17 @@ class BaseAnalyzer:
             if hasattr(p, "x") and hasattr(p, "y"):
                 return float(p.x), float(p.y)
 
+        landmark_map = getattr(self, "LANDMARKS", {})
+        landmark_index = landmark_map.get(name)
+        if landmark_index in kps:
+            p = kps[landmark_index]
+            if isinstance(p, (list, tuple)) and len(p) >= 2:
+                return float(p[0]), float(p[1])
+            if isinstance(p, Mapping) and "x" in p and "y" in p:
+                return float(p["x"]), float(p["y"])
+            if hasattr(p, "x") and hasattr(p, "y"):
+                return float(p.x), float(p.y)
+
         if alt_names and name in alt_names:
             for alias in alt_names[name]:
                 if alias in kps:

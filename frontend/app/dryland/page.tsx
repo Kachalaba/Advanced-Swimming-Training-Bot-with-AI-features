@@ -12,6 +12,7 @@ export default function DrylandPage() {
       badges={[
         { icon: Dumbbell, label: "Bodyweight · Loaded" },
         { variant: "info", label: "AI exercise detection" },
+        { variant: "warn", label: "Demo metrics" },
       ]}
       hint="Place the camera at hip height, capture the full body in frame. SPRINT auto-classifies the exercise and counts reps with eccentric/concentric tempo."
       accentRgb="139,92,246"
