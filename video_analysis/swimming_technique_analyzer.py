@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from statistics import mean
-from typing import Any, Dict, List, Mapping, Optional, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from video_analysis.base_analyzer import BaseAnalyzer
 from video_analysis.constants import SWIM_CONFIDENCE_HIGH, SWIM_CONFIDENCE_MEDIUM, SWIM_MIN_DIAGNOSIS_CYCLES
@@ -268,7 +268,7 @@ class SwimmingTechniqueAnalyzer(BaseAnalyzer):
         }
 
     @staticmethod
-    def _select_primary_issue(zones: List[Mapping[str, Any]]) -> Optional[Dict[str, Any]]:
+    def _select_primary_issue(zones: Sequence[Mapping[str, Any]]) -> Optional[Dict[str, Any]]:
         candidates = []
         for zone in zones:
             for issue in zone.get("issues", []):
