@@ -564,12 +564,26 @@ def save_analysis_to_db(
     )
 
     if session_type == "swimming":
-        summary = analysis.get("summary", {})
-        session.duration_sec = summary.get("total_time_s", 0)
-        session.distance_m = summary.get("total_distance_m", 0)
-        session.avg_speed = summary.get("avg_speed_ms", 0)
+        swimming = analysis.get("swimming_analysis", analysis)
+        if swimming.get("analysis_type") == "swimming_freestyle_side":
+            session.exercise_type = "freestyle_side"
+            cycles = swimming.get("cycles", [])
+            session.stroke_count = len(cycles)
+            if cycles:
+                starts = [float(cycle.get("start_sec", 0.0)) for cycle in cycles]
+                ends = [float(cycle.get("end_sec", 0.0)) for cycle in cycles]
+                session.duration_sec = max(ends) - min(starts)
+            session.ai_score = float(swimming.get("overall_score") or 0.0)
+            primary_issue = swimming.get("primary_issue") or {}
+            session.ai_summary = primary_issue.get("title", "")
 
-        biomech = analysis.get("biomechanics", {})
+        summary = swimming.get("summary", {})
+        if summary:
+            session.duration_sec = summary.get("total_time_s", 0)
+            session.distance_m = summary.get("total_distance_m", 0)
+            session.avg_speed = summary.get("avg_speed_ms", 0)
+
+        biomech = swimming.get("biomechanics", {})
         stroke = biomech.get("stroke_analysis")
         if stroke:
             session.stroke_rate = (

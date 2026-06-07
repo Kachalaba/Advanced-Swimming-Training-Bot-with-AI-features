@@ -171,6 +171,38 @@ class TestTrainingSessions:
 
 class TestSaveAnalysis:
 
+    def test_waterline_swimming_analysis_populates_history_fields(self, tmp_path):
+        import video_analysis.athlete_database as athlete_database
+
+        original_instance = athlete_database._db_instance
+        athlete_database._db_instance = AthleteDatabase(str(tmp_path / "swimming.db"))
+        try:
+            payload = {
+                "analysis_type": "swimming_freestyle_side",
+                "overall_score": 82.0,
+                "cycles": [
+                    {"start_sec": 1.0, "end_sec": 2.2},
+                    {"start_sec": 2.2, "end_sec": 3.4},
+                ],
+                "primary_issue": {"title": "Hips drop below the body line"},
+            }
+            session_id = athlete_database.save_analysis_to_db(
+                athlete_name="Swim Athlete",
+                session_type="swimming",
+                analysis={"swimming_analysis": payload},
+                video_path="/data/session-videos/swimming-job.mp4",
+            )
+
+            session = athlete_database._db_instance.get_session(session_id)
+            assert session is not None
+            assert session.exercise_type == "freestyle_side"
+            assert session.stroke_count == 2
+            assert session.duration_sec == 2.4
+            assert session.ai_score == 82.0
+            assert session.ai_summary == "Hips drop below the body line"
+        finally:
+            athlete_database._db_instance = original_instance
+
     def test_rehab_analysis_populates_existing_session_fields(self, tmp_path):
         import json
 
