@@ -18,11 +18,7 @@ from pydantic import BaseModel, Field
 from video_analysis.athlete_database import get_database, save_analysis_to_db
 
 from ..services.jobs import Job, registry, stream_job_events
-from ..services.tools import (
-    extract_frame_archive,
-    probe_video,
-    trim_video,
-)
+from ..services.tools import extract_frame_archive, probe_video, trim_video
 from .upload_validation import UploadValidationError, copy_upload_with_limit, validate_video_upload
 
 logger = logging.getLogger(__name__)
