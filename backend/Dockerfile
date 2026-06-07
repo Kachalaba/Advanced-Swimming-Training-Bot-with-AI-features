@@ -29,6 +29,9 @@ RUN pip install \
 COPY backend/requirements.txt /srv/requirements.txt
 RUN pip install -r /srv/requirements.txt
 
+# Keep first analysis independent from runtime network access.
+RUN python -c "from ultralytics import YOLO; YOLO('yolov8n.pt')"
+
 COPY backend/app /srv/app
 
 # The pipeline service computes REPO_ROOT = parents[3] from
@@ -37,6 +40,8 @@ COPY backend/app /srv/app
 # while keeping the same code path for local dev (where parents[3] is
 # the repo root).
 COPY video_analysis /video_analysis
+
+ENV PYTHONPATH=/
 
 EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

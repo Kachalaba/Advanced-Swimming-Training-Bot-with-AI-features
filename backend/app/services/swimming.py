@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import math
 import sys
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 from statistics import mean, median
@@ -32,6 +33,7 @@ from video_analysis.waterline_analyzer import WaterlineAnalyzer, WaterlineEstima
 from .video_encoding import finalize_browser_video, open_intermediate_writer
 
 logger = logging.getLogger(__name__)
+_POSE_PROCESSING_LOCK = threading.Lock()
 
 LANDMARK_NAMES = {
     0: "nose",
@@ -439,7 +441,8 @@ def _pose_landmarks(
         return {}
 
     enhanced = _enhance_water_zones(crop, waterline, cx1, cy1)
-    result = pose_detector.process(cv2.cvtColor(enhanced, cv2.COLOR_BGR2RGB))
+    with _POSE_PROCESSING_LOCK:
+        result = pose_detector.process(cv2.cvtColor(enhanced, cv2.COLOR_BGR2RGB))
     if not result.pose_landmarks:
         return {}
 

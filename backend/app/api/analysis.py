@@ -13,6 +13,7 @@ from typing import Optional
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
+
 from video_analysis.athlete_database import save_analysis_to_db
 
 from ..services import running as running_pipeline

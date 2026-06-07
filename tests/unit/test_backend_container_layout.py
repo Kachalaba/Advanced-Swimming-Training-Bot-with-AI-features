@@ -9,6 +9,10 @@ from pathlib import Path
 
 def test_backend_imports_from_container_layout(tmp_path):
     repo_root = Path(__file__).resolve().parents[2]
+    dockerfile = (repo_root / "backend" / "Dockerfile").read_text()
+    assert "PYTHONPATH=/" in dockerfile
+    assert "YOLO('yolov8n.pt')" in dockerfile
+
     container_root = tmp_path / "container"
     srv = container_root / "srv"
     srv.mkdir(parents=True)
@@ -17,7 +21,7 @@ def test_backend_imports_from_container_layout(tmp_path):
     shutil.copytree(repo_root / "video_analysis", container_root / "video_analysis")
 
     env = os.environ.copy()
-    env["PYTHONPATH"] = str(srv)
+    env["PYTHONPATH"] = os.pathsep.join((str(container_root), str(srv)))
     completed = subprocess.run(
         [sys.executable, "-c", "import app.main"],
         cwd=srv,

@@ -82,3 +82,14 @@ def test_cycle_timestamps_are_derived_from_source_fps():
     assert cycle.start_sec == cycle.start_frame / 20.0
     assert cycle.peak_sec == cycle.peak_frame / 20.0
     assert cycle.end_sec == cycle.end_frame / 20.0
+
+
+def test_bridged_landmarks_cannot_establish_a_stroke_cycle():
+    frames = _synthetic_freestyle_landmarks(cycles=3)
+    for frame in frames:
+        for landmark in frame["landmarks"].values():
+            landmark["state"] = "bridged"
+
+    result = SwimmingCycleSelector(fps=10.0).select(frames)
+
+    assert result == []

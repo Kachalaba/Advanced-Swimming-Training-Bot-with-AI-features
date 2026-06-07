@@ -86,6 +86,8 @@ class SwimmingCycleSelector(BaseAnalyzer):
         if value is None:
             return None
         if isinstance(value, Mapping):
+            if value.get("state") == "bridged":
+                return None
             if float(value.get("visibility", 1.0)) < SWIM_CONFIDENCE_MEDIUM:
                 return None
             if "x" in value and "y" in value:

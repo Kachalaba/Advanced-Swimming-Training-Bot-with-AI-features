@@ -6,7 +6,6 @@ from typing import Dict, Optional
 
 from video_analysis.swimming_technique_analyzer import ConfidenceInputs, SwimmingTechniqueAnalyzer
 
-
 ZONE_IDS = ("body_position", "rotation", "catch", "breathing", "kick")
 
 

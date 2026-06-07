@@ -7,11 +7,7 @@ from statistics import mean
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 from video_analysis.base_analyzer import BaseAnalyzer
-from video_analysis.constants import (
-    SWIM_CONFIDENCE_HIGH,
-    SWIM_CONFIDENCE_MEDIUM,
-    SWIM_MIN_DIAGNOSIS_CYCLES,
-)
+from video_analysis.constants import SWIM_CONFIDENCE_HIGH, SWIM_CONFIDENCE_MEDIUM, SWIM_MIN_DIAGNOSIS_CYCLES
 
 
 @dataclass(frozen=True)

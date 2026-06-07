@@ -3,9 +3,15 @@
 from __future__ import annotations
 
 import math
+import threading
+import time
 from pathlib import Path
+from types import SimpleNamespace
 
-from backend.app.services.swimming import ObservationBatch, analyze_swimming_video
+import numpy as np
+
+from backend.app.services.swimming import ObservationBatch, _pose_landmarks, analyze_swimming_video
+from video_analysis.waterline_analyzer import WaterlineEstimate
 
 
 def _zone(issue_code=None, score=88.0):
@@ -164,3 +170,38 @@ def test_pipeline_preserves_partial_quality_warnings(tmp_path):
     result = events[-1].to_dict()
     assert result["quality"]["status"] == "partial"
     assert result["quality"]["warnings"] == ["Feet leave the frame"]
+
+
+def test_shared_pose_detector_calls_are_serialized():
+    class OverlapDetectingPose:
+        def __init__(self):
+            self.active = 0
+            self.max_active = 0
+            self.guard = threading.Lock()
+
+        def process(self, image):
+            with self.guard:
+                self.active += 1
+                self.max_active = max(self.max_active, self.active)
+            time.sleep(0.03)
+            with self.guard:
+                self.active -= 1
+            return SimpleNamespace(pose_landmarks=None)
+
+    detector = OverlapDetectingPose()
+    frame = np.zeros((80, 120, 3), dtype=np.uint8)
+    waterline = WaterlineEstimate(slope=0.0, intercept=40.0, confidence=0.9, observed=True)
+    barrier = threading.Barrier(3)
+
+    def run_pose():
+        barrier.wait()
+        _pose_landmarks(frame, (10, 10, 110, 70), waterline, detector)
+
+    threads = [threading.Thread(target=run_pose) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    barrier.wait()
+    for thread in threads:
+        thread.join()
+
+    assert detector.max_active == 1
