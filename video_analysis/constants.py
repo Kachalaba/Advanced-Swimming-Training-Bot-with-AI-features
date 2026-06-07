@@ -38,6 +38,13 @@ HEAD_STABILITY_MULTIPLIER = 2
 BREATHING_REGULARITY_MULTIPLIER = 2
 KICK_SYMMETRY_MULTIPLIER = 3
 
+# Confidence-aware side-view freestyle analysis
+SWIM_CONFIDENCE_HIGH = 0.78
+SWIM_CONFIDENCE_MEDIUM = 0.55
+SWIM_MIN_DIAGNOSIS_CYCLES = 2
+SWIM_TARGET_CYCLE_COUNT = 5
+SWIM_MIN_PARTIAL_CYCLE_COUNT = 2
+
 # ---------------------------------------------------------------------------
 # Running analysis thresholds
 # ---------------------------------------------------------------------------
