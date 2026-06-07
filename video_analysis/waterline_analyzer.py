@@ -66,7 +66,7 @@ class WaterlineAnalyzer(BaseAnalyzer):
         height, width = frame.shape[:2]
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-        gradient = np.abs(cv2.Sobel(blurred, cv2.CV_32F, 0, 1, ksize=3))
+        gradient = np.abs(cv2.Sobel(blurred, cv2.CV_32F, 0, 1, ksize=3))  # type: ignore[attr-defined]
 
         row_scores = gradient.mean(axis=1)
         start = max(2, int(height * 0.05))

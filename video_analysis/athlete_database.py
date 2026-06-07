@@ -573,7 +573,7 @@ def save_analysis_to_db(
                 starts = [float(cycle.get("start_sec", 0.0)) for cycle in cycles]
                 ends = [float(cycle.get("end_sec", 0.0)) for cycle in cycles]
                 session.duration_sec = max(ends) - min(starts)
-            session.ai_score = round(float(swimming.get("overall_score") or 0.0))
+            session.ai_score = int(round(float(swimming.get("overall_score") or 0.0)))
             primary_issue = swimming.get("primary_issue") or {}
             session.ai_summary = primary_issue.get("title", "")
 
