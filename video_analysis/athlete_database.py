@@ -10,6 +10,7 @@ Features:
 
 import json
 import logging
+import os
 import sqlite3
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
@@ -20,7 +21,12 @@ from typing import Any, Dict, List, Optional
 logger = logging.getLogger(__name__)
 
 # Database path
-DB_PATH = Path(__file__).parent.parent / "data" / "athletes.db"
+DB_PATH = Path(
+    os.environ.get(
+        "ATHLETE_DB_PATH",
+        str(Path(__file__).parent.parent / "data" / "athletes.db"),
+    )
+)
 
 
 @dataclass
@@ -42,7 +48,7 @@ class TrainingSession:
 
     id: Optional[int] = None
     athlete_id: int = 0
-    session_type: str = "swimming"  # swimming, dryland
+    session_type: str = "swimming"  # swimming, running, cycling, dryland, rehab
     date: str = ""
     duration_sec: float = 0
     distance_m: float = 0
@@ -558,12 +564,26 @@ def save_analysis_to_db(
     )
 
     if session_type == "swimming":
-        summary = analysis.get("summary", {})
-        session.duration_sec = summary.get("total_time_s", 0)
-        session.distance_m = summary.get("total_distance_m", 0)
-        session.avg_speed = summary.get("avg_speed_ms", 0)
+        swimming = analysis.get("swimming_analysis", analysis)
+        if swimming.get("analysis_type") == "swimming_freestyle_side":
+            session.exercise_type = "freestyle_side"
+            cycles = swimming.get("cycles", [])
+            session.stroke_count = len(cycles)
+            if cycles:
+                starts = [float(cycle.get("start_sec", 0.0)) for cycle in cycles]
+                ends = [float(cycle.get("end_sec", 0.0)) for cycle in cycles]
+                session.duration_sec = max(ends) - min(starts)
+            session.ai_score = int(round(float(swimming.get("overall_score") or 0.0)))
+            primary_issue = swimming.get("primary_issue") or {}
+            session.ai_summary = primary_issue.get("title", "")
 
-        biomech = analysis.get("biomechanics", {})
+        summary = swimming.get("summary", {})
+        if summary:
+            session.duration_sec = summary.get("total_time_s", 0)
+            session.distance_m = summary.get("total_distance_m", 0)
+            session.avg_speed = summary.get("avg_speed_ms", 0)
+
+        biomech = swimming.get("biomechanics", {})
         stroke = biomech.get("stroke_analysis")
         if stroke:
             session.stroke_rate = (
@@ -595,6 +615,27 @@ def save_analysis_to_db(
             session.avg_tempo = getattr(exercise_stats, "avg_tempo", 0)
             session.stability_score = getattr(exercise_stats, "stability_score", 0)
         session.exercise_type = analysis.get("main_movement", "")
+
+    elif session_type == "rehab":
+        rehab = analysis.get("rehab_analysis", analysis)
+        session.exercise_type = rehab.get("protocol", "")
+        session.reps = rehab.get("total_correct_reps", 0)
+        session.symmetry_score = rehab.get("symmetry", {}).get("score", 0)
+        session.stability_score = rehab.get("completion_score", 0)
+
+    elif session_type == "tool":
+        tool = analysis.get("tool", analysis)
+        metadata = tool.get("metadata", {})
+        operation = tool.get("operation", "")
+        session.exercise_type = operation
+        if operation == "trim":
+            start_sec = float(metadata.get("start_sec", 0))
+            end_sec = float(metadata.get("end_sec", 0))
+            session.duration_sec = float(metadata.get("duration_sec", max(0.0, end_sec - start_sec)))
+            session.ai_summary = f"Trim {start_sec:.1f}s-{end_sec:.1f}s"
+        elif operation == "frame_extractor":
+            session.reps = int(metadata.get("frame_count", 0))
+            session.ai_summary = f"Extracted {session.reps} frames"
 
     if ai_advice:
         session.ai_score = getattr(ai_advice, "score", 0)

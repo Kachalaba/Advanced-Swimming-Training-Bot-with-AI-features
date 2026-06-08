@@ -1,354 +1,162 @@
-# SPRINT AI — Triathlon Video Analysis Platform
-
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Streamlit](https://img.shields.io/badge/Streamlit-1.28+-FF4B4B.svg)](https://streamlit.io/)
-[![CI: Lint](https://github.com/Kachalaba/Advanced-Swimming-Training-Bot-with-AI-features/actions/workflows/lint.yml/badge.svg)](https://github.com/Kachalaba/Advanced-Swimming-Training-Bot-with-AI-features/actions/workflows/lint.yml)
-[![CI: Tests](https://github.com/Kachalaba/Advanced-Swimming-Training-Bot-with-AI-features/actions/workflows/tests.yml/badge.svg)](https://github.com/Kachalaba/Advanced-Swimming-Training-Bot-with-AI-features/actions/workflows/tests.yml)
-[![CI: Docker](https://github.com/Kachalaba/Advanced-Swimming-Training-Bot-with-AI-features/actions/workflows/docker.yml/badge.svg)](https://github.com/Kachalaba/Advanced-Swimming-Training-Bot-with-AI-features/actions/workflows/docker.yml)
-
-**Професійний AI-інструмент для тренерів з тріатлону: аналіз відео у реальному часі для плавання, бігу та велосипеда**
-
 <p align="center">
-  <img src="https://img.shields.io/badge/Swimming-40+_metrics-00D9FF?style=for-the-badge" />
-  <img src="https://img.shields.io/badge/Running-30+_metrics-10B981?style=for-the-badge" />
-  <img src="https://img.shields.io/badge/Cycling-35+_metrics-F59E0B?style=for-the-badge" />
-  <img src="https://img.shields.io/badge/Dryland-AI_coaching-8B5CF6?style=for-the-badge" />
+  <img src="assets/sprint-ai-banner.png" alt="SPRINT AI" width="100%" />
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Language-EN%20%2F%20UA-blue?style=for-the-badge" />
-  <img src="https://img.shields.io/badge/Theme-Light%20%2F%20Dark-gray?style=for-the-badge" />
-  <img src="https://img.shields.io/badge/AI-Claude%20API-blueviolet?style=for-the-badge" />
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-22d3ee?style=flat-square" /></a>
+  <img src="https://img.shields.io/badge/Frontend-Next.js_16_·_React_19-0ea5e9?style=flat-square" />
+  <img src="https://img.shields.io/badge/Backend-FastAPI-10b981?style=flat-square" />
+  <img src="https://img.shields.io/badge/AI-YOLOv8_·_MediaPipe_·_Claude-8b5cf6?style=flat-square" />
+  <img src="https://img.shields.io/badge/UI-EN_·_UA-64748b?style=flat-square" />
 </p>
 
+<p align="center"><b>Камера замість лабораторії.</b> SPRINT AI перетворює звичайне відео з телефона чи вебкамери на клінічну біомеханіку для <b>плавання, бігу, велоспорту, силових вправ і реабілітації</b> — за лічені секунди.</p>
+
 ---
 
-## New web app (Phase 1)
+## 💡 Навіщо це
 
-A Next.js + FastAPI rewrite is in progress alongside the Streamlit
-prototype. Both run in parallel during the migration.
+Раніше, щоб розібрати техніку чи прогрес відновлення, потрібні були дорогі
+датчики, лабораторія або «око» тренера й секундомір. SPRINT AI робить це
+**з одного відео**: сам знаходить людину, бачить кожен суглоб і пояснює
+зрозумілою мовою — що добре, що ні, над чим працювати.
 
-```
-backend/    FastAPI app (REST API for analyzers, athlete data)
-frontend/   Next.js 15 app (App Router, Tailwind, dark UI)
-app.py      Streamlit prototype (still works, used as fallback)
-```
+> 🎯 Один інструмент для тренерів із тріатлону, плавання, легкої атлетики,
+> фітнесу — **та фізичних терапевтів**.
 
-Run the new stack locally with docker-compose:
+## 📸 Як це виглядає
+
+Преміальний темний інтерфейс (Next.js 16 / React 19), що відкривається на
+**http://localhost:3000** після `docker compose up`:
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/screenshots/rehab-live.png" width="100%" /><br/>
+      <b>🩺 Жива реабілітація</b> — постуральна карта, ROM L/R, симетрія та відносне калібрування кута камери у реальному часі.
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/screenshots/ai-assistant.png" width="100%" /><br/>
+      <b>🤖 AI-тренер</b> — чат на базі Claude з контекстом усіх сесій атлета; дані анонімізуються перед відправкою.
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2" valign="top">
+      <img src="docs/screenshots/dryland.png" width="100%" /><br/>
+      <b>🤸 Суходіл</b> — обсяг, темп, амплітуда, оцінка техніки та AI-інсайти з виявленням патернів.
+    </td>
+  </tr>
+</table>
+
+---
+
+## 🩺 Флагман: блок «Реабілітація»
+
+Режим відновлення руху (кінезіотерапія) прямо у браузері — для роботи з плечем,
+ліктем, стегном і коліном після травм. **Працює наживо з вебкамери.**
+
+<table>
+<tr><td width="34%"><b>📹 Live-камера</b></td><td>Аналіз у реальному часі, без завантаження файлів</td></tr>
+<tr><td><b>🦴 Постуральна карта</b></td><td>Осі плечей, таза й корпусу з підсвічуванням перекосів — прямо поверх відео</td></tr>
+<tr><td><b>📐 Амплітуда руху (ROM)</b></td><td>Скільки градусів реально «проходить» суглоб — окремо ліворуч і праворуч</td></tr>
+<tr><td><b>⚖️ Симетрія L/R</b></td><td>Наскільки одна сторона відстає від іншої — ключове у відновленні</td></tr>
+<tr><td><b>🎚️ Калібрування камери</b></td><td>Нахилений телефон? Система врахує кут і не зіпсує вимірювання</td></tr>
+<tr><td><b>🖥️ Повний екран</b></td><td>Зручно для занять; вихід клавішею <code>Esc</code></td></tr>
+<tr><td><b>💾 Історія</b></td><td>Кожне заняття лягає в картку атлета — видно прогрес тиждень за тижнем</td></tr>
+<tr><td><b>⚡ Швидкість</b></td><td>Потік оптимізовано під сучасні ноутбуки (тестовано на MacBook Air M4)</td></tr>
+</table>
+
+Також працює **аналіз завантаженого відео**: обираєте вправу → відео зі
+скелетом, графіки ROM і підсумок із симетрією.
+
+> ⚕️ SPRINT AI — тренувальний помічник, а не медичний прилад; не замінює огляд
+> лікаря чи фізичного терапевта.
+
+---
+
+## 🏆 Що ще вміє платформа
+
+| Дисципліна | Що показує |
+|---|---|
+| 🏊 **Плавання** | Фази гребка, темп, DPS, SWOLF, кут входу руки, «високий лікоть», крен тіла, дихання, симетрія ніг |
+| 🏃 **Біг** | Каденс, тип постановки стопи, «перекрок», просідання таза, симетрія рук, ризик травми |
+| 🚴 **Велосипед** | Каденс, кути коліна, посадка (saddle / aero), «мертві точки», плавність педалювання |
+| 🤸 **Суходіл** | Розпізнавання вправ, кути суглобів, темп і якість повторень |
+| 📈 **Історія + AI-тренер** | Прогрес у графіках, чат-помічник на базі Claude, генератор планів |
+
+---
+
+## 🚀 Запуск за 1 хвилину
+
+Потрібен лише [Docker Desktop](https://www.docker.com/products/docker-desktop/).
 
 ```bash
-docker compose up --build
-# frontend → http://localhost:3000
-# backend  → http://localhost:8000/api/health
+docker compose up --build       # → відкрий http://localhost:3000
 ```
 
-Or run each part directly:
+**🖥️ Ярлик на робочому столі (macOS)** — запуск подвійним кліком з іконкою:
 
 ```bash
-# backend
-cd backend && pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
-
-# frontend
-cd frontend && npm install && npm run dev
+bash scripts/install-macos-launcher.sh
 ```
 
-The Streamlit app (`streamlit run app.py`) keeps working independently
-on port 8501.
-
----
-
-## Для кого цей інструмент?
-
-| Користувач | Використання |
-|---------------|-----------------|
-| **Тренери з тріатлону** | Аналіз техніки всіх 3 дисциплін + AI-асистент |
-| **Тренери з плавання** | Детальний аналіз гребка, body roll, дихання |
-| **Тренери з легкої атлетики** | Foot strike, cadence, травмопрофілактика |
-| **Bike fitters** | Bike fit аналіз, посадка, педалювання |
-| **Фітнес-тренери** | Аналіз вправ суходолу + база спортсменів |
-
----
-
-## Можливості платформи
-
-### Плавання (40+ метрик)
-
-| Категорія | Метрики |
-|-----------|---------|
-| **Гребок** | Фази (Catch/Pull/Push/Recovery), Stroke Rate, DPS, SWOLF |
-| **Техніка рук** | Hand Entry Angle (опт. 40°), High Elbow Catch Score |
-| **Тіло** | Body Roll (опт. 30-50°), Head Stability, Streamline Score |
-| **Дихання** | Pattern Detection (bilateral/2/3/4), Regularity |
-| **Ноги** | Kick Frequency, Amplitude, Symmetry |
-| **Симетрія** | L/R Balance, Phase Distribution |
-
-### Біг (30+ метрик)
-
-| Категорія | Метрики |
-|-----------|---------|
-| **Cadence** | Steps/min (опт. 170-190), Ground Contact Time |
-| **Foot Strike** | Type (heel/midfoot/forefoot), Angle, Score |
-| **Overstriding** | Detection, Distance Ahead, Risk Score |
-| **Hip Drop** | Left/Right degrees, Trendelenburg Score |
-| **Arms** | Symmetry, Crossover Detection, Swing Range |
-| **Efficiency** | Bounce Score, Overall Efficiency, **Injury Risk Score** |
-
-### Велосипед (35+ метрик)
-
-| Категорія | Метрики |
-|-----------|---------|
-| **Cadence** | RPM (опт. 80-100), Power Phase % |
-| **Knee** | Angle Top/Bottom, Range of Motion |
-| **Bike Fit** | Saddle Height Score, Aero Score, Stack Score |
-| **Ankling** | Ankle Angle Top/Bottom, Ankling Score |
-| **Dead Spots** | Top/Bottom ms, Dead Spot Score |
-| **Stability** | Lateral Sway, Vertical Bounce, Rock Detection |
-| **Efficiency** | Pedal Smoothness, Torque Effectiveness |
-
-### Суходіл
-
-| Можливість | Опис |
-|------------|------|
-| **Детекція вправ** | Присідання, випади, планка, віджимання |
-| **Біомеханіка** | Кути суглобів, траєкторія руху |
-| **AI Coaching** | Рекомендації щодо техніки в реальному часі |
-
----
-
-## Додаткові інструменти
-
-### База даних спортсменів
-- Профілі атлетів (рівень, спеціалізація)
-- Історія всіх тренувань
-- Графіки прогресу з фільтрами за типом та часовим проміжком
-- Порівняння сесій та CSV-експорт метрик
-
-### AI Асистент (Claude API)
-- Контекстно-залежний чат (знає дані спортсмена)
-- Генератор персоналізованих тренувальних планів
-- TTS озвучення (pyttsx3/gTTS)
-- База знань: drills, типові помилки техніки
-
-### Відео інструменти
-- **Side-by-Side** — порівняння двох відео
-- **Highlights** — вирізка + slow-motion
-- **Zoom** — фіксований або tracking zoom
-
----
-
-## Швидкий старт
-
-### 1. Встановлення
+<details>
+<summary><b>Альтернатива: класичний інтерфейс (Streamlit)</b></summary>
 
 ```bash
-git clone https://github.com/Kachalaba/Advanced-Swimming-Training-Bot-with-AI-features.git
-cd Advanced-Swimming-Training-Bot-with-AI-features
-
-python3 -m venv venv
-source venv/bin/activate  # Linux/Mac
-# або: venv\Scripts\activate  # Windows
-
+python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
+python3 -m streamlit run app.py        # → http://localhost:8501
+```
+Тут доступні всі 8 вкладок із повним набором функцій.
+</details>
+
+---
+
+## 🧠 Як це працює «під капотом»
+
+```
+1. Знаходимо людину на кожному кадрі  →  YOLOv8 + lock-on трекінг
+2. Будуємо скелет із 33 точок         →  MediaPipe + згладжування (EMA)
+3. Рахуємо біомеханіку                →  кути, ROM, симетрія, фази руху
+4. Пояснюємо людською мовою           →  звіт, графіки, поради AI-тренера
 ```
 
-### 2. Запуск
+Два інтерфейси спільно використовують один «движок» аналізу (`video_analysis/`):
+сучасний **Next.js + FastAPI** застосунок і класичний **Streamlit**-прототип.
+
+---
+
+## 🛠️ Стек і розробка
+
+`Python` · `YOLOv8` · `MediaPipe` · `OpenCV` · `FastAPI` · `Server-Sent Events` ·
+`Next.js 16` · `React 19` · `TailwindCSS` · `SQLite/SQLAlchemy` · `Claude API` ·
+`Docker` · `GitHub Actions`.
 
 ```bash
-python3 -m streamlit run app.py
+pytest tests/unit/ -v       # тести движка та бекенду
+make lint                   # ruff + black + isort + mypy
+cd frontend && npm run lint && npm run test
 ```
 
-Відкрийте: **http://localhost:8501**
+Документація: [Архітектура](ARCHITECTURE.md) · [Налаштування](SETUP.md) ·
+[Лаунчер macOS](docs/macos-launcher.md) · [Історія змін](CHANGELOG.md)
 
 ---
 
-## Архітектура проекту
+## 🗺️ Дорожня карта
 
-```
-sprint-ai/
-├── app.py                          # Streamlit UI (7 вкладок)
-├── video_analysis/
-│   ├── # === CORE DETECTION ===
-│   ├── frame_extractor.py          # Витягування кадрів з відео
-│   ├── swimmer_detector.py         # YOLO детекція + IoU Tracking
-│   ├── swimming_pose_analyzer.py   # MediaPipe поза (33 точки)
-│   │
-│   ├── # === SPORT-SPECIFIC ANALYZERS ===
-│   ├── stroke_analyzer.py          # Аналіз гребка (40+ метрик)
-│   ├── running_analyzer.py         # Аналіз бігу (30+ метрик)
-│   ├── cycling_analyzer.py         # Аналіз велосипеда (35+ метрик)
-│   ├── exercise_analyzer.py        # Аналіз вправ суходолу
-│   │
-│   ├── # === BIOMECHANICS ===
-│   ├── biomechanics_analyzer.py    # Загальна біомеханіка
-│   ├── biomechanics_visualizer.py  # Преміум візуалізація скелету
-│   ├── trajectory_analyzer.py      # Траєкторія руху
-│   ├── split_analyzer.py           # Спліти та темп
-│   │
-│   ├── # === AI & DATABASE ===
-│   ├── ai_coach.py                 # AI рекомендації
-│   ├── ai_chat.py                  # Claude API чат + TTS + Плани
-│   ├── athlete_database.py         # SQLite/PostgreSQL база спортсменів
-│   │
-│   ├── # === OUTPUT ===
-│   ├── video_overlay.py            # Анотоване відео
-│   ├── video_tools.py              # Side-by-side, Zoom, Highlights
-│   └── report_generator.py         # PDF/JSON звіти
-│
-├── i18n/                           # Локалізація EN/UA
-├── data/
-│   └── athletes.db                 # SQLite база даних
-├── tests/                          # pytest + pytest-asyncio
-├── .github/workflows/              # CI: lint, tests, docker
-└── requirements.txt                # Залежності
-```
-
----
-
-## Приклад результатів
-
-### Плавання
-```json
-{
-  "stroke_analysis": {
-    "total_strokes": 24,
-    "stroke_rate": 58.5,
-    "dps": 2.08,
-    "swolf": 42.3,
-    "symmetry_score": 94.2,
-    "body_roll": 38.5,
-    "high_elbow_score": 87.0,
-    "breathing_pattern": "bilateral/3"
-  }
-}
-```
-
-### Біг
-```json
-{
-  "running_analysis": {
-    "cadence": 176,
-    "foot_strike_type": "midfoot",
-    "foot_strike_score": 95.0,
-    "overstriding_detected": false,
-    "hip_drop_score": 88.0,
-    "efficiency_score": 82.5,
-    "injury_risk_score": 15
-  }
-}
-```
-
-### Велосипед
-```json
-{
-  "cycling_analysis": {
-    "cadence": 92,
-    "knee_range": 78.5,
-    "saddle_height_score": 95.0,
-    "aero_score": 85.0,
-    "ankling_score": 80.0,
-    "pedal_smoothness": 88.0,
-    "bike_fit_score": 90.0
-  }
-}
-```
-
----
-
-## Інтерфейс
-
-### 7 основних вкладок:
-
-| Вкладка | Призначення |
-|---------|-------------|
-| **Плавання** | Аналіз техніки плавання |
-| **Біг** | Аналіз техніки бігу |
-| **Велосипед** | Bike fit та педалювання |
-| **Суходіл** | Аналіз вправ |
-| **Історія** | Прогрес спортсменів + графіки + CSV |
-| **AI Асистент** | Claude API чат та генератор планів |
-| **Інструменти** | Відео утиліти |
-
----
-
-## Технології
-
-| Технологія | Використання |
-|------------|--------------|
-| **Python 3.8+** | Основна мова |
-| **YOLOv8** | Детекція спортсмена + stable IoU tracking |
-| **MediaPipe** | Pose Estimation (33 keypoints) + EMA smoothing |
-| **OpenCV** | Обробка відео |
-| **Streamlit** | Веб-інтерфейс (light/dark theme) |
-| **Claude API** | AI-асистент з контекстом спортсмена |
-| **SQLite / PostgreSQL** | База даних спортсменів |
-| **SQLAlchemy + Alembic** | ORM та міграції |
-| **Matplotlib / Seaborn** | Графіки та візуалізація |
-| **ReportLab / FPDF2** | PDF звіти |
-| **pyttsx3 / gTTS** | Text-to-Speech |
-| **Sentry SDK** | Логування помилок та моніторинг |
-| **Docker** | Контейнеризація |
-| **GitHub Actions** | CI/CD: lint, tests, docker build |
-
----
-
-## Roadmap
-
-- [x] Плавання: фази гребка, body roll, симетрія (40+ метрик)
-- [x] Біг: foot strike, overstriding, hip drop (30+ метрик)
-- [x] Велосипед: bike fit, ankling, dead spots (35+ метрик)
-- [x] База даних спортсменів (SQLite / PostgreSQL)
-- [x] AI чат (Claude API) з контекстом спортсмена
-- [x] Генератор тренувальних планів
-- [x] Відео інструменти (side-by-side, zoom, highlights)
-- [x] PDF / JSON звіти
-- [x] Локалізація EN / UA з перемикачем мови
-- [x] Light / Dark theme toggle
-- [x] Графіки прогресу з фільтрами та CSV-експортом
-- [x] Стабільний IoU tracking (плавання, велосипед)
-- [x] Преміум скелет: EMA smoothing, triple-guard displacement
-- [x] GitHub Actions CI/CD (lint, tests, docker)
-- [ ] Календар тренувань
-- [ ] Інтеграція Garmin / Strava
-
----
-
-## Документація
-
-- [Посібник користувача](docs/USER_GUIDE.md)
-- [Архітектура](ARCHITECTURE.md)
-- [Історія змін](CHANGELOG.md)
-- [Налаштування](SETUP.md)
-
----
-
-## Внесок
-
-```bash
-# 1. Fork репозиторію
-# 2. Створіть branch
-git checkout -b feature/amazing-feature
-
-# 3. Commit
-git commit -m 'Add amazing feature'
-
-# 4. Push
-git push origin feature/amazing-feature
-
-# 5. Відкрийте Pull Request
-```
-
----
-
-## Ліцензія
-
-MIT License — див. [LICENSE](LICENSE)
+- [x] Плавання, біг, велосипед, суходіл
+- [x] База атлетів, історія, AI-чат і плани, відеоінструменти
+- [x] Українська / English, світла / темна тема
+- [x] Веб-застосунок (Next.js + FastAPI)
+- [x] **Реабілітація: ROM, симетрія, відео + live-камера, постуральна карта**
+- [ ] Перенесення плавання / велосипеда / суходолу у веб-пайплайн
+- [ ] Інтеграція Garmin / Strava, календар тренувань
 
 ---
 
 <p align="center">
-  <b>Створено для тренерів та спортсменів</b>
-  <br>
-  Swimming | Running | Cycling
+  <sub><b>Створено для тренерів, фізичних терапевтів і спортсменів.</b></sub><br>
+  <sub>MIT License · Плавання · Біг · Велосипед · Суходіл · Реабілітація</sub>
 </p>

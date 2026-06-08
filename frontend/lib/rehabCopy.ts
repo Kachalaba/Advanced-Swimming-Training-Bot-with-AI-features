@@ -1,0 +1,213 @@
+import type { RehabProtocol } from "./rehabilitation";
+
+export type RehabLocale = "uk" | "en";
+
+export const REHAB_LOCALE_STORAGE_KEY = "sprint-ai-rehab-locale";
+
+const uk = {
+  language: "Мова",
+  prototypeBadge: "Дослідницький прототип",
+  localBadge: "Локальна обробка",
+  title: "Аналіз руху, ROM і відновлення",
+  subtitle:
+    "Комп'ютерний зір для двобічної оцінки амплітуди руху, симетрії та постуральних орієнтирів.",
+  protocol: "Протокол",
+  liveMode: "Камера наживо",
+  uploadMode: "Завантажити відео",
+  limitationTitle: "Що важливо знати перед демо",
+  limitationBody:
+    "Це дослідницький прототип і не є медичним виробом. Він не встановлює діагноз і не замінює клінічну оцінку. Цільові кути налаштовує фахівець під конкретний план реабілітації; вони не є діагностичними нормативами.",
+  featureRomTitle: "Двобічний ROM",
+  featureRomText:
+    "Амплітуда ліворуч і праворуч, досягнення заданої цілі та якість повторів.",
+  featurePostureTitle: "Постуральні осі",
+  featurePostureText:
+    "Плечі, таз і лінія тулуба накладаються безпосередньо на відео.",
+  featureQualityTitle: "Контроль якості зйомки",
+  featureQualityText:
+    "Повний зріст у кадрі, стабільна камера, достатнє освітлення та калібрування горизонту.",
+  footer:
+    "Результати призначені для спостереження за рухом і професійного обговорення. Інтерпретувати їх слід разом із клінічним контекстом.",
+  protocols: {
+    shoulder_flexion: "Згинання плеча",
+    shoulder_abduction: "Відведення плеча",
+    elbow_flexion: "Згинання ліктя",
+    knee_extension: "Розгинання коліна",
+    hip_abduction: "Відведення стегна",
+  } satisfies Record<RehabProtocol, string>,
+  live: {
+    postureMap: "Постуральна карта",
+    postureMapAria: "Показувати постуральну карту",
+    overlayAria: "Постуральна координатна карта",
+    shoulders: "Плечі",
+    pelvis: "Таз",
+    trunk: "Тулуб",
+    save: "Зберегти",
+    saved: "Збережено",
+    saveError: "Не вдалося зберегти сесію",
+    calibrate: "Калібрувати горизонт",
+    fullscreen: "На весь екран",
+    exitFullscreen: "Вийти з повноекранного режиму",
+    exit: "Вийти",
+    active: "Аналіз",
+    standby: "Готово",
+    studioTitle: "Аналіз руху наживо",
+    studioBody:
+      "Встановіть камеру нерухомо та станьте в повний зріст. Кадри обробляються локально на SPRINT AI.",
+    connecting: "Підключення…",
+    startCamera: "Запустити камеру",
+    stop: "Зупинити",
+    cameraAngle: "Кут камери",
+    calibrationNote: "Відносно останнього оптичного калібрування",
+    level: "РІВНО",
+    adjust: "ВИРІВНЯЙТЕ",
+    recalibrate: "ПЕРЕКАЛІБРУЙТЕ",
+    uncalibrated: "НЕ КАЛІБРОВАНО",
+    liveError: "Помилка аналізу наживо",
+    cameraUnavailable: "Браузер не підтримує доступ до камери.",
+    cameraDenied:
+      "Доступ до камери заборонено. Дозвольте його в налаштуваннях браузера.",
+    cameraStartError: "Не вдалося запустити камеру.",
+    metrics: {
+      rom: "ROM Л / П",
+      repetitions: "Повтори",
+      asymmetry: "Асиметрія",
+      camera: "Камера",
+      pose: "Поза в кадрі",
+      poseDetected: "ВИЯВЛЕНО",
+      poseMissing: "НЕ ВИЯВЛЕНО",
+      poseWaiting: "ОЧІКУВАННЯ",
+    },
+  },
+  upload: {
+    ready: "Готово до завантаження",
+    uploading: "Завантаження відео",
+    complete: "Аналіз завершено",
+    uploadError: "Не вдалося завантажити відео",
+    saveError: "Не вдалося зберегти сесію",
+    resultTitle: "Відео проаналізовано",
+    uploadTitle: "Завантажити реабілітаційну сесію",
+    uploadBody:
+      "MP4, MOV, AVI або MKV до 512 MB. Для постуральної карти знімайте у фронтальній площині та в повний зріст.",
+    repetitions: "Повтори",
+    targetCompletion: "Досягнення цілі",
+    symmetry: "Симетрія",
+    poseCoverage: "Якість розпізнавання",
+    save: "Зберегти в історію",
+    saved: "Збережено в історію",
+    targetNote:
+      "Цільовий ROM задається протоколом і може бути змінений фахівцем. Це не клінічна норма.",
+    progress: {
+      "Extracting frames": "Виділення кадрів",
+      "Detecting posture": "Розпізнавання пози",
+      "Calculating ROM and symmetry": "Розрахунок ROM і симетрії",
+      Done: "Готово",
+    } satisfies Record<string, string>,
+  },
+} as const;
+
+const en = {
+  language: "Language",
+  prototypeBadge: "Research prototype",
+  localBadge: "Local processing",
+  title: "Movement, ROM and recovery analysis",
+  subtitle:
+    "Computer vision for bilateral range-of-motion, symmetry and postural landmark review.",
+  protocol: "Protocol",
+  liveMode: "Live camera",
+  uploadMode: "Upload video",
+  limitationTitle: "What to know before the demo",
+  limitationBody:
+    "This is a research prototype, not a medical device. It does not diagnose or replace clinical assessment. Target angles are configured by a professional for an individual rehabilitation plan; they are not diagnostic reference values.",
+  featureRomTitle: "Bilateral ROM",
+  featureRomText:
+    "Left and right range of motion, progress toward a configured target and repetition quality.",
+  featurePostureTitle: "Postural axes",
+  featurePostureText:
+    "Shoulder, pelvis and trunk guides are overlaid directly on the video.",
+  featureQualityTitle: "Capture quality control",
+  featureQualityText:
+    "Keep the full body visible, the camera stable, the scene well lit and the horizon calibrated.",
+  footer:
+    "Results support movement observation and professional discussion. Interpret them together with the clinical context.",
+  protocols: {
+    shoulder_flexion: "Shoulder flexion",
+    shoulder_abduction: "Shoulder abduction",
+    elbow_flexion: "Elbow flexion",
+    knee_extension: "Knee extension",
+    hip_abduction: "Hip abduction",
+  },
+  live: {
+    postureMap: "Posture map",
+    postureMapAria: "Show posture map",
+    overlayAria: "Postural coordinate map",
+    shoulders: "Shoulders",
+    pelvis: "Pelvis",
+    trunk: "Trunk",
+    save: "Save",
+    saved: "Saved",
+    saveError: "Could not save the session",
+    calibrate: "Calibrate horizon",
+    fullscreen: "Full screen",
+    exitFullscreen: "Exit full screen",
+    exit: "Exit",
+    active: "Analyzing",
+    standby: "Ready",
+    studioTitle: "Live movement analysis",
+    studioBody:
+      "Keep the camera stable and stand with your full body in frame. Frames are processed locally by SPRINT AI.",
+    connecting: "Connecting…",
+    startCamera: "Start camera",
+    stop: "Stop",
+    cameraAngle: "Camera angle",
+    calibrationNote: "Relative to the latest optical calibration",
+    level: "LEVEL",
+    adjust: "ADJUST",
+    recalibrate: "RECALIBRATE",
+    uncalibrated: "NOT CALIBRATED",
+    liveError: "Live analysis error",
+    cameraUnavailable: "This browser does not support camera access.",
+    cameraDenied:
+      "Camera access was denied. Allow it in your browser settings.",
+    cameraStartError: "Could not start the camera.",
+    metrics: {
+      rom: "ROM L / R",
+      repetitions: "Repetitions",
+      asymmetry: "Asymmetry",
+      camera: "Camera",
+      pose: "Pose in frame",
+      poseDetected: "DETECTED",
+      poseMissing: "NOT DETECTED",
+      poseWaiting: "WAITING",
+    },
+  },
+  upload: {
+    ready: "Ready to upload",
+    uploading: "Uploading video",
+    complete: "Analysis complete",
+    uploadError: "Could not upload the video",
+    saveError: "Could not save the session",
+    resultTitle: "Video analyzed",
+    uploadTitle: "Upload a rehabilitation session",
+    uploadBody:
+      "MP4, MOV, AVI or MKV up to 512 MB. For the posture map, record in the frontal plane with the full body visible.",
+    repetitions: "Repetitions",
+    targetCompletion: "Target completion",
+    symmetry: "Symmetry",
+    poseCoverage: "Recognition quality",
+    save: "Save to history",
+    saved: "Saved to history",
+    targetNote:
+      "The protocol defines the target ROM and a professional can adjust it. It is not a clinical norm.",
+    progress: {
+      "Extracting frames": "Extracting frames",
+      "Detecting posture": "Detecting posture",
+      "Calculating ROM and symmetry": "Calculating ROM and symmetry",
+      Done: "Done",
+    },
+  },
+} as const;
+
+export const rehabCopy = { uk, en } as const;
+
+export type RehabCopy = (typeof rehabCopy)[RehabLocale];

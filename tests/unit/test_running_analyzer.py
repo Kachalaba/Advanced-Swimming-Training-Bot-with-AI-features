@@ -42,8 +42,19 @@ class TestRunningAnalyzerMetrics:
         analyzer = RunningAnalyzer(fps=30.0)
         result = analyzer.analyze(frames, fps=30.0)
         assert isinstance(result, RunningAnalysis)
-        # Should detect non-zero cadence (simulated ~168 spm)
-        assert result.cadence >= 0.0
+        assert 150.0 <= result.cadence <= 185.0
+
+    def test_cadence_uses_observed_step_intervals_when_pose_is_missing(self):
+        frames = make_running_frames(n=90, fps=30.0) + make_empty_frames(90)
+        result = RunningAnalyzer(fps=30.0).analyze(frames, fps=30.0)
+        assert 150.0 <= result.cadence <= 185.0
+
+    def test_vertical_oscillation_ignores_single_pose_outlier(self):
+        frames = make_running_frames(n=180, fps=30.0)
+        frames[40][23]["y"] = 10.0
+        frames[40][24]["y"] = 10.0
+        result = RunningAnalyzer(fps=30.0).analyze(frames, fps=30.0)
+        assert result.avg_vertical_osc < 0.1
 
     def test_scores_in_valid_range(self):
         frames = make_running_frames(n=90, fps=30.0)

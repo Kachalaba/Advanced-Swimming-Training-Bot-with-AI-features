@@ -4,6 +4,7 @@ History/progress page module.
 
 import streamlit as st
 
+from i18n.translations import t
 from video_analysis.athlete_database import get_database
 
 
@@ -55,11 +56,12 @@ def render_history_tab():
     if stats["by_type"]:
         st.markdown("### 📊 По типам тренувань")
         for stype, sdata in stats["by_type"].items():
-            type_icon = "🏊" if stype == "swimming" else "🏋️"
+            type_icon = "🏊" if stype == "swimming" else "🩺" if stype == "rehab" else "🏋️"
+            type_label = t("rehab_history_type") if stype == "rehab" else stype.capitalize()
             st.markdown(
                 f"""
             <div style="background: rgba(59,130,246,0.1); border-radius: 8px; padding: 0.5rem 1rem; margin: 0.5rem 0;">
-                <strong>{type_icon} {stype.capitalize()}</strong>: {sdata['count']} сесій |
+                <strong>{type_icon} {type_label}</strong>: {sdata['count']} сесій |
                 Середня: {sdata['avg_score']}/100 | Найкраща: {sdata['best_score']}/100
             </div>
             """,
@@ -87,6 +89,7 @@ def render_history_tab():
         "Running": "running",
         "Cycling": "cycling",
         "Dryland": "dryland",
+        t("rehab_history_type"): "rehab",
     }
 
     _mcol1, _mcol2, _mcol3 = st.columns(3)
@@ -174,7 +177,7 @@ def render_history_tab():
         )
 
         for session in sessions:
-            type_icon = "🏊" if session.session_type == "swimming" else "🏋️"
+            type_icon = "🏊" if session.session_type == "swimming" else "🩺" if session.session_type == "rehab" else "🏋️"
             with st.expander(f"{type_icon} {session.date[:10]} - Оцінка: {session.ai_score}/100"):
                 col1, col2 = st.columns(2)
 

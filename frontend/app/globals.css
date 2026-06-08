@@ -30,3 +30,11 @@ body {
 .scrollbar-none::-webkit-scrollbar {
   display: none;
 }
+
+video {
+  background: #070b10;
+}
+
+::backdrop {
+  background: #05070a;
+}

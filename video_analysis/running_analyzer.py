@@ -41,6 +41,10 @@ from video_analysis.constants import (
     INJURY_RISK_OVERSTRIDING,
     LONG_CONTACT_TIME_MS,
     OVERSTRIDING_THRESHOLD_PX,
+    RUN_MAX_SAME_SIDE_STEP_INTERVAL_SEC,
+    RUN_MIN_ANKLE_EXCURSION_BODY_RATIO,
+    RUN_MIN_ANKLE_EXCURSION_PX,
+    RUN_MIN_SAME_SIDE_STEP_INTERVAL_SEC,
     RUN_PHASE_THRESHOLD_PX,
     SEVERE_HEEL_STRIKE_THRESHOLD,
 )
@@ -206,6 +210,7 @@ class RunningAnalyzer(BaseAnalyzer):
         self.steps: List[StepData] = []
         self.phases: List[RunPhase] = []
         self.hip_heights: List[float] = []
+        self.hip_height_frames: List[int] = []
 
         # Advanced tracking
         self.foot_strike_angles: List[float] = []
@@ -289,6 +294,12 @@ class RunningAnalyzer(BaseAnalyzer):
         prev_right_ankle_y = None
         left_step_start = None
         right_step_start = None
+        left_step_start_y = None
+        right_step_start_y = None
+        left_step_peak_y = None
+        right_step_peak_y = None
+        last_left_step_frame = None
+        last_right_step_frame = None
 
         for frame_idx, kps in enumerate(keypoints_list):
             if not kps:
@@ -311,6 +322,7 @@ class RunningAnalyzer(BaseAnalyzer):
             if l_hip and r_hip:
                 hip_center_y = (l_hip[1] + r_hip[1]) / 2
                 self.hip_heights.append(hip_center_y)
+                self.hip_height_frames.append(frame_idx)
 
             # Calculate knee lift angles
             if l_hip and l_knee and l_ankle:
@@ -348,35 +360,70 @@ class RunningAnalyzer(BaseAnalyzer):
 
             # Step detection based on ankle height changes
             if l_ankle and r_ankle:
+                body_height = self._estimate_body_height(
+                    l_shoulder,
+                    r_shoulder,
+                    l_hip,
+                    r_hip,
+                    l_ankle,
+                    r_ankle,
+                )
+                min_excursion = self._minimum_step_excursion(body_height)
+                min_step_frames = max(1, round(self.fps * RUN_MIN_SAME_SIDE_STEP_INTERVAL_SEC))
+
                 # Detect left step (ankle goes down then up)
                 if prev_left_ankle_y is not None:
                     if prev_left_ankle_y < l_ankle[1] and left_step_start is None:
-                        # Ankle going down - starting stance
                         left_step_start = frame_idx
+                        left_step_start_y = prev_left_ankle_y
+                        left_step_peak_y = l_ankle[1]
+                    elif left_step_start is not None and l_ankle[1] >= prev_left_ankle_y:
+                        left_step_peak_y = max(left_step_peak_y or l_ankle[1], l_ankle[1])
                     elif prev_left_ankle_y > l_ankle[1] and left_step_start is not None:
-                        # Ankle going up - end of stance, step complete
-                        step = StepData(
-                            frame=left_step_start,
-                            side="left",
-                            duration_sec=(frame_idx - left_step_start) / self.fps,
-                            knee_angle=knee_lifts_left[-1] if knee_lifts_left else 0,
+                        excursion = (left_step_peak_y or 0) - (left_step_start_y or 0)
+                        interval_ok = (
+                            last_left_step_frame is None or frame_idx - last_left_step_frame >= min_step_frames
                         )
-                        self.steps.append(step)
+                        if excursion >= min_excursion and interval_ok:
+                            self.steps.append(
+                                StepData(
+                                    frame=left_step_start,
+                                    side="left",
+                                    duration_sec=(frame_idx - left_step_start) / self.fps,
+                                    knee_angle=knee_lifts_left[-1] if knee_lifts_left else 0,
+                                )
+                            )
+                            last_left_step_frame = frame_idx
                         left_step_start = None
+                        left_step_start_y = None
+                        left_step_peak_y = None
 
                 # Detect right step
                 if prev_right_ankle_y is not None:
                     if prev_right_ankle_y < r_ankle[1] and right_step_start is None:
                         right_step_start = frame_idx
+                        right_step_start_y = prev_right_ankle_y
+                        right_step_peak_y = r_ankle[1]
+                    elif right_step_start is not None and r_ankle[1] >= prev_right_ankle_y:
+                        right_step_peak_y = max(right_step_peak_y or r_ankle[1], r_ankle[1])
                     elif prev_right_ankle_y > r_ankle[1] and right_step_start is not None:
-                        step = StepData(
-                            frame=right_step_start,
-                            side="right",
-                            duration_sec=(frame_idx - right_step_start) / self.fps,
-                            knee_angle=knee_lifts_right[-1] if knee_lifts_right else 0,
+                        excursion = (right_step_peak_y or 0) - (right_step_start_y or 0)
+                        interval_ok = (
+                            last_right_step_frame is None or frame_idx - last_right_step_frame >= min_step_frames
                         )
-                        self.steps.append(step)
+                        if excursion >= min_excursion and interval_ok:
+                            self.steps.append(
+                                StepData(
+                                    frame=right_step_start,
+                                    side="right",
+                                    duration_sec=(frame_idx - right_step_start) / self.fps,
+                                    knee_angle=knee_lifts_right[-1] if knee_lifts_right else 0,
+                                )
+                            )
+                            last_right_step_frame = frame_idx
                         right_step_start = None
+                        right_step_start_y = None
+                        right_step_peak_y = None
 
                 prev_left_ankle_y = l_ankle[1]
                 prev_right_ankle_y = r_ankle[1]
@@ -423,6 +470,55 @@ class RunningAnalyzer(BaseAnalyzer):
         )
 
     # _get_point and _calculate_angle are inherited from BaseAnalyzer
+
+    @staticmethod
+    def _estimate_body_height(l_shoulder, r_shoulder, l_hip, r_hip, l_ankle, r_ankle) -> float:
+        upper_points = [p for p in (l_shoulder, r_shoulder) if p]
+        if not upper_points:
+            upper_points = [p for p in (l_hip, r_hip) if p]
+        lower_points = [p for p in (l_ankle, r_ankle) if p]
+        if not upper_points or not lower_points:
+            return 0.0
+        upper_y = min(p[1] for p in upper_points)
+        lower_y = max(p[1] for p in lower_points)
+        return max(0.0, lower_y - upper_y)
+
+    @staticmethod
+    def _minimum_step_excursion(body_height: float) -> float:
+        relative_threshold = body_height * RUN_MIN_ANKLE_EXCURSION_BODY_RATIO
+        if body_height <= 2.0:
+            return relative_threshold
+        return max(RUN_MIN_ANKLE_EXCURSION_PX, relative_threshold)
+
+    def _calculate_cadence(self, duration: float) -> float:
+        same_side_intervals = []
+        for side in ("left", "right"):
+            side_frames = sorted(step.frame for step in self.steps if step.side == side)
+            for start, end in zip(side_frames, side_frames[1:]):
+                interval_sec = (end - start) / self.fps
+                if RUN_MIN_SAME_SIDE_STEP_INTERVAL_SEC <= interval_sec <= RUN_MAX_SAME_SIDE_STEP_INTERVAL_SEC:
+                    same_side_intervals.append(interval_sec)
+
+        if same_side_intervals:
+            return 120.0 / float(np.median(same_side_intervals))
+        return (len(self.steps) / duration) * 60 if duration > 0 else 0.0
+
+    def _calculate_vertical_oscillation(self) -> float:
+        if not self.hip_heights:
+            return 0.0
+
+        samples = dict(zip(self.hip_height_frames, self.hip_heights))
+        cycle_ranges = []
+        for side in ("left", "right"):
+            side_frames = sorted(step.frame for step in self.steps if step.side == side)
+            for start, end in zip(side_frames, side_frames[1:]):
+                values = [samples[frame] for frame in range(start, end + 1) if frame in samples]
+                if len(values) >= 5:
+                    cycle_ranges.append(float(np.percentile(values, 90) - np.percentile(values, 10)))
+
+        if cycle_ranges:
+            return float(np.median(cycle_ranges))
+        return float(np.percentile(self.hip_heights, 90) - np.percentile(self.hip_heights, 10))
 
     def _calculate_arm_angle(self, shoulder, elbow, hip) -> float:
         """Calculate arm swing angle relative to torso."""
@@ -603,7 +699,7 @@ class RunningAnalyzer(BaseAnalyzer):
         total_steps = left_steps + right_steps
 
         # Cadence (steps per minute)
-        cadence = (total_steps / duration) * 60 if duration > 0 else 0
+        cadence = self._calculate_cadence(duration)
 
         # Average knee lift
         all_knee = knee_left + knee_right
@@ -625,10 +721,7 @@ class RunningAnalyzer(BaseAnalyzer):
             arm_symmetry = 0
 
         # Vertical oscillation
-        if self.hip_heights:
-            vertical_osc = max(self.hip_heights) - min(self.hip_heights)
-        else:
-            vertical_osc = 0
+        vertical_osc = self._calculate_vertical_oscillation()
 
         # Phase distribution
         phase_counts = {}

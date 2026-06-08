@@ -169,6 +169,129 @@ class TestTrainingSessions:
         assert stats["total_distance_m"] == pytest.approx(1100.0, abs=0.1)
 
 
+class TestSaveAnalysis:
+
+    def test_waterline_swimming_analysis_populates_history_fields(self, tmp_path):
+        import video_analysis.athlete_database as athlete_database
+
+        original_instance = athlete_database._db_instance
+        athlete_database._db_instance = AthleteDatabase(str(tmp_path / "swimming.db"))
+        try:
+            payload = {
+                "analysis_type": "swimming_freestyle_side",
+                "overall_score": 82.0,
+                "cycles": [
+                    {"start_sec": 1.0, "end_sec": 2.2},
+                    {"start_sec": 2.2, "end_sec": 3.4},
+                ],
+                "primary_issue": {"title": "Hips drop below the body line"},
+            }
+            session_id = athlete_database.save_analysis_to_db(
+                athlete_name="Swim Athlete",
+                session_type="swimming",
+                analysis={"swimming_analysis": payload},
+                video_path="/data/session-videos/swimming-job.mp4",
+            )
+
+            session = athlete_database._db_instance.get_session(session_id)
+            assert session is not None
+            assert session.exercise_type == "freestyle_side"
+            assert session.stroke_count == 2
+            assert session.duration_sec == 2.4
+            assert session.ai_score == 82.0
+            assert session.ai_summary == "Hips drop below the body line"
+        finally:
+            athlete_database._db_instance = original_instance
+
+    def test_rehab_analysis_populates_existing_session_fields(self, tmp_path):
+        import json
+
+        import video_analysis.athlete_database as athlete_database
+
+        original_instance = athlete_database._db_instance
+        athlete_database._db_instance = AthleteDatabase(str(tmp_path / "rehab.db"))
+        try:
+            report = {
+                "protocol": "shoulder_flexion",
+                "total_correct_reps": 3,
+                "completion_score": 87.5,
+                "symmetry": {"score": 91.0},
+            }
+            session_id = athlete_database.save_analysis_to_db(
+                athlete_name="Rehab Athlete",
+                session_type="rehab",
+                analysis={"rehab_analysis": report},
+            )
+
+            session = athlete_database._db_instance.get_session(session_id)
+            assert session is not None
+            assert session.session_type == "rehab"
+            assert session.exercise_type == "shoulder_flexion"
+            assert session.reps == 3
+            assert session.symmetry_score == 91.0
+            assert session.stability_score == 87.5
+            assert json.loads(session.full_analysis)["rehab_analysis"]["protocol"] == "shoulder_flexion"
+        finally:
+            athlete_database._db_instance = original_instance
+
+    def test_tool_analysis_populates_history_fields(self, tmp_path):
+        import video_analysis.athlete_database as athlete_database
+
+        original_instance = athlete_database._db_instance
+        athlete_database._db_instance = AthleteDatabase(str(tmp_path / "tools.db"))
+        try:
+            session_id = athlete_database.save_analysis_to_db(
+                athlete_name="Tool Athlete",
+                session_type="tool",
+                analysis={
+                    "tool": {
+                        "operation": "trim",
+                        "artifact_name": "trim.mp4",
+                        "metadata": {
+                            "start_sec": 1.0,
+                            "end_sec": 4.0,
+                            "duration_sec": 3.0,
+                        },
+                    }
+                },
+                video_path="/data/session-artifacts/tools/job/trim.mp4",
+            )
+
+            session = athlete_database._db_instance.get_session(session_id)
+            assert session is not None
+            assert session.exercise_type == "trim"
+            assert session.duration_sec == 3.0
+            assert session.ai_summary == "Trim 1.0s-4.0s"
+            assert session.video_path.endswith("trim.mp4")
+        finally:
+            athlete_database._db_instance = original_instance
+
+    def test_frame_tool_analysis_uses_frame_count_as_reps(self, tmp_path):
+        import video_analysis.athlete_database as athlete_database
+
+        original_instance = athlete_database._db_instance
+        athlete_database._db_instance = AthleteDatabase(str(tmp_path / "frames.db"))
+        try:
+            session_id = athlete_database.save_analysis_to_db(
+                athlete_name="Tool Athlete",
+                session_type="tool",
+                analysis={
+                    "tool": {
+                        "operation": "frame_extractor",
+                        "metadata": {"frame_count": 5},
+                    }
+                },
+            )
+
+            session = athlete_database._db_instance.get_session(session_id)
+            assert session is not None
+            assert session.exercise_type == "frame_extractor"
+            assert session.reps == 5
+            assert session.ai_summary == "Extracted 5 frames"
+        finally:
+            athlete_database._db_instance = original_instance
+
+
 class TestContextManagerBehavior:
     """Verify that the DB connection context manager handles errors correctly."""
 

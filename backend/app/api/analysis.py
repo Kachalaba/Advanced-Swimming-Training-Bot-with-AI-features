@@ -3,22 +3,31 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
+import os
 import shutil
-import threading
 from pathlib import Path
+from threading import Thread
+from typing import Optional
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
+from pydantic import BaseModel, Field
 
-from app.api.upload_validation import UploadValidationError, copy_upload_with_limit, validate_video_upload
-from app.services import running as running_pipeline
-from app.services.jobs import Job, registry
+from video_analysis.athlete_database import save_analysis_to_db
+
+from ..services import running as running_pipeline
+from ..services import swimming as swimming_pipeline
+from ..services.jobs import Job, registry, stream_job_events
+from .upload_validation import UploadValidationError, copy_upload_with_limit, validate_video_upload
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["analysis"])
+
+
+class SaveAnalysisRequest(BaseModel):
+    athlete_name: str = Field(default="Athlete", min_length=1, max_length=120)
 
 
 def _run_pipeline_in_thread(job: Job, video_path: Path, fps: float) -> None:
@@ -42,9 +51,65 @@ def _run_pipeline_in_thread(job: Job, video_path: Path, fps: float) -> None:
             job.status = "done"
     except Exception as exc:
         logger.exception("Job %s failed", job.id)
-        job.status = "error"
         job.error = str(exc)
         job.push_event({"type": "error", "message": str(exc)})
+        job.status = "error"
+
+
+def _run_swimming_pipeline_in_thread(
+    job: Job,
+    video_path: Path,
+    fps: Optional[float],
+) -> None:
+    try:
+        job.status = "running"
+        for event in swimming_pipeline.analyze_swimming_video(
+            video_path=video_path,
+            output_dir=job.workspace,
+            fps=fps,
+        ):
+            payload = event.to_dict()
+            job.push_event(payload)
+            if payload["type"] == "result":
+                job.result = payload
+                job.status = "done"
+            elif payload["type"] == "error":
+                job.result = payload
+                job.error = payload["message"]
+                job.status = "error"
+        if job.status == "running":
+            job.status = "done"
+    except Exception as exc:
+        logger.exception("Swimming job %s failed", job.id)
+        payload = {
+            "type": "error",
+            "code": "internal_error",
+            "message": str(exc),
+            "reshoot_guidance": "",
+        }
+        job.result = payload
+        job.error = str(exc)
+        job.push_event(payload)
+        job.status = "error"
+
+
+def _get_swimming_job(job_id: str) -> Job:
+    job = registry.get(job_id)
+    if job is None or job.kind != "swimming":
+        raise HTTPException(status_code=404, detail="Job not found")
+    return job
+
+
+def _persist_swimming_video(job: Job) -> str:
+    source = job.workspace / "annotated.mp4"
+    if not source.exists():
+        return ""
+    default_dir = Path(os.environ.get("ATHLETE_DB_PATH", "data/athletes.db")).parent / "session-videos"
+    video_dir = Path(os.environ.get("SESSION_VIDEO_DIR", str(default_dir)))
+    video_dir.mkdir(parents=True, exist_ok=True)
+    target = video_dir / f"swimming-{job.id}.mp4"
+    shutil.copy2(source, target)
+    return str(target)
 
 
 @router.post("/running")
@@ -73,7 +138,7 @@ async def upload_running(
     logger.info("Saved upload %s (%d bytes)", video_path, video_path.stat().st_size)
     logger.debug("Copied %d upload bytes for job %s", bytes_written, job.id)
 
-    thread = threading.Thread(
+    thread = Thread(
         target=_run_pipeline_in_thread,
         args=(job, video_path, fps),
         daemon=True,
@@ -103,29 +168,8 @@ async def stream_events(job_id: str):
     if job is None:
         raise HTTPException(404, "Job not found")
 
-    async def event_generator():
-        # Replay any events that arrived before this client connected
-        for ev in list(job.events):
-            yield f"data: {json.dumps(ev)}\n\n"
-            if ev["type"] in ("result", "error"):
-                return
-
-        # Then stream new ones until the job is finished
-        while True:
-            try:
-                ev = await asyncio.wait_for(job.queue.get(), timeout=30.0)
-            except asyncio.TimeoutError:
-                # Heartbeat so proxies don't close the connection
-                yield ": heartbeat\n\n"
-                if job.status in ("done", "error"):
-                    return
-                continue
-            yield f"data: {json.dumps(ev)}\n\n"
-            if ev["type"] in ("result", "error"):
-                return
-
     return StreamingResponse(
-        event_generator(),
+        stream_job_events(job),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -143,3 +187,89 @@ async def stream_video(job_id: str):
     if not video_path.exists():
         raise HTTPException(404, "Annotated video not ready")
     return FileResponse(video_path, media_type="video/mp4")
+
+
+@router.post("/swimming")
+async def upload_swimming(
+    video: UploadFile = File(...),
+    fps: Optional[float] = Form(None),
+) -> dict[str, str]:
+    try:
+        suffix = validate_video_upload(
+            filename=video.filename,
+            content_type=video.content_type,
+            declared_size=getattr(video, "size", None),
+        )
+    except UploadValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    job = registry.create(kind="swimming")
+    job.source_name = video.filename
+    video_path = job.workspace / f"input{suffix}"
+    try:
+        with video_path.open("wb") as target:
+            copy_upload_with_limit(video.file, target)
+    except UploadValidationError as exc:
+        shutil.rmtree(job.workspace, ignore_errors=True)
+        raise HTTPException(status_code=413, detail=str(exc)) from exc
+
+    Thread(
+        target=_run_swimming_pipeline_in_thread,
+        args=(job, video_path, fps),
+        daemon=True,
+    ).start()
+    return {"job_id": job.id}
+
+
+@router.get("/swimming/{job_id}")
+async def get_swimming_job(job_id: str) -> dict:
+    job = _get_swimming_job(job_id)
+    return {
+        "id": job.id,
+        "status": job.status,
+        "result": job.result,
+        "error": job.error,
+        "event_count": len(job.events),
+        "saved_session_id": job.saved_session_id,
+    }
+
+
+@router.get("/swimming/{job_id}/events")
+async def stream_swimming_events(job_id: str):
+    job = _get_swimming_job(job_id)
+    return StreamingResponse(
+        stream_job_events(job),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@router.get("/swimming/{job_id}/video")
+async def stream_swimming_video(job_id: str):
+    job = _get_swimming_job(job_id)
+    video_path = job.workspace / "annotated.mp4"
+    if not video_path.exists():
+        raise HTTPException(status_code=404, detail="Annotated video not ready")
+    return FileResponse(video_path, media_type="video/mp4")
+
+
+@router.post("/swimming/{job_id}/save")
+async def save_swimming_job(
+    job_id: str,
+    request: SaveAnalysisRequest,
+) -> dict[str, int]:
+    job = _get_swimming_job(job_id)
+    if job.status != "done" or not job.result:
+        raise HTTPException(status_code=409, detail="Swimming analysis is not ready")
+    if job.saved_session_id is None:
+        job.saved_session_id = await asyncio.to_thread(
+            save_analysis_to_db,
+            athlete_name=request.athlete_name,
+            session_type="swimming",
+            analysis={"swimming_analysis": job.result},
+            video_path=_persist_swimming_video(job),
+        )
+    return {"session_id": job.saved_session_id}

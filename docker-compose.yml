@@ -8,6 +8,22 @@ services:
       - "8000:8000"
     environment:
       CORS_ORIGINS: "http://localhost:3000,http://127.0.0.1:3000"
+      ATHLETE_DB_PATH: "/data/athletes.db"
+      SESSION_VIDEO_DIR: "/data/session-videos"
+      SESSION_ARTIFACT_DIR: "/data/session-artifacts"
+      CURRENT_ATHLETE_NAME: "Nikita K."
+    volumes:
+      - ./data:/data
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=2)"
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
     restart: unless-stopped
 
   frontend:
@@ -20,5 +36,6 @@ services:
     ports:
       - "3000:3000"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     restart: unless-stopped

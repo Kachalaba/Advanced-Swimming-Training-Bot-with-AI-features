@@ -14,6 +14,7 @@ export default function RunningPage() {
       badges={[
         { icon: Footprints, label: "Track · Trail · Treadmill" },
         { variant: "success", icon: TrendingUp, label: "Form trending up" },
+        { variant: "warn", label: "Demo metrics below" },
       ]}
       hint="The pipeline locks onto the runner once detected and follows them across all zoom changes — no more lost analyses when the camera pulls back."
       accentRgb="34,211,238"

@@ -12,6 +12,7 @@ export default function CyclingPage() {
       badges={[
         { icon: Bike, label: "Road · TT · Indoor" },
         { variant: "info", label: "35+ metrics per session" },
+        { variant: "warn", label: "Demo metrics" },
       ]}
       hint="Best results with a 30s clip in a steady aero or seated position. SPRINT will compute knee-extension angle, hip drop, and pedal-stroke smoothness."
       accentRgb="16,185,129"

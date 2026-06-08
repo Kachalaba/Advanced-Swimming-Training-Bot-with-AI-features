@@ -46,6 +46,12 @@ export type SportLandingProps = {
   sessions: SportSession[];
   insights: { tag: string; variant: "success" | "warn" | "info"; title: string; detail: string }[];
   uploader?: React.ReactNode;
+  uploadSubtitle?: string;
+  secondaryPanel?: {
+    title: string;
+    subtitle?: string;
+    content: React.ReactNode;
+  };
 };
 
 export function SportLanding({
@@ -58,7 +64,15 @@ export function SportLanding({
   sessions,
   insights,
   uploader,
+  uploadSubtitle = "Multi-angle video supported",
+  secondaryPanel,
 }: SportLandingProps) {
+  function scrollToUploader() {
+    document
+      .getElementById("sport-uploader")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   return (
     <div className="animate-slide-up space-y-8">
       <div className="relative overflow-hidden rounded-2xl border border-white/[0.06] bg-gradient-to-br from-surface to-bg p-6 md:p-8">
@@ -93,7 +107,11 @@ export function SportLanding({
             <p className="text-sm text-slate-400 mt-1.5 max-w-xl">{subtitle}</p>
           </div>
           <div className="flex items-center gap-2">
-            <button className="flex items-center gap-2 px-3 h-8 bg-cyan-400 hover:bg-cyan-300 text-slate-900 text-xs font-semibold rounded-lg transition-all duration-200 active:scale-[0.98]">
+            <button
+              type="button"
+              onClick={scrollToUploader}
+              className="flex items-center gap-2 px-3 h-8 bg-cyan-400 hover:bg-cyan-300 text-slate-900 text-xs font-semibold rounded-lg transition-all duration-200 active:scale-[0.98]"
+            >
               <Upload className="w-3.5 h-3.5" />
               Upload session
             </button>
@@ -138,7 +156,11 @@ export function SportLanding({
                 title="No sessions yet"
                 message="Upload your first video to start building a baseline for this discipline."
                 action={
-                  <button className="flex items-center gap-1.5 px-3 h-8 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.06] text-xs font-medium text-slate-200 rounded-lg transition-colors">
+                  <button
+                    type="button"
+                    onClick={scrollToUploader}
+                    className="flex items-center gap-1.5 px-3 h-8 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.06] text-xs font-medium text-slate-200 rounded-lg transition-colors"
+                  >
                     <Plus className="w-3 h-3" /> Upload first session
                   </button>
                 }
@@ -213,25 +235,37 @@ export function SportLanding({
         </ChartContainer>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div
+        id="sport-uploader"
+        className="grid scroll-mt-24 grid-cols-1 gap-6 lg:grid-cols-2"
+      >
         <ChartContainer
           title="Upload new session"
-          subtitle="Multi-angle video supported"
+          subtitle={uploadSubtitle}
         >
           {uploader ?? <FileDropZone />}
         </ChartContainer>
-        <ChartContainer title="Drills library" subtitle="Discipline-specific cues">
-          <EmptyState
-            icon={Target}
-            title="Coming soon"
-            message="A curated library of drills tied to detected weaknesses in your video analysis."
-            action={
-              <button className="flex items-center gap-1.5 px-3 h-8 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.06] text-xs font-medium text-slate-200 rounded-lg transition-colors">
-                <ArrowUpRight className="w-3 h-3" /> Notify me
-              </button>
-            }
-          />
-        </ChartContainer>
+        {secondaryPanel ? (
+          <ChartContainer
+            title={secondaryPanel.title}
+            subtitle={secondaryPanel.subtitle}
+          >
+            {secondaryPanel.content}
+          </ChartContainer>
+        ) : (
+          <ChartContainer title="Drills library" subtitle="Discipline-specific cues">
+            <EmptyState
+              icon={Target}
+              title="Coming soon"
+              message="A curated library of drills tied to detected weaknesses in your video analysis."
+              action={
+                <button className="flex items-center gap-1.5 px-3 h-8 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.06] text-xs font-medium text-slate-200 rounded-lg transition-colors">
+                  <ArrowUpRight className="w-3 h-3" /> Notify me
+                </button>
+              }
+            />
+          </ChartContainer>
+        )}
       </div>
     </div>
   );

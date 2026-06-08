@@ -8,8 +8,10 @@ surface tiny and lets the frontend poll or subscribe to events.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import threading
+import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -27,19 +29,47 @@ class Job:
     events: list[dict[str, Any]] = field(default_factory=list)
     result: dict[str, Any] | None = None
     error: str | None = None
-    queue: asyncio.Queue[dict[str, Any]] = field(default_factory=lambda: asyncio.Queue())
+    saved_session_id: int | None = None
+    artifact_path: Path | None = None
+    source_name: str | None = None
+    operation: str | None = None
     _lock: threading.Lock = field(default_factory=threading.Lock)
 
     def push_event(self, event: dict[str, Any]) -> None:
         with self._lock:
             self.events.append(event)
-        # asyncio.Queue.put is async, but we're called from a worker
-        # thread. Use put_nowait — this queue is unbounded so it never
-        # blocks. The async listener wraps await for next event.
-        try:
-            self.queue.put_nowait(event)
-        except asyncio.QueueFull:
-            pass
+
+    def events_since(self, index: int) -> list[dict[str, Any]]:
+        with self._lock:
+            return list(self.events[index:])
+
+
+async def stream_job_events(
+    job: Job,
+    *,
+    heartbeat_seconds: float = 30.0,
+    poll_seconds: float = 0.1,
+):
+    """Yield each job event exactly once for a single SSE subscriber."""
+    cursor = 0
+    last_emit = time.monotonic()
+    while True:
+        events = job.events_since(cursor)
+        for event in events:
+            cursor += 1
+            last_emit = time.monotonic()
+            yield f"data: {json.dumps(event)}\n\n"
+            if event["type"] in ("result", "error"):
+                return
+
+        if job.status in ("done", "error"):
+            return
+
+        now = time.monotonic()
+        if now - last_emit >= heartbeat_seconds:
+            yield ": heartbeat\n\n"
+            last_emit = now
+        await asyncio.sleep(poll_seconds)
 
 
 class JobRegistry:

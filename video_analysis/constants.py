@@ -38,6 +38,17 @@ HEAD_STABILITY_MULTIPLIER = 2
 BREATHING_REGULARITY_MULTIPLIER = 2
 KICK_SYMMETRY_MULTIPLIER = 3
 
+# Confidence-aware side-view freestyle analysis
+SWIM_CONFIDENCE_HIGH = 0.78
+SWIM_CONFIDENCE_MEDIUM = 0.55
+SWIM_MIN_DIAGNOSIS_CYCLES = 2
+SWIM_TARGET_CYCLE_COUNT = 5
+SWIM_MIN_PARTIAL_CYCLE_COUNT = 2
+SWIM_WATERLINE_MIN_EDGE_STRENGTH = 6.0
+SWIM_WATERLINE_MAX_SLOPE = 0.25
+SWIM_WATERLINE_MAX_JUMP_RATIO = 0.12
+SWIM_WATERLINE_BRIDGE_DECAY = 0.8
+
 # ---------------------------------------------------------------------------
 # Running analysis thresholds
 # ---------------------------------------------------------------------------
@@ -149,3 +160,81 @@ OPTIMAL_CADENCE_RPM_MAX = 100
 # ---------------------------------------------------------------------------
 OPTIMAL_CADENCE_SPM_MIN = 170
 OPTIMAL_CADENCE_SPM_MAX = 190
+RUN_MIN_SAME_SIDE_STEP_INTERVAL_SEC = 0.4
+RUN_MAX_SAME_SIDE_STEP_INTERVAL_SEC = 1.5
+RUN_MIN_ANKLE_EXCURSION_BODY_RATIO = 0.02
+RUN_MIN_ANKLE_EXCURSION_PX = 3.0
+
+# ---------------------------------------------------------------------------
+# Rehabilitation / kinesiotherapy
+# ---------------------------------------------------------------------------
+# These are configurable exercise targets for video feedback, not diagnostic
+# reference values. A clinician can tune them for an individual care plan.
+REHAB_MIN_VALID_FRAMES = 10
+REHAB_SMOOTHING_WINDOW = 3
+REHAB_MIN_REP_DURATION_SEC = 0.4
+REHAB_MAX_REP_DURATION_SEC = 12.0
+REHAB_CORRECT_REP_COMPLETION_RATIO = 0.8
+REHAB_ASYMMETRY_GOOD_PCT = 10.0
+REHAB_ASYMMETRY_WARNING_PCT = 20.0
+REHAB_LIVE_WINDOW_FRAMES = 300
+REHAB_LIVE_ANALYSIS_INTERVAL_FRAMES = 5
+
+# NOTE: with a single 2D camera, shoulder flexion (sagittal plane) and shoulder
+# abduction (frontal plane) are measured by the same elbow-shoulder-hip angle —
+# they differ only in the recording plane / patient instruction. Both protocols
+# therefore map to the neutral "shoulder" joint family below and are
+# distinguished by their clinical target ROM, not by the geometry.
+REHAB_JOINTS = {
+    "shoulder": {
+        "points": ("elbow", "shoulder", "hip"),
+        "target_rom": 150.0,
+        "rest_threshold": 35.0,
+        "active_threshold": 120.0,
+        "direction": "increase",
+    },
+    "elbow_flexion": {
+        "points": ("shoulder", "elbow", "wrist"),
+        "target_rom": 110.0,
+        "rest_threshold": 150.0,
+        "active_threshold": 70.0,
+        "direction": "decrease",
+    },
+    "hip_abduction": {
+        "points": ("shoulder", "hip", "knee"),
+        "target_rom": 40.0,
+        "rest_threshold": 165.0,
+        "active_threshold": 125.0,
+        "direction": "decrease",
+    },
+    "knee_extension": {
+        "points": ("hip", "knee", "ankle"),
+        "target_rom": 50.0,
+        "rest_threshold": 125.0,
+        "active_threshold": 160.0,
+        "direction": "increase",
+    },
+}
+
+REHAB_PROTOCOLS = {
+    "shoulder_flexion": {
+        "joint_metric": "shoulder",
+        "target_rom": 150.0,
+    },
+    "shoulder_abduction": {
+        "joint_metric": "shoulder",
+        "target_rom": 160.0,
+    },
+    "elbow_flexion": {
+        "joint_metric": "elbow_flexion",
+        "target_rom": 110.0,
+    },
+    "knee_extension": {
+        "joint_metric": "knee_extension",
+        "target_rom": 50.0,
+    },
+    "hip_abduction": {
+        "joint_metric": "hip_abduction",
+        "target_rom": 40.0,
+    },
+}

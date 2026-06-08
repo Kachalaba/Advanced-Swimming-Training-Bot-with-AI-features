@@ -21,9 +21,10 @@ import math
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any, Iterator, Union
 
 import cv2
+import numpy as np
 
 # The video_analysis package lives at the repo root. Backend runs from
 # /srv inside docker; mount the repo root and add it to the path so we
@@ -36,6 +37,8 @@ from video_analysis.frame_extractor import extract_frames_from_video  # noqa: E4
 from video_analysis.running_analyzer import RunningAnalysis  # noqa: E402
 from video_analysis.running_analyzer import RunningAnalyzer
 from video_analysis.swimmer_detector import detect_swimmer_in_frames  # noqa: E402
+
+from .video_encoding import finalize_browser_video, open_intermediate_writer
 
 logger = logging.getLogger(__name__)
 
@@ -156,7 +159,7 @@ class ErrorEvent:
         return {"type": "error", "message": self.message}
 
 
-Event = ProgressEvent | ResultEvent | ErrorEvent
+Event = Union[ProgressEvent, ResultEvent, ErrorEvent]
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -492,14 +495,14 @@ def analyze_running_video(
 
     yield ProgressEvent(75, "Encoding annotated video")
     annotated_path = output_dir / "annotated.mp4"
-    writer = None
-    for codec in ("avc1", "mp4v"):
-        fourcc = cv2.VideoWriter_fourcc(*codec)
-        writer = cv2.VideoWriter(str(annotated_path), fourcc, fps, (w, h))
-        if writer.isOpened():
-            break
-    if writer is None or not writer.isOpened():
-        yield ErrorEvent("Could not initialize video writer (codec missing)")
+    try:
+        writer, intermediate_path = open_intermediate_writer(
+            annotated_path,
+            fps=fps,
+            frame_size=(w, h),
+        )
+    except RuntimeError as exc:
+        yield ErrorEvent(str(exc))
         return
 
     cadence_label = f"Cadence: {analysis.cadence:.0f} spm"
@@ -527,6 +530,11 @@ def analyze_running_video(
         )
         writer.write(af)
     writer.release()
+    try:
+        finalize_browser_video(intermediate_path, annotated_path)
+    except RuntimeError as exc:
+        yield ErrorEvent(str(exc))
+        return
 
     yield ProgressEvent(95, "Finalizing")
     payload = {
@@ -557,10 +565,13 @@ def _serialize_analysis(a: RunningAnalysis) -> dict[str, Any]:
             out[k] = {kk: _safe(vv) for kk, vv in v.items()}
         else:
             out[k] = _safe(v)
+    out["vertical_oscillation_px"] = out.get("avg_vertical_osc", 0)
     return out
 
 
 def _safe(v: Any) -> Any:
+    if isinstance(v, np.generic):
+        return v.item()
     if isinstance(v, (str, int, float, bool)) or v is None:
         return v
     if isinstance(v, (list, tuple)):

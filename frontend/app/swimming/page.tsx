@@ -1,36 +1,81 @@
 "use client";
 
-import { Award, Target, Waves, Zap } from "lucide-react";
+import { Eye, Target, Timer, Waves } from "lucide-react";
 
 import { SportLanding } from "@/components/sports/SportLanding";
+import {
+  SwimmingFilmingGuide,
+  SwimmingUploader,
+} from "@/components/swimming/SwimmingUploader";
 
 export default function SwimmingPage() {
   return (
     <SportLanding
-      title="Swimming · Stroke intelligence"
-      subtitle="Frame-perfect analysis of stroke mechanics, body roll, breathing, and underwater phase. 40+ metrics per session."
+      title="Swimming · Waterline-aware analysis"
+      subtitle="Evidence-first freestyle analysis for side-on pool video. See the main issue, its exact moment, and what to train next."
       badges={[
-        { icon: Waves, label: "Pool · Open water" },
-        { variant: "success", label: "Detection rate 96%" },
+        { icon: Waves, label: "Freestyle · Side view" },
+        { variant: "success", label: "Confidence-aware" },
+        { variant: "info", label: "Waterline tracking" },
       ]}
-      hint="Upload a side-on or overhead video. SPRINT detects stroke phases (catch, pull, recovery), measures symmetry per arm, and flags timing breaks at 1/30s resolution."
+      hint="SPRINT separates above-water and underwater evidence, selects the clearest complete cycles, and hides metrics it cannot support."
       accentRgb="34,211,238"
       metrics={[
-        { label: "100m PR (Free)", value: "1:02.4", icon: Award, change: 1.4, accent: true, hint: "Set 6 days ago · 25m pool" },
-        { label: "Stroke rate", value: "42", unit: "/min", icon: Zap, change: 3, hint: "Avg over last 4 sessions" },
-        { label: "Distance per stroke", value: "1.94", unit: "m", icon: Target, change: 5, hint: "Up from 1.85 m last block" },
-        { label: "Symmetry", value: "92", unit: "%", icon: Target, change: 2, accent: true, hint: "Left/right pull balance" },
+        {
+          label: "Technique zones",
+          value: "5",
+          icon: Target,
+          accent: true,
+          hint: "Body · rotation · catch · breathing · kick",
+        },
+        {
+          label: "Selected cycles",
+          value: "3–5",
+          icon: Timer,
+          hint: "Only the clearest complete stroke cycles",
+        },
+        {
+          label: "Confidence",
+          value: "Strict",
+          icon: Eye,
+          hint: "Unreliable segments and metrics stay hidden",
+        },
+        {
+          label: "Result",
+          value: "Action",
+          icon: Waves,
+          accent: true,
+          hint: "Exact moment · drill · next-workout mini-set",
+        },
       ]}
-      sessions={[
-        { id: 1, title: "200m freestyle drills", duration: "1:08:42", date: "Yesterday", score: 92, thumb: "from-cyan-500/30 to-blue-500/20" },
-        { id: 2, title: "Catch-up + 6/3/6 set", duration: "44:10", date: "3 days ago", score: 88, thumb: "from-blue-500/30 to-indigo-500/20" },
-        { id: 3, title: "Open-water sighting", duration: "52:25", date: "Last week", score: 84, thumb: "from-cyan-500/30 to-emerald-500/20" },
-      ]}
+      sessions={[]}
       insights={[
-        { tag: "Catch", variant: "success", title: "Catch phase efficiency up 6%", detail: "Earlier vertical-forearm position over 14 days." },
-        { tag: "Body roll", variant: "warn", title: "Right roll under-rotated", detail: "Avg 28° vs 35° on left. Add unilateral kick drills." },
-        { tag: "Breathing", variant: "info", title: "Bilateral pattern stable", detail: "3-stroke breathing held for 86% of session." },
+        {
+          tag: "Evidence",
+          variant: "success",
+          title: "Every conclusion links to video",
+          detail: "Jump directly to the cycle and timestamp that supports the finding.",
+        },
+        {
+          tag: "Confidence",
+          variant: "warn",
+          title: "Missing evidence is not a zero",
+          detail: "The result reports zone coverage and hides unsupported scores.",
+        },
+        {
+          tag: "Coaching",
+          variant: "info",
+          title: "One issue, one next action",
+          detail: "The main repeated issue becomes a drill and a concrete mini-set.",
+        },
       ]}
+      uploader={<SwimmingUploader />}
+      uploadSubtitle="Side-on freestyle · MP4, MOV, AVI or MKV"
+      secondaryPanel={{
+        title: "How to film",
+        subtitle: "A reliable result starts with a reliable side view",
+        content: <SwimmingFilmingGuide />,
+      }}
     />
   );
 }

@@ -66,8 +66,8 @@ export default function AssistantPage() {
               </p>
             </div>
           </div>
-          <StatusBadge variant="success" icon={Brain}>
-            Claude · Live
+          <StatusBadge variant="warn" icon={Brain}>
+            Prototype · no model call
           </StatusBadge>
         </div>
 
@@ -109,20 +109,21 @@ export default function AssistantPage() {
             <textarea
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
+              disabled
               rows={1}
-              placeholder="Ask about your training, technique, or recovery…"
+              placeholder="AI chat is not connected in this build"
               className="flex-1 bg-transparent text-sm text-slate-100 placeholder:text-slate-500 outline-none resize-none py-1.5 max-h-32"
             />
             <button
-              disabled={!draft.trim()}
+              disabled
               className="w-8 h-8 flex items-center justify-center bg-cyan-400 hover:bg-cyan-300 disabled:bg-white/[0.06] disabled:text-slate-500 text-slate-900 rounded-lg transition-all duration-200 active:scale-95 shrink-0"
             >
               <ArrowUp className="w-4 h-4" />
             </button>
           </div>
           <p className="text-[10px] text-slate-500 mt-2 px-1">
-            SPRINT AI references your sessions and anonymises before sending to
-            the model.
+            Sample conversation only. No data is sent to an AI model in this
+            build.
           </p>
         </div>
       </div>
