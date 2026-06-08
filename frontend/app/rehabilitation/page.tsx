@@ -5,27 +5,26 @@ import {
   Camera,
   CircleGauge,
   HeartPulse,
+  Languages,
+  ShieldAlert,
   ShieldCheck,
   Upload,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { LiveRehabWorkspace } from "@/components/rehabilitation/LiveRehabWorkspace";
 import { RehabUploader } from "@/components/rehabilitation/RehabUploader";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import {
+  REHAB_LOCALE_STORAGE_KEY,
+  rehabCopy,
+  type RehabLocale,
+} from "@/lib/rehabCopy";
+import {
   rehabProtocols,
   type RehabProtocol,
 } from "@/lib/rehabilitation";
-
-const protocolLabels: Record<RehabProtocol, string> = {
-  shoulder_flexion: "Сгибание плеча",
-  shoulder_abduction: "Отведение плеча",
-  elbow_flexion: "Сгибание локтя",
-  knee_extension: "Разгибание колена",
-  hip_abduction: "Отведение бедра",
-};
 
 type InputMode = "live" | "upload";
 
@@ -33,9 +32,21 @@ export default function RehabilitationPage() {
   const [protocol, setProtocol] =
     useState<RehabProtocol>("shoulder_flexion");
   const [mode, setMode] = useState<InputMode>("live");
+  const [locale, setLocale] = useState<RehabLocale>("uk");
+  const copy = rehabCopy[locale];
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem(REHAB_LOCALE_STORAGE_KEY);
+    if (stored === "uk" || stored === "en") setLocale(stored);
+  }, []);
+
+  const changeLocale = (value: RehabLocale) => {
+    setLocale(value);
+    window.localStorage.setItem(REHAB_LOCALE_STORAGE_KEY, value);
+  };
 
   return (
-    <div className="animate-slide-up space-y-6">
+    <div className="animate-slide-up space-y-6" lang={locale}>
       <section className="relative overflow-hidden rounded-2xl border border-white/[0.07] bg-gradient-to-br from-surface via-surface to-bg p-6 md:p-8">
         <div className="absolute -right-20 -top-28 h-80 w-80 rounded-full bg-cyan-400/[0.08] blur-3xl" />
         <div
@@ -51,26 +62,38 @@ export default function RehabilitationPage() {
         <div className="relative flex flex-col justify-between gap-6 xl:flex-row xl:items-end">
           <div>
             <div className="mb-3 flex flex-wrap gap-2">
-              <StatusBadge variant="info" icon={HeartPulse}>
-                Rehabilitation intelligence
+              <StatusBadge variant="warn" icon={HeartPulse}>
+                {copy.prototypeBadge}
               </StatusBadge>
               <StatusBadge variant="success" icon={ShieldCheck}>
-                Local processing
+                {copy.localBadge}
               </StatusBadge>
             </div>
             <h1 className="text-3xl font-bold tracking-tight text-slate-50 md:text-4xl">
-              Posture, ROM & recovery
+              {copy.title}
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-400">
-              Live-кинезиотерапия с двусторонним ROM, картой плечевого и
-              тазового перекоса, контролем корпуса и относительным уровнем
-              камеры.
+              {copy.subtitle}
             </p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <div className="space-y-1.5">
+              <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.13em] text-slate-500">
+                <Languages className="h-3 w-3" />
+                {copy.language}
+              </span>
+              <SegmentedControl<RehabLocale>
+                value={locale}
+                onChange={changeLocale}
+                options={[
+                  { value: "uk", label: "Українська" },
+                  { value: "en", label: "English" },
+                ]}
+              />
+            </div>
             <label className="space-y-1.5">
               <span className="block text-[10px] font-semibold uppercase tracking-[0.13em] text-slate-500">
-                Протокол
+                {copy.protocol}
               </span>
               <select
                 value={protocol}
@@ -81,7 +104,7 @@ export default function RehabilitationPage() {
               >
                 {rehabProtocols.map((value) => (
                   <option key={value} value={value}>
-                    {protocolLabels[value]}
+                    {copy.protocols[value]}
                   </option>
                 ))}
               </select>
@@ -90,19 +113,35 @@ export default function RehabilitationPage() {
               value={mode}
               onChange={setMode}
               options={[
-                { value: "live", label: "Live camera" },
-                { value: "upload", label: "Upload video" },
+                { value: "live", label: copy.liveMode },
+                { value: "upload", label: copy.uploadMode },
               ]}
             />
           </div>
         </div>
       </section>
 
+      <section className="flex gap-3 rounded-xl border border-amber-400/20 bg-amber-400/[0.06] p-4">
+        <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" />
+        <div>
+          <h2 className="text-sm font-semibold text-amber-100">
+            {copy.limitationTitle}
+          </h2>
+          <p className="mt-1 text-xs leading-relaxed text-amber-100/65">
+            {copy.limitationBody}
+          </p>
+        </div>
+      </section>
+
       {mode === "live" ? (
-        <LiveRehabWorkspace key={protocol} protocol={protocol} />
+        <LiveRehabWorkspace
+          key={protocol}
+          protocol={protocol}
+          locale={locale}
+        />
       ) : (
         <section className="rounded-2xl border border-white/[0.07] bg-surface p-5 md:p-6">
-          <RehabUploader protocol={protocol} />
+          <RehabUploader protocol={protocol} locale={locale} />
         </section>
       )}
 
@@ -110,18 +149,18 @@ export default function RehabilitationPage() {
         {[
           {
             icon: CircleGauge,
-            title: "Двусторонний ROM",
-            text: "Амплитуда слева и справа, дефицит цели и качество повторов.",
+            title: copy.featureRomTitle,
+            text: copy.featureRomText,
           },
           {
             icon: Activity,
-            title: "Постуральные оси",
-            text: "Плечи, таз и линия корпуса накладываются прямо на live-видео.",
+            title: copy.featurePostureTitle,
+            text: copy.featurePostureText,
           },
           {
             icon: mode === "live" ? Camera : Upload,
-            title: "Web сейчас, Mac потом",
-            text: "Контракты камеры и анализа готовы к будущей AVFoundation-оболочке.",
+            title: copy.featureQualityTitle,
+            text: copy.featureQualityText,
           },
         ].map(({ icon: Icon, title, text }) => (
           <div
@@ -136,9 +175,7 @@ export default function RehabilitationPage() {
       </section>
 
       <p className="text-center text-[11px] leading-relaxed text-slate-600">
-        Видеоанализ является тренировочным инструментом и не заменяет оценку
-        врача или физического терапевта. Угол камеры измеряется относительно
-        последней оптической калибровки.
+        {copy.footer}
       </p>
     </div>
   );

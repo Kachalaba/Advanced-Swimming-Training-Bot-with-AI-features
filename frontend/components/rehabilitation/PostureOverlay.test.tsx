@@ -24,9 +24,9 @@ describe("PostureOverlay", () => {
     render(<PostureOverlay visible posture={posture} />);
 
     expect(screen.getByTestId("posture-plumb-axis")).toBeInTheDocument();
-    expect(screen.getByText("Плечи +2.7°")).toBeInTheDocument();
+    expect(screen.getByText("Плечі +2.7°")).toBeInTheDocument();
     expect(screen.getByText("Таз −1.9°")).toBeInTheDocument();
-    expect(screen.getByText("Корпус +0.8°")).toBeInTheDocument();
+    expect(screen.getByText("Тулуб +0.8°")).toBeInTheDocument();
   });
 
   it("removes the complete overlay when hidden", () => {

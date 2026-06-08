@@ -3,6 +3,7 @@
 import { CheckCircle2, Loader2, Save, Upload } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import { rehabCopy, type RehabLocale } from "@/lib/rehabCopy";
 import {
   rehabAnnotatedVideoUrl,
   saveUploadedRehabSession,
@@ -12,11 +13,18 @@ import {
   type RehabProtocol,
 } from "@/lib/rehabilitation";
 
-export function RehabUploader({ protocol }: { protocol: RehabProtocol }) {
+export function RehabUploader({
+  protocol,
+  locale = "uk",
+}: {
+  protocol: RehabProtocol;
+  locale?: RehabLocale;
+}) {
+  const copy = rehabCopy[locale].upload;
   const inputRef = useRef<HTMLInputElement>(null);
   const unsubscribeRef = useRef<null | (() => void)>(null);
   const [progress, setProgress] = useState(0);
-  const [label, setLabel] = useState("Готов к загрузке");
+  const [label, setLabel] = useState<string | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
   const [result, setResult] = useState<
     Extract<RehabAnalysisEvent, { type: "result" }> | null
@@ -32,7 +40,7 @@ export function RehabUploader({ protocol }: { protocol: RehabProtocol }) {
     setResult(null);
     setSavedSessionId(null);
     setProgress(1);
-    setLabel("Загрузка видео");
+    setLabel(null);
     try {
       const upload = await uploadRehabVideo(file, protocol);
       setJobId(upload.jobId);
@@ -42,17 +50,26 @@ export function RehabUploader({ protocol }: { protocol: RehabProtocol }) {
           setLabel(event.label);
         } else if (event.type === "result") {
           setProgress(100);
-          setLabel("Анализ завершён");
+          setLabel("Done");
           setResult(event);
         } else {
           setError(event.message);
         }
       });
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Не удалось загрузить видео");
+    } catch {
+      setError(copy.uploadError);
       setProgress(0);
     }
   }
+
+  const progressLabel =
+    progress === 0
+      ? copy.ready
+      : progress === 1 && label === null
+        ? copy.uploading
+        : label
+          ? (copy.progress as Record<string, string>)[label] ?? label
+          : copy.uploading;
 
   return (
     <div className="space-y-5">
@@ -82,11 +99,10 @@ export function RehabUploader({ protocol }: { protocol: RehabProtocol }) {
           )}
         </div>
         <h3 className="relative mt-5 text-base font-semibold text-slate-100">
-          {result ? "Видео проанализировано" : "Загрузить реабилитационную сессию"}
+          {result ? copy.resultTitle : copy.uploadTitle}
         </h3>
         <p className="relative mt-2 max-w-md text-sm text-slate-500">
-          MP4, MOV, AVI или MKV до 512 MB. Фронтальный ракурс лучше всего
-          подходит для постуральной карты.
+          {copy.uploadBody}
         </p>
         {progress > 0 ? (
           <div className="relative mt-5 w-full max-w-sm">
@@ -97,7 +113,7 @@ export function RehabUploader({ protocol }: { protocol: RehabProtocol }) {
               />
             </div>
             <div className="mt-2 flex justify-between text-[10px] uppercase tracking-wider text-slate-500">
-              <span>{label}</span>
+              <span>{progressLabel}</span>
               <span className="font-mono">{progress}%</span>
             </div>
           </div>
@@ -108,10 +124,19 @@ export function RehabUploader({ protocol }: { protocol: RehabProtocol }) {
       {result ? (
         <div className="grid gap-3 sm:grid-cols-4">
           {[
-            ["Повторы", result.report.total_correct_reps],
-            ["Выполнение", `${result.report.completion_score.toFixed(0)}%`],
-            ["Симметрия", `${result.report.symmetry.score.toFixed(0)}%`],
-            ["Pose-кадры", `${result.frames_with_pose}/${result.frames_total}`],
+            [copy.repetitions, result.report.total_correct_reps],
+            [copy.targetCompletion, `${result.report.completion_score.toFixed(0)}%`],
+            [copy.symmetry, `${result.report.symmetry.score.toFixed(0)}%`],
+            [
+              copy.poseCoverage,
+              `${
+                result.frames_total
+                  ? Math.round(
+                      (result.frames_with_pose / result.frames_total) * 100,
+                    )
+                  : 0
+              }%`,
+            ],
           ].map(([metric, value]) => (
             <div
               key={metric}
@@ -140,22 +165,21 @@ export function RehabUploader({ protocol }: { protocol: RehabProtocol }) {
                 try {
                   const saved = await saveUploadedRehabSession(jobId);
                   setSavedSessionId(saved.sessionId);
-                } catch (cause) {
-                  setError(
-                    cause instanceof Error
-                      ? cause.message
-                      : "Не удалось сохранить сессию",
-                  );
+                } catch {
+                  setError(copy.saveError);
                 }
               }}
               className="mt-1 inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-cyan-400/25 bg-cyan-400/10 px-4 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-400/15 disabled:cursor-default disabled:border-emerald-400/25 disabled:bg-emerald-400/10 disabled:text-emerald-200 sm:col-span-4"
             >
               <Save className="h-3.5 w-3.5" />
               {savedSessionId
-                ? `Сохранено в историю #${savedSessionId}`
-                : "Сохранить в историю"}
+                ? `${copy.saved} #${savedSessionId}`
+                : copy.save}
             </button>
           ) : null}
+          <p className="text-center text-[11px] leading-relaxed text-slate-500 sm:col-span-4">
+            {copy.targetNote}
+          </p>
         </div>
       ) : null}
     </div>

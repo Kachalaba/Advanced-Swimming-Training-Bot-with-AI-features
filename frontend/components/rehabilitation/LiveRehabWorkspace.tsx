@@ -17,6 +17,7 @@ import {
 } from "react";
 
 import { createFrameScheduler, type FrameScheduler } from "@/lib/frameScheduler";
+import { rehabCopy, type RehabLocale } from "@/lib/rehabCopy";
 import {
   createLiveRehabSession,
   deleteLiveRehabSession,
@@ -36,9 +37,12 @@ const CAPTURE_HEIGHT = 360;
 
 export function LiveRehabWorkspace({
   protocol,
+  locale = "uk",
 }: {
   protocol: RehabProtocol;
+  locale?: RehabLocale;
 }) {
+  const copy = rehabCopy[locale].live;
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
@@ -52,7 +56,11 @@ export function LiveRehabWorkspace({
   const [fullscreen, setFullscreen] = useState(false);
   const [savedSessionId, setSavedSessionId] = useState<number | null>(null);
   const { status, error: cameraError, start: startCamera, stop: stopCamera } =
-    useCameraSource(videoRef);
+    useCameraSource(videoRef, {
+      unavailable: copy.cameraUnavailable,
+      denied: copy.cameraDenied,
+      startError: copy.cameraStartError,
+    });
 
   const capture = useCallback(() => {
     const video = videoRef.current;
@@ -102,17 +110,15 @@ export function LiveRehabWorkspace({
         try {
           setUpdate(await sendLiveRehabFrame(sessionId, blob, calibrate));
           setTransportError(null);
-        } catch (cause) {
-          setTransportError(
-            cause instanceof Error ? cause.message : "Ошибка live-анализа",
-          );
+        } catch {
+          setTransportError(copy.liveError);
         }
       });
       timerRef.current = window.setInterval(capture, ANALYSIS_INTERVAL_MS);
     } catch {
       stopCamera();
     }
-  }, [capture, protocol, startCamera, stopCamera]);
+  }, [capture, copy.liveError, protocol, startCamera, stopCamera]);
 
   useEffect(() => {
     const onFullscreen = () =>
@@ -161,12 +167,12 @@ export function LiveRehabWorkspace({
   const cameraLevel = update?.camera_level ?? null;
   const levelLabel =
     cameraLevel?.status === "level"
-      ? "РОВНО"
+      ? copy.level
       : cameraLevel?.status === "adjust"
-        ? "ВЫРОВНЯЙТЕ"
+        ? copy.adjust
         : cameraLevel?.status === "recalibrate"
-          ? "ПЕРЕКАЛИБРОВАТЬ"
-          : "НЕ КАЛИБРОВАНО";
+          ? copy.recalibrate
+          : copy.uncalibrated;
 
   return (
     <div
@@ -197,14 +203,18 @@ export function LiveRehabWorkspace({
         height={CAPTURE_HEIGHT}
         className="hidden"
       />
-      <PostureOverlay visible={showPosture} posture={update?.posture ?? null} />
+      <PostureOverlay
+        visible={showPosture}
+        posture={update?.posture ?? null}
+        locale={locale}
+      />
 
       <div className="absolute left-4 right-4 top-4 z-20 flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
             role="switch"
-            aria-label="Показывать постуральную карту"
+            aria-label={copy.postureMapAria}
             aria-checked={showPosture}
             onClick={() => setShowPosture((value) => !value)}
             className={`flex h-9 items-center gap-2 rounded-lg border px-3 text-xs font-medium backdrop-blur-xl transition ${
@@ -225,7 +235,7 @@ export function LiveRehabWorkspace({
               />
             </span>
             <ScanLine className="h-3.5 w-3.5" />
-            Постуральная карта
+            {copy.postureMap}
           </button>
           <button
             type="button"
@@ -236,16 +246,16 @@ export function LiveRehabWorkspace({
               try {
                 const saved = await saveLiveRehabSession(sessionId);
                 setSavedSessionId(saved.sessionId);
-              } catch (cause) {
-                setTransportError(
-                  cause instanceof Error ? cause.message : "Не удалось сохранить сессию",
-                );
+              } catch {
+                setTransportError(copy.saveError);
               }
             }}
             className="flex h-9 items-center gap-2 rounded-lg border border-white/10 bg-black/45 px-3 text-xs font-medium text-slate-200 backdrop-blur-xl transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Save className="h-3.5 w-3.5 text-cyan-300" />
-            {savedSessionId ? `Сохранено #${savedSessionId}` : "Сохранить"}
+            {savedSessionId
+              ? `${copy.saved} #${savedSessionId}`
+              : copy.save}
           </button>
           <button
             type="button"
@@ -257,14 +267,16 @@ export function LiveRehabWorkspace({
             className="flex h-9 items-center gap-2 rounded-lg border border-white/10 bg-black/45 px-3 text-xs font-medium text-slate-200 backdrop-blur-xl transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Crosshair className="h-3.5 w-3.5 text-emerald-300" />
-            Калибровать горизонт
+            {copy.calibrate}
           </button>
         </div>
 
         <div className="flex gap-2">
           <button
             type="button"
-            aria-label={fullscreen ? "Выйти из полного экрана" : "Полный экран"}
+            aria-label={
+              fullscreen ? copy.exitFullscreen : copy.fullscreen
+            }
             onClick={() => void toggleFullscreen()}
             className="flex h-9 items-center gap-2 rounded-lg border border-white/10 bg-black/45 px-3 text-xs font-medium text-slate-200 backdrop-blur-xl transition hover:bg-white/10"
           >
@@ -274,7 +286,7 @@ export function LiveRehabWorkspace({
               <Maximize2 className="h-3.5 w-3.5" />
             )}
             <span className="hidden sm:inline">
-              {fullscreen ? "Выйти" : "Полный экран"}
+              {fullscreen ? copy.exit : copy.fullscreen}
             </span>
           </button>
           <div className="flex h-9 items-center gap-2 rounded-lg border border-white/10 bg-black/45 px-3 text-[10px] font-bold uppercase tracking-[0.13em] text-slate-300 backdrop-blur-xl">
@@ -285,7 +297,7 @@ export function LiveRehabWorkspace({
                   : "bg-slate-600"
               }`}
             />
-            {isLive ? "Live" : "Standby"}
+            {isLive ? copy.active : copy.standby}
           </div>
         </div>
       </div>
@@ -297,11 +309,10 @@ export function LiveRehabWorkspace({
               <Camera className="h-7 w-7 text-cyan-300" />
             </div>
             <h3 className="mt-5 text-xl font-semibold text-slate-50">
-              Live rehabilitation studio
+              {copy.studioTitle}
             </h3>
             <p className="mt-2 text-sm leading-relaxed text-slate-400">
-              Поставьте MacBook на устойчивую поверхность и встаньте в полный
-              рост. Видео остаётся на вашем локальном SPRINT AI backend.
+              {copy.studioBody}
             </p>
             <button
               type="button"
@@ -310,7 +321,7 @@ export function LiveRehabWorkspace({
               className="mt-6 inline-flex h-10 items-center gap-2 rounded-lg bg-cyan-400 px-4 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300 active:scale-[0.98] disabled:opacity-60"
             >
               <Power className="h-4 w-4" />
-              {status === "requesting" ? "Подключение…" : "Запустить камеру"}
+              {status === "requesting" ? copy.connecting : copy.startCamera}
             </button>
             {cameraError ? (
               <p className="mt-3 text-xs text-rose-300">{cameraError}</p>
@@ -320,10 +331,15 @@ export function LiveRehabWorkspace({
       ) : null}
 
       <div className="absolute bottom-4 left-4 right-4 z-20 flex flex-col items-start justify-between gap-3 xl:flex-row xl:items-end">
-        <LiveMetricRail report={update?.report ?? null} cameraLevel={cameraLevel} />
+        <LiveMetricRail
+          report={update?.report ?? null}
+          cameraLevel={cameraLevel}
+          poseDetected={update?.pose_detected ?? null}
+          locale={locale}
+        />
         <div className="w-full max-w-[270px] rounded-xl border border-white/[0.09] bg-[#080c12]/80 p-3.5 backdrop-blur-xl">
           <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.12em] text-slate-500">
-            <span>Угол камеры</span>
+            <span>{copy.cameraAngle}</span>
             <span
               className={
                 cameraLevel?.status === "level"
@@ -350,7 +366,7 @@ export function LiveRehabWorkspace({
             />
           </div>
           <p className="mt-2 text-[10px] text-slate-600">
-            Относительно последней оптической калибровки
+            {copy.calibrationNote}
           </p>
         </div>
       </div>
@@ -361,7 +377,7 @@ export function LiveRehabWorkspace({
           onClick={() => void stop()}
           className="absolute right-4 top-16 z-20 rounded-lg border border-rose-400/20 bg-rose-400/10 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-rose-200 backdrop-blur-xl hover:bg-rose-400/15"
         >
-          Остановить
+          {copy.stop}
         </button>
       ) : null}
       {transportError ? (

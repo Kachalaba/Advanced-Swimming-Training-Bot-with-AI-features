@@ -1,11 +1,13 @@
 "use client";
 
 import type { NormalizedPoint, PostureUpdate } from "@/lib/rehabilitation";
+import { rehabCopy, type RehabLocale } from "@/lib/rehabCopy";
 
 type Props = {
   visible: boolean;
   posture: PostureUpdate | null;
   mirrored?: boolean;
+  locale?: RehabLocale;
 };
 
 const connections = [
@@ -40,8 +42,10 @@ export function PostureOverlay({
   visible,
   posture,
   mirrored = true,
+  locale = "uk",
 }: Props) {
   if (!visible) return null;
+  const copy = rehabCopy[locale].live;
   const points = posture?.points ?? {};
   const mapPoint = (point?: NormalizedPoint) =>
     point
@@ -56,7 +60,7 @@ export function PostureOverlay({
   return (
     <svg
       data-testid="posture-overlay"
-      aria-label="Постуральная координатная карта"
+      aria-label={copy.overlayAria}
       className="absolute inset-0 h-full w-full pointer-events-none"
       viewBox="0 0 1000 1000"
       preserveAspectRatio="none"
@@ -199,13 +203,13 @@ export function PostureOverlay({
       {posture?.available ? (
         <g className="font-mono text-[24px] font-bold">
           <text x="42" y="78" fill={severityColor(posture.shoulder?.severity)}>
-            Плечи {signed(posture.shoulder_angle_deg)}
+            {copy.shoulders} {signed(posture.shoulder_angle_deg)}
           </text>
           <text x="42" y="116" fill={severityColor(posture.pelvis?.severity)}>
-            Таз {signed(posture.pelvis_angle_deg)}
+            {copy.pelvis} {signed(posture.pelvis_angle_deg)}
           </text>
           <text x="42" y="154" fill={severityColor(posture.trunk?.severity)}>
-            Корпус {signed(posture.trunk_lean_deg)}
+            {copy.trunk} {signed(posture.trunk_lean_deg)}
           </text>
         </g>
       ) : null}

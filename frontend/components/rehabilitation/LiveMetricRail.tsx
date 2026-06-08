@@ -4,6 +4,7 @@ import type {
   CameraLevelUpdate,
   RehabReport,
 } from "@/lib/rehabilitation";
+import { rehabCopy, type RehabLocale } from "@/lib/rehabCopy";
 
 function Metric({
   label,
@@ -38,10 +39,16 @@ function Metric({
 export function LiveMetricRail({
   report,
   cameraLevel,
+  poseDetected,
+  locale = "uk",
 }: {
   report: RehabReport | null;
   cameraLevel: CameraLevelUpdate | null;
+  poseDetected: boolean | null;
+  locale?: RehabLocale;
 }) {
+  const liveCopy = rehabCopy[locale].live;
+  const copy = liveCopy.metrics;
   const left = report?.target_metrics.left.rom;
   const right = report?.target_metrics.right.rom;
   const asymmetry = report?.symmetry.asymmetry_index;
@@ -53,13 +60,13 @@ export function LiveMetricRail({
         : "cyan";
   const cameraValue =
     cameraLevel?.angle_deg === null || cameraLevel?.angle_deg === undefined
-      ? "НЕ КАЛИБР."
+      ? liveCopy.uncalibrated
       : `${Math.abs(cameraLevel.angle_deg).toFixed(1)}°`;
 
   return (
     <div className="flex flex-wrap gap-2">
       <Metric
-        label="ROM L / R"
+        label={copy.rom}
         value={
           left === undefined || right === undefined
             ? "— / —"
@@ -68,22 +75,34 @@ export function LiveMetricRail({
         icon={Activity}
       />
       <Metric
-        label="Повторы"
+        label={copy.repetitions}
         value={String(report?.total_correct_reps ?? 0)}
         accent="green"
         icon={Repeat2}
       />
       <Metric
-        label="Асимметрия"
+        label={copy.asymmetry}
         value={asymmetry === undefined ? "—" : `${asymmetry.toFixed(1)}%`}
         accent={asymmetry !== undefined && asymmetry > 10 ? "rose" : "cyan"}
         icon={Scale}
       />
       <Metric
-        label="Камера"
+        label={copy.camera}
         value={cameraValue}
         accent={cameraAccent}
         icon={RefreshCcw}
+      />
+      <Metric
+        label={copy.pose}
+        value={
+          poseDetected === null
+            ? copy.poseWaiting
+            : poseDetected
+              ? copy.poseDetected
+              : copy.poseMissing
+        }
+        accent={poseDetected === null ? "cyan" : poseDetected ? "green" : "amber"}
+        icon={Activity}
       />
     </div>
   );

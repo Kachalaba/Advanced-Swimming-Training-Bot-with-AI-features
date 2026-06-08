@@ -39,14 +39,14 @@ describe("LiveRehabWorkspace", () => {
     const user = userEvent.setup();
     render(<LiveRehabWorkspace protocol="shoulder_flexion" />);
 
-    await user.click(screen.getByRole("button", { name: "Запустить камеру" }));
+    await user.click(screen.getByRole("button", { name: "Запустити камеру" }));
     await user.click(
-      screen.getByRole("switch", { name: "Показывать постуральную карту" }),
+      screen.getByRole("switch", { name: "Показувати постуральну карту" }),
     );
 
     expect(getUserMedia).toHaveBeenCalledTimes(1);
     expect(
-      screen.getByRole("switch", { name: "Показывать постуральную карту" }),
+      screen.getByRole("switch", { name: "Показувати постуральну карту" }),
     ).toHaveAttribute("aria-checked", "false");
   });
 
@@ -59,7 +59,7 @@ describe("LiveRehabWorkspace", () => {
     });
     render(<LiveRehabWorkspace protocol="shoulder_flexion" />);
 
-    await user.click(screen.getByRole("button", { name: "Полный экран" }));
+    await user.click(screen.getByRole("button", { name: "На весь екран" }));
 
     expect(requestFullscreen).toHaveBeenCalledTimes(1);
   });
@@ -70,11 +70,11 @@ describe("LiveRehabWorkspace", () => {
       <LiveRehabWorkspace protocol="shoulder_flexion" />,
     );
 
-    await user.click(screen.getByRole("button", { name: "Полный экран" }));
+    await user.click(screen.getByRole("button", { name: "На весь екран" }));
 
     expect(container.firstElementChild).toHaveClass("fixed", "inset-0");
     expect(
-      screen.getByRole("button", { name: "Выйти из полного экрана" }),
+      screen.getByRole("button", { name: "Вийти з повноекранного режиму" }),
     ).toBeInTheDocument();
 
     await user.keyboard("{Escape}");

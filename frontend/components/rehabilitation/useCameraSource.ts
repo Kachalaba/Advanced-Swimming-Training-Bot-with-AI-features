@@ -10,7 +10,16 @@ export type CameraStatus =
   | "unavailable"
   | "error";
 
-export function useCameraSource(videoRef: RefObject<HTMLVideoElement | null>) {
+type CameraMessages = {
+  unavailable: string;
+  denied: string;
+  startError: string;
+};
+
+export function useCameraSource(
+  videoRef: RefObject<HTMLVideoElement | null>,
+  messages: CameraMessages,
+) {
   const streamRef = useRef<MediaStream | null>(null);
   const [status, setStatus] = useState<CameraStatus>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -25,7 +34,7 @@ export function useCameraSource(videoRef: RefObject<HTMLVideoElement | null>) {
   const start = useCallback(async () => {
     if (!navigator.mediaDevices?.getUserMedia) {
       setStatus("unavailable");
-      setError("Браузер не поддерживает доступ к камере.");
+      setError(messages.unavailable);
       throw new Error("Camera API unavailable");
     }
     if (streamRef.current) return streamRef.current;
@@ -53,12 +62,12 @@ export function useCameraSource(videoRef: RefObject<HTMLVideoElement | null>) {
       setStatus(denied ? "denied" : "error");
       setError(
         denied
-          ? "Доступ к камере запрещён. Разрешите его в настройках браузера."
-          : "Не удалось запустить камеру.",
+          ? messages.denied
+          : messages.startError,
       );
       throw cause;
     }
-  }, [videoRef]);
+  }, [messages.denied, messages.startError, messages.unavailable, videoRef]);
 
   useEffect(() => stop, [stop]);
 
