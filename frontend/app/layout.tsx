@@ -25,7 +25,9 @@ export default function RootLayout({
     <html lang="en" className={`dark ${inter.variable}`}>
       <body className="bg-bg text-slate-100 font-sans">
         <TopNav />
-        <main className="max-w-[1600px] mx-auto px-6 py-8">{children}</main>
+        <main className="mx-auto max-w-[1600px] px-3 py-4 sm:px-6 sm:py-8">
+          {children}
+        </main>
       </body>
     </html>
   );

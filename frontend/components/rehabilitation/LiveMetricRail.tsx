@@ -24,7 +24,7 @@ function Metric({
     rose: "text-rose-300",
   };
   return (
-    <div className="min-w-[118px] rounded-xl border border-white/[0.09] bg-[#080c12]/80 px-3.5 py-3 backdrop-blur-xl shadow-xl shadow-black/20">
+    <div className="min-w-0 rounded-xl border border-white/[0.09] bg-[#080c12]/80 px-3 py-2.5 backdrop-blur-xl shadow-xl shadow-black/20 sm:min-w-[118px] sm:px-3.5 sm:py-3">
       <div className="flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-500">
         <Icon className="h-3 w-3" />
         {label}
@@ -64,7 +64,7 @@ export function LiveMetricRail({
       : `${Math.abs(cameraLevel.angle_deg).toFixed(1)}°`;
 
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:flex-wrap">
       <Metric
         label={copy.rom}
         value={

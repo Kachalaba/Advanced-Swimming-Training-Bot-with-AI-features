@@ -177,7 +177,7 @@ export function LiveRehabWorkspace({
   return (
     <div
       ref={workspaceRef}
-      className={`group relative min-h-[790px] overflow-hidden rounded-2xl border border-white/[0.08] bg-[#070b10] shadow-2xl shadow-black/30 md:min-h-[690px] xl:min-h-[610px] fullscreen:min-h-screen fullscreen:rounded-none ${
+      className={`group relative min-h-[920px] overflow-hidden rounded-2xl border border-white/[0.08] bg-[#070b10] shadow-2xl shadow-black/30 sm:min-h-[790px] md:min-h-[690px] xl:min-h-[610px] fullscreen:min-h-screen fullscreen:rounded-none ${
         fullscreen ? "fixed inset-0 z-[100] min-h-screen rounded-none" : ""
       }`}
     >
@@ -303,7 +303,7 @@ export function LiveRehabWorkspace({
       </div>
 
       {status !== "live" ? (
-        <div className="absolute inset-0 z-10 flex items-center justify-center px-6">
+        <div className="absolute inset-0 z-10 flex items-center justify-center px-6 pb-[380px] pt-28 sm:pb-[280px] md:pb-0 md:pt-0">
           <div className="max-w-md text-center">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl border border-cyan-400/20 bg-cyan-400/10 shadow-[0_0_40px_rgba(34,211,238,.1)]">
               <Camera className="h-7 w-7 text-cyan-300" />
@@ -330,7 +330,7 @@ export function LiveRehabWorkspace({
         </div>
       ) : null}
 
-      <div className="absolute bottom-4 left-4 right-4 z-20 flex flex-col items-start justify-between gap-3 xl:flex-row xl:items-end">
+      <div className="absolute bottom-4 left-3 right-3 z-20 flex flex-col items-start justify-between gap-3 sm:left-4 sm:right-4 xl:flex-row xl:items-end">
         <LiveMetricRail
           report={update?.report ?? null}
           cameraLevel={cameraLevel}
