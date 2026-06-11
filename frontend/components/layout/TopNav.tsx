@@ -18,6 +18,39 @@ import { useEffect, useState } from "react";
 import { api, type Athlete } from "@/lib/api";
 import { sections } from "@/lib/sections";
 import { Logo } from "@/components/ui/Logo";
+import {
+  REHAB_LOCALE_STORAGE_KEY,
+  type RehabLocale,
+} from "@/lib/rehabCopy";
+
+const rehabNavLabels = {
+  uk: {
+    swimming: "Плавання",
+    running: "Біг",
+    cycling: "Велоспорт",
+    dryland: "Сухе тренування",
+    rehabilitation: "Реабілітація",
+    history: "Історія",
+    assistant: "AI асистент",
+    tools: "Інструменти",
+    athletes: "Атлети",
+    search: "Пошук сесій і вправ…",
+    loading: "Завантаження…",
+  },
+  en: {
+    swimming: "Swimming",
+    running: "Running",
+    cycling: "Cycling",
+    dryland: "Dryland",
+    rehabilitation: "Rehabilitation",
+    history: "History",
+    assistant: "AI Assistant",
+    tools: "Tools",
+    athletes: "Athletes",
+    search: "Search sessions and drills…",
+    loading: "Loading…",
+  },
+} as const;
 
 export function TopNav() {
   const pathname = usePathname();
@@ -25,11 +58,27 @@ export function TopNav() {
   const [roster, setRoster] = useState<Athlete[]>([]);
   const [athleteOpen, setAthleteOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [rehabLocale, setRehabLocale] = useState<RehabLocale>("uk");
+  const onRehabPage = pathname?.startsWith("/rehabilitation");
+  const navCopy = rehabNavLabels[rehabLocale];
 
   useEffect(() => {
     api.me().then(setMe).catch(() => undefined);
     api.listAthletes().then(setRoster).catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    if (!onRehabPage) return;
+    const stored = window.localStorage.getItem(REHAB_LOCALE_STORAGE_KEY);
+    if (stored === "uk" || stored === "en") setRehabLocale(stored);
+    const onLocaleChange = (event: Event) => {
+      const value = (event as CustomEvent<RehabLocale>).detail;
+      if (value === "uk" || value === "en") setRehabLocale(value);
+    };
+    window.addEventListener("rehab-locale-change", onLocaleChange);
+    return () =>
+      window.removeEventListener("rehab-locale-change", onLocaleChange);
+  }, [onRehabPage]);
 
   return (
     <header className="sticky top-0 z-40 backdrop-blur-xl bg-bg/80 border-b border-white/[0.06]">
@@ -50,7 +99,9 @@ export function TopNav() {
             <div className="hidden md:flex items-center gap-1.5 text-xs">
               <span className="text-slate-400">Kachamba Lab</span>
               <ChevronRight className="w-3 h-3 text-slate-600" />
-              <span className="text-slate-200 font-medium">Athletes</span>
+              <span className="text-slate-200 font-medium">
+                {onRehabPage ? navCopy.athletes : "Athletes"}
+              </span>
               <ChevronRight className="w-3 h-3 text-slate-600" />
               <span className="text-slate-200 font-medium">
                 {me?.name ?? "—"}
@@ -61,7 +112,7 @@ export function TopNav() {
           <div className="flex items-center gap-2">
             <button className="hidden sm:flex items-center gap-2 px-3 h-8 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] rounded-lg text-xs text-slate-400 transition-colors">
               <Search className="w-3.5 h-3.5" />
-              <span>Search sessions, drills…</span>
+              <span>{onRehabPage ? navCopy.search : "Search sessions, drills…"}</span>
               <kbd className="px-1.5 py-0.5 bg-white/[0.06] rounded text-[10px] font-mono text-slate-500">
                 ⌘K
               </kbd>
@@ -76,7 +127,7 @@ export function TopNav() {
                   {me?.initials ?? "—"}
                 </div>
                 <span className="text-slate-200 font-medium hidden sm:inline">
-                  {me?.name ?? "Loading…"}
+                  {me?.name ?? (onRehabPage ? navCopy.loading : "Loading…")}
                 </span>
                 <ChevronDown className="w-3 h-3 text-slate-500" />
               </button>
@@ -166,7 +217,7 @@ export function TopNav() {
                 }`}
               >
                 <Icon className="w-3.5 h-3.5" />
-                {s.label}
+                {onRehabPage ? navCopy[s.id] : s.label}
                 {active ? (
                   <span className="absolute bottom-0 left-0 right-0 h-px bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
                 ) : null}

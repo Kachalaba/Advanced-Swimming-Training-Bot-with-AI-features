@@ -30,23 +30,21 @@ describe("RehabilitationPage", () => {
     });
   });
 
-  it("defaults to Ukrainian and presents the clinical limitations prominently", () => {
+  it("opens with a polished Ukrainian demo and keeps limitations available", () => {
     render(<RehabilitationPage />);
 
     expect(
-      screen.getByRole("heading", { name: "Аналіз руху, ROM і відновлення" }),
+      screen.getByRole("heading", {
+        name: "Рух видно. Докази — у кожному кадрі.",
+      }),
     ).toBeInTheDocument();
     expect(screen.getByText("Дослідницький прототип")).toBeInTheDocument();
-    expect(
-      screen.getByText(/не є медичним виробом/i),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(/цільові кути налаштовує фахівець/i),
-    ).toBeInTheDocument();
-    expect(screen.getByTestId("live-workspace")).toHaveTextContent("uk");
+    expect(screen.getByTestId("rehab-body-figure")).toBeInTheDocument();
+    expect(screen.queryByTestId("live-workspace")).not.toBeInTheDocument();
+    expect(screen.getByText(/не є медичним виробом/i)).not.toBeVisible();
   });
 
-  it("switches the complete rehabilitation experience to English", async () => {
+  it("switches the complete demo experience to English", async () => {
     const user = userEvent.setup();
     render(<RehabilitationPage />);
 
@@ -54,12 +52,24 @@ describe("RehabilitationPage", () => {
 
     expect(
       screen.getByRole("heading", {
-        name: "Movement, ROM and recovery analysis",
+        name: "See the movement. Prove it frame by frame.",
       }),
     ).toBeInTheDocument();
     expect(screen.getByText("Research prototype")).toBeInTheDocument();
-    expect(screen.getByText(/not a medical device/i)).toBeInTheDocument();
-    expect(screen.getByTestId("live-workspace")).toHaveTextContent("en");
+    expect(screen.getByText(/simulated demo session/i)).toBeInTheDocument();
     expect(localStorage.getItem("sprint-ai-rehab-locale")).toBe("en");
+  });
+
+  it("keeps live and upload workflows one click away", async () => {
+    const user = userEvent.setup();
+    render(<RehabilitationPage />);
+
+    await user.click(screen.getByRole("button", { name: "Камера наживо" }));
+    expect(screen.getByTestId("live-workspace")).toHaveTextContent("uk");
+
+    await user.click(
+      screen.getByRole("button", { name: "Завантажити відео" }),
+    );
+    expect(screen.getByTestId("rehab-uploader")).toHaveTextContent("uk");
   });
 });
