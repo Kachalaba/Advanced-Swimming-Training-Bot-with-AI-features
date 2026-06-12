@@ -30,6 +30,7 @@ import {
 import { LiveMetricRail } from "./LiveMetricRail";
 import { PostureOverlay } from "./PostureOverlay";
 import { useCameraSource } from "./useCameraSource";
+import type { RehabAnalysisSnapshot } from "./rehabHandoff";
 
 const ANALYSIS_INTERVAL_MS = 200;
 const CAPTURE_WIDTH = 640;
@@ -38,9 +39,11 @@ const CAPTURE_HEIGHT = 360;
 export function LiveRehabWorkspace({
   protocol,
   locale = "uk",
+  onAnalysisChange,
 }: {
   protocol: RehabProtocol;
   locale?: RehabLocale;
+  onAnalysisChange?: (snapshot: RehabAnalysisSnapshot | null) => void;
 }) {
   const copy = rehabCopy[locale].live;
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -141,6 +144,18 @@ export function LiveRehabWorkspace({
       void stop();
     };
   }, [stop]);
+
+  useEffect(() => {
+    if (!update?.report) {
+      onAnalysisChange?.(null);
+      return;
+    }
+    onAnalysisChange?.({
+      report: update.report,
+      confidence: update.camera_level.confidence,
+      poseCoverage: null,
+    });
+  }, [onAnalysisChange, update]);
 
   const toggleFullscreen = async () => {
     if (document.fullscreenElement) {

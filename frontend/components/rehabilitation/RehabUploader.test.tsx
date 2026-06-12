@@ -1,0 +1,72 @@
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
+
+import {
+  subscribeRehabAnalysis,
+  uploadRehabVideo,
+} from "@/lib/rehabilitation";
+
+import { RehabUploader } from "./RehabUploader";
+
+const report = {
+  protocol: "shoulder_flexion" as const,
+  total_correct_reps: 3,
+  completion_score: 84,
+  target_metrics: {
+    left: { rom: 150 },
+    right: { rom: 132 },
+  },
+  symmetry: { asymmetry_index: 12, score: 88 },
+};
+
+vi.mock("@/lib/rehabilitation", async (importOriginal) => {
+  const original = await importOriginal<typeof import("@/lib/rehabilitation")>();
+  return {
+    ...original,
+    uploadRehabVideo: vi.fn().mockResolvedValue({ jobId: "job-1" }),
+    subscribeRehabAnalysis: vi.fn(),
+  };
+});
+
+describe("RehabUploader", () => {
+  it("clears stale data and emits completed upload coverage", async () => {
+    const user = userEvent.setup();
+    const onAnalysisChange = vi.fn();
+    vi.mocked(subscribeRehabAnalysis).mockImplementation((_jobId, onEvent) => {
+      onEvent({
+        type: "result",
+        report,
+        frames_total: 40,
+        frames_with_pose: 30,
+        video_path: null,
+      });
+      return vi.fn();
+    });
+
+    const { container } = render(
+      <RehabUploader
+        protocol="shoulder_flexion"
+        onAnalysisChange={onAnalysisChange}
+      />,
+    );
+    const input = container.querySelector('input[type="file"]');
+    expect(input).not.toBeNull();
+
+    await user.upload(
+      input as HTMLInputElement,
+      new File(["video"], "session.mp4", { type: "video/mp4" }),
+    );
+
+    expect(uploadRehabVideo).toHaveBeenCalledOnce();
+    expect(onAnalysisChange).toHaveBeenCalledWith(null);
+    await waitFor(() =>
+      expect(onAnalysisChange).toHaveBeenLastCalledWith({
+        report,
+        confidence: null,
+        poseCoverage: 75,
+      }),
+    );
+    expect(screen.getByText("Відео проаналізовано")).toBeInTheDocument();
+  });
+});

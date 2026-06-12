@@ -13,12 +13,16 @@ import {
   type RehabProtocol,
 } from "@/lib/rehabilitation";
 
+import type { RehabAnalysisSnapshot } from "./rehabHandoff";
+
 export function RehabUploader({
   protocol,
   locale = "uk",
+  onAnalysisChange,
 }: {
   protocol: RehabProtocol;
   locale?: RehabLocale;
+  onAnalysisChange?: (snapshot: RehabAnalysisSnapshot | null) => void;
 }) {
   const copy = rehabCopy[locale].upload;
   const inputRef = useRef<HTMLInputElement>(null);
@@ -33,9 +37,16 @@ export function RehabUploader({
   const [savedSessionId, setSavedSessionId] = useState<number | null>(null);
   const busy = progress > 0 && progress < 100 && !error;
 
-  useEffect(() => () => unsubscribeRef.current?.(), []);
+  useEffect(() => {
+    onAnalysisChange?.(null);
+    return () => {
+      unsubscribeRef.current?.();
+      onAnalysisChange?.(null);
+    };
+  }, [onAnalysisChange]);
 
   async function analyze(file: File) {
+    onAnalysisChange?.(null);
     setError(null);
     setResult(null);
     setSavedSessionId(null);
@@ -52,6 +63,13 @@ export function RehabUploader({
           setProgress(100);
           setLabel("Done");
           setResult(event);
+          onAnalysisChange?.({
+            report: event.report,
+            confidence: null,
+            poseCoverage: event.frames_total
+              ? (event.frames_with_pose / event.frames_total) * 100
+              : null,
+          });
         } else {
           setError(event.message);
         }
