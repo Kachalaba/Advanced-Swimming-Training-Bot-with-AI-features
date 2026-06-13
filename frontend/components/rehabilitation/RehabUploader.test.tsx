@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   saveUploadedRehabSession,
@@ -32,6 +32,33 @@ vi.mock("@/lib/rehabilitation", async (importOriginal) => {
 });
 
 describe("RehabUploader", () => {
+  beforeEach(() => {
+    vi.mocked(uploadRehabVideo).mockClear();
+    vi.mocked(subscribeRehabAnalysis).mockReset();
+    vi.mocked(saveUploadedRehabSession).mockClear();
+  });
+
+  it("automatically analyzes a file selected by the clinical readiness step", async () => {
+    const initialFile = new File(["video"], "visit.mp4", {
+      type: "video/mp4",
+    });
+    vi.mocked(subscribeRehabAnalysis).mockReturnValue(vi.fn());
+
+    render(
+      <RehabUploader
+        protocol="shoulder_flexion"
+        initialFile={initialFile}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(uploadRehabVideo).toHaveBeenCalledWith(
+        initialFile,
+        "shoulder_flexion",
+      ),
+    );
+  });
+
   it("clears stale data and emits completed upload coverage", async () => {
     const user = userEvent.setup();
     const onAnalysisChange = vi.fn();

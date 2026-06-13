@@ -311,4 +311,24 @@ describe("NewClinicalVisitPage", () => {
       screen.getByRole("button", { name: "Start analysis" }),
     ).toBeEnabled();
   });
+
+  it("requires an upload file before starting uploaded analysis", async () => {
+    const user = userEvent.setup();
+    render(<NewClinicalVisitPage />);
+    await user.click(
+      await screen.findByRole("button", { name: "Upload video" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+
+    const startButton = screen.getByRole("button", {
+      name: "Start analysis",
+    });
+    expect(startButton).toBeDisabled();
+    expect(screen.getByText("Select a video to continue")).toBeInTheDocument();
+    await user.upload(
+      screen.getByLabelText("Choose video"),
+      new File(["video"], "visit.mp4", { type: "video/mp4" }),
+    );
+    expect(startButton).toBeEnabled();
+  });
 });

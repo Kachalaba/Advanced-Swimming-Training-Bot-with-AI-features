@@ -195,6 +195,7 @@ export default function NewClinicalVisitPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [state, dispatch] = useReducer(reducer, initialState);
   const copy = clinicalCopy[locale];
   const steps: VisitStep[] = [
@@ -389,7 +390,11 @@ export default function NewClinicalVisitPage() {
   }
 
   const currentReadiness =
-    state.source === "upload" ? uploadReady : state.readiness;
+    state.source === "upload"
+      ? uploadFile
+        ? uploadReady
+        : null
+      : state.readiness;
   const canStart =
     currentReadiness?.state === "ready" ||
     (currentReadiness?.state === "warning" &&
@@ -522,6 +527,7 @@ export default function NewClinicalVisitPage() {
             <RehabUploader
               protocol={episode.protocol}
               locale={locale}
+              initialFile={uploadFile}
               saveTarget={{
                 athleteId: episode.athlete.id,
                 athleteName: episode.athlete.name,
@@ -535,10 +541,43 @@ export default function NewClinicalVisitPage() {
 
           {state.step === "readiness" ? (
             <>
+              {state.source === "upload" ? (
+                <label className="flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-white/[0.08] bg-[#091017] p-4 text-sm text-slate-200 transition hover:border-cyan-300/25">
+                  <span className="flex items-center gap-3">
+                    <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-300/10 text-cyan-300">
+                      <FileUp className="h-5 w-5" />
+                    </span>
+                    <span>
+                      <span className="block font-semibold">
+                        {copy.visit.chooseVideo}
+                      </span>
+                      {uploadFile ? (
+                        <span className="mt-1 block text-xs text-slate-500">
+                          {copy.visit.selectedVideo}: {uploadFile.name}
+                        </span>
+                      ) : null}
+                    </span>
+                  </span>
+                  <input
+                    aria-label={copy.visit.chooseVideo}
+                    type="file"
+                    accept="video/mp4,video/quicktime,video/x-msvideo,video/x-matroska"
+                    className="sr-only"
+                    onChange={(event) =>
+                      setUploadFile(event.target.files?.[0] ?? null)
+                    }
+                  />
+                </label>
+              ) : null}
               <CaptureReadinessPanel
                 result={currentReadiness}
                 locale={locale}
                 acknowledged={state.warningAcknowledged}
+                waitingLabel={
+                  state.source === "upload"
+                    ? copy.readiness.waitingUpload
+                    : undefined
+                }
                 onAcknowledgedChange={(value) =>
                   dispatch({ type: "acknowledged", value })
                 }

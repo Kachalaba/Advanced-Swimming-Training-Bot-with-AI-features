@@ -89,6 +89,8 @@ type ClinicalCopy = {
     repeatMeasurement: string;
     saveError: string;
     baselineComparison: string;
+    chooseVideo: string;
+    selectedVideo: string;
   };
   readiness: {
     title: string;
@@ -96,6 +98,7 @@ type ClinicalCopy = {
     warning: string;
     blocked: string;
     waiting: string;
+    waitingUpload: string;
     codes: Record<string, string>;
   };
   quality: Record<CaptureQuality, string>;
@@ -197,6 +200,8 @@ const uk: ClinicalCopy = {
     repeatMeasurement: "Повторити вимірювання",
     saveError: "Не вдалося зберегти або фіналізувати візит",
     baselineComparison: "Порівняння з базовим вимірюванням",
+    chooseVideo: "Обрати відео",
+    selectedVideo: "Обране відео",
   },
   readiness: {
     title: "Готовність до вимірювання",
@@ -204,6 +209,7 @@ const uk: ClinicalCopy = {
     warning: "Потрібне підтвердження",
     blocked: "Аналіз заблоковано",
     waiting: "Очікування сигналу камери",
+    waitingUpload: "Оберіть відео, щоб продовжити",
     codes: {
       ready: "Ключові орієнтири видно, камера готова.",
       pose_missing: "Людину не виявлено в кадрі.",
@@ -321,6 +327,8 @@ const en: ClinicalCopy = {
     repeatMeasurement: "Repeat measurement",
     saveError: "Could not save or finalize the visit",
     baselineComparison: "Baseline comparison",
+    chooseVideo: "Choose video",
+    selectedVideo: "Selected video",
   },
   readiness: {
     title: "Measurement readiness",
@@ -328,6 +336,7 @@ const en: ClinicalCopy = {
     warning: "Acknowledgement required",
     blocked: "Analysis blocked",
     waiting: "Waiting for camera signal",
+    waitingUpload: "Select a video to continue",
     codes: {
       ready: "Key landmarks are visible and the camera is ready.",
       pose_missing: "No person is detected in the frame.",

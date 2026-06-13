@@ -11,18 +11,20 @@ export function CaptureReadinessPanel({
   locale,
   acknowledged,
   onAcknowledgedChange,
+  waitingLabel,
 }: {
   result: CaptureReadinessResult | null;
   locale: RehabLocale;
   acknowledged: boolean;
   onAcknowledgedChange: (value: boolean) => void;
+  waitingLabel?: string;
 }) {
   const copy = clinicalCopy[locale];
   const state = result?.state ?? "waiting";
   const presentation = {
     waiting: {
       icon: AlertTriangle,
-      label: copy.readiness.waiting,
+      label: waitingLabel ?? copy.readiness.waiting,
       accent: "border-white/[0.07] bg-white/[0.025] text-slate-400",
     },
     ready: {
@@ -78,11 +80,7 @@ export function CaptureReadinessPanel({
               </div>
             ),
           )
-        ) : (
-          <p className="text-xs leading-relaxed opacity-75">
-            {copy.readiness.waiting}
-          </p>
-        )}
+        ) : null}
       </div>
 
       {result?.state === "warning" ? (
