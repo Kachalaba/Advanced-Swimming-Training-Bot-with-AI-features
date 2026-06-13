@@ -79,4 +79,37 @@ describe("rehab handoff adapters", () => {
     expect(handoff.poseCoverage).toBe(100);
     expect(handoff.findingBody).toContain("18°");
   });
+
+  it("preserves persisted clinical context for the handoff report", () => {
+    const handoff = createReportHandoff({
+      source: "live",
+      locale: "en",
+      protocol: "shoulder_flexion",
+      report,
+      clinical: {
+        patientName: "Patient A",
+        episodeTitle: "Shoulder recovery",
+        functionalGoal: "Reach an overhead shelf",
+        captureSource: "live",
+        captureQuality: "accepted_with_warning",
+        qualityDetails: "Camera tilt acknowledged.",
+        specialistObservation: "ROM remains asymmetric.",
+        baselineDelta: {
+          leftRom: 18,
+          rightRom: 18,
+          symmetry: 6,
+          repetitions: 1,
+          completionScore: 12,
+        },
+        previousDelta: null,
+      },
+    });
+
+    expect(handoff.clinical).toMatchObject({
+      patientName: "Patient A",
+      functionalGoal: "Reach an overhead shelf",
+      captureQuality: "accepted_with_warning",
+      specialistObservation: "ROM remains asymmetric.",
+    });
+  });
 });

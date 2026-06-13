@@ -554,6 +554,50 @@ def save_analysis_to_db(
     else:
         athlete_id = athlete.id
 
+    return _save_analysis_for_athlete(
+        database=db,
+        athlete_id=athlete_id,
+        session_type=session_type,
+        analysis=analysis,
+        ai_advice=ai_advice,
+        video_path=video_path,
+    )
+
+
+def save_analysis_to_athlete(
+    athlete_id: int,
+    session_type: str,
+    analysis: Dict,
+    ai_advice: Any = None,
+    video_path: str = "",
+    database: Optional[AthleteDatabase] = None,
+) -> int:
+    """Save analysis for an existing athlete selected by stable ID."""
+
+    db = database or get_database()
+    athlete = db.get_athlete(athlete_id=athlete_id)
+    if athlete is None:
+        raise ValueError("Athlete not found")
+    return _save_analysis_for_athlete(
+        database=db,
+        athlete_id=athlete_id,
+        session_type=session_type,
+        analysis=analysis,
+        ai_advice=ai_advice,
+        video_path=video_path,
+    )
+
+
+def _save_analysis_for_athlete(
+    database: AthleteDatabase,
+    athlete_id: int,
+    session_type: str,
+    analysis: Dict,
+    ai_advice: Any = None,
+    video_path: str = "",
+) -> int:
+    """Build and persist one normalized session for a known athlete."""
+
     # Extract metrics
     session = TrainingSession(
         athlete_id=athlete_id,
@@ -641,4 +685,4 @@ def save_analysis_to_db(
         session.ai_score = getattr(ai_advice, "score", 0)
         session.ai_summary = getattr(ai_advice, "summary", "")
 
-    return db.add_session(session)
+    return database.add_session(session)

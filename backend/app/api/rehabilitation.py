@@ -8,7 +8,7 @@ import os
 import shutil
 import threading
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 import cv2
 import numpy as np
@@ -16,7 +16,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
-from video_analysis.athlete_database import save_analysis_to_db
+from video_analysis.athlete_database import save_analysis_to_athlete, save_analysis_to_db
 from video_analysis.constants import REHAB_PROTOCOLS
 
 from ..services.jobs import Job
@@ -38,6 +38,7 @@ class LiveSessionRequest(BaseModel):
 
 
 class SaveLiveSessionRequest(BaseModel):
+    athlete_id: Optional[int] = Field(default=None, ge=1)
     athlete_name: str = Field(default="Athlete", min_length=1, max_length=120)
 
 
@@ -56,6 +57,31 @@ def _persist_job_video(job: Job) -> str:
     target = video_dir / f"rehab-{job.id}.mp4"
     shutil.copy2(source, target)
     return str(target)
+
+
+async def _save_rehab_analysis(
+    request: SaveLiveSessionRequest,
+    report: dict[str, Any],
+    video_path: str,
+) -> int:
+    try:
+        if request.athlete_id is not None:
+            return await asyncio.to_thread(
+                save_analysis_to_athlete,
+                athlete_id=request.athlete_id,
+                session_type="rehab",
+                analysis={"rehab_analysis": report},
+                video_path=video_path,
+            )
+        return await asyncio.to_thread(
+            save_analysis_to_db,
+            athlete_name=request.athlete_name,
+            session_type="rehab",
+            analysis={"rehab_analysis": report},
+            video_path=video_path,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.post("/rehabilitation/live")
@@ -117,11 +143,9 @@ async def save_live_session(
     report = session.snapshot().get("report")
     if not report:
         raise HTTPException(status_code=409, detail="Live report is not ready")
-    saved_session_id = await asyncio.to_thread(
-        save_analysis_to_db,
-        athlete_name=request.athlete_name,
-        session_type="rehab",
-        analysis={"rehab_analysis": report},
+    saved_session_id = await _save_rehab_analysis(
+        request=request,
+        report=report,
         video_path="",
     )
     return {"session_id": saved_session_id}
@@ -226,11 +250,9 @@ async def save_rehabilitation_job(
         report = job.result.get("report")
         if not report:
             raise HTTPException(status_code=409, detail="Rehabilitation report is not ready")
-        job.saved_session_id = await asyncio.to_thread(
-            save_analysis_to_db,
-            athlete_name=request.athlete_name,
-            session_type="rehab",
-            analysis={"rehab_analysis": report},
+        job.saved_session_id = await _save_rehab_analysis(
+            request=request,
+            report=report,
             video_path=_persist_job_video(job),
         )
     return {"session_id": job.saved_session_id}

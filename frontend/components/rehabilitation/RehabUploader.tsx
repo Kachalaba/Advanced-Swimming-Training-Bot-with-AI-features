@@ -11,6 +11,7 @@ import {
   uploadRehabVideo,
   type RehabAnalysisEvent,
   type RehabProtocol,
+  type RehabSaveTarget,
 } from "@/lib/rehabilitation";
 
 import type { RehabAnalysisSnapshot } from "./rehabHandoff";
@@ -19,14 +20,21 @@ export function RehabUploader({
   protocol,
   locale = "uk",
   onAnalysisChange,
+  saveTarget,
+  onSessionSaved,
+  initialFile,
 }: {
   protocol: RehabProtocol;
   locale?: RehabLocale;
   onAnalysisChange?: (snapshot: RehabAnalysisSnapshot | null) => void;
+  saveTarget?: RehabSaveTarget;
+  onSessionSaved?: (sessionId: number) => void;
+  initialFile?: File | null;
 }) {
   const copy = rehabCopy[locale].upload;
   const inputRef = useRef<HTMLInputElement>(null);
   const unsubscribeRef = useRef<null | (() => void)>(null);
+  const analyzedInitialFileRef = useRef<File | null>(null);
   const [progress, setProgress] = useState(0);
   const [label, setLabel] = useState<string | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
@@ -79,6 +87,17 @@ export function RehabUploader({
       setProgress(0);
     }
   }
+
+  useEffect(() => {
+    if (
+      !initialFile ||
+      analyzedInitialFileRef.current === initialFile
+    ) {
+      return;
+    }
+    analyzedInitialFileRef.current = initialFile;
+    void analyze(initialFile);
+  }, [initialFile]);
 
   const progressLabel =
     progress === 0
@@ -181,8 +200,12 @@ export function RehabUploader({
               disabled={savedSessionId !== null}
               onClick={async () => {
                 try {
-                  const saved = await saveUploadedRehabSession(jobId);
+                  const saved = await saveUploadedRehabSession(
+                    jobId,
+                    saveTarget,
+                  );
                   setSavedSessionId(saved.sessionId);
+                  onSessionSaved?.(saved.sessionId);
                 } catch {
                   setError(copy.saveError);
                 }

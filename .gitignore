@@ -75,3 +75,4 @@ data/session-videos/
 *.tmp
 *.temp
 .cache/
+.worktrees/
