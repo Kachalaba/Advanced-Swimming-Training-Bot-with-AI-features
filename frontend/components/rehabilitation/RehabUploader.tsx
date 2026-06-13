@@ -11,6 +11,7 @@ import {
   uploadRehabVideo,
   type RehabAnalysisEvent,
   type RehabProtocol,
+  type RehabSaveTarget,
 } from "@/lib/rehabilitation";
 
 import type { RehabAnalysisSnapshot } from "./rehabHandoff";
@@ -19,10 +20,14 @@ export function RehabUploader({
   protocol,
   locale = "uk",
   onAnalysisChange,
+  saveTarget,
+  onSessionSaved,
 }: {
   protocol: RehabProtocol;
   locale?: RehabLocale;
   onAnalysisChange?: (snapshot: RehabAnalysisSnapshot | null) => void;
+  saveTarget?: RehabSaveTarget;
+  onSessionSaved?: (sessionId: number) => void;
 }) {
   const copy = rehabCopy[locale].upload;
   const inputRef = useRef<HTMLInputElement>(null);
@@ -181,8 +186,12 @@ export function RehabUploader({
               disabled={savedSessionId !== null}
               onClick={async () => {
                 try {
-                  const saved = await saveUploadedRehabSession(jobId);
+                  const saved = await saveUploadedRehabSession(
+                    jobId,
+                    saveTarget,
+                  );
                   setSavedSessionId(saved.sessionId);
+                  onSessionSaved?.(saved.sessionId);
                 } catch {
                   setError(copy.saveError);
                 }

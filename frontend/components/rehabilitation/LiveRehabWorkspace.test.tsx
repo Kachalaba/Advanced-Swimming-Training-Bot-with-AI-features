@@ -2,7 +2,10 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { sendLiveRehabFrame } from "@/lib/rehabilitation";
+import {
+  saveLiveRehabSession,
+  sendLiveRehabFrame,
+} from "@/lib/rehabilitation";
 
 import { LiveRehabWorkspace } from "./LiveRehabWorkspace";
 
@@ -27,6 +30,7 @@ vi.mock("@/lib/rehabilitation", async (importOriginal) => {
       analysisFps: 5,
     }),
     deleteLiveRehabSession: vi.fn().mockResolvedValue(undefined),
+    saveLiveRehabSession: vi.fn().mockResolvedValue({ sessionId: 91 }),
     sendLiveRehabFrame: vi.fn(),
   };
 });
@@ -59,6 +63,7 @@ describe("LiveRehabWorkspace", () => {
         callback(new Blob(["frame"], { type: "image/jpeg" })),
     });
     vi.mocked(sendLiveRehabFrame).mockReset();
+    vi.mocked(saveLiveRehabSession).mockClear();
   });
 
   it("toggles the postural map without reacquiring the camera", async () => {
@@ -144,5 +149,52 @@ describe("LiveRehabWorkspace", () => {
         }),
       { timeout: 1500 },
     );
+  });
+
+  it("saves to the explicit athlete and emits live and persistence events", async () => {
+    const user = userEvent.setup();
+    const onLiveUpdate = vi.fn();
+    const onSessionSaved = vi.fn();
+    const update = {
+      session_id: "session-1",
+      sequence: 1,
+      pose_detected: true,
+      landmarks: {
+        left_shoulder: { x: 0.4, y: 0.3 },
+      },
+      posture: { available: false },
+      camera_level: {
+        angle_deg: 0,
+        confidence: 0.92,
+        status: "level" as const,
+        relative: true,
+      },
+      report,
+    };
+    vi.mocked(sendLiveRehabFrame).mockResolvedValue(update);
+
+    render(
+      <LiveRehabWorkspace
+        protocol="shoulder_flexion"
+        saveTarget={{ athleteId: 7, athleteName: "Patient A" }}
+        onLiveUpdate={onLiveUpdate}
+        onSessionSaved={onSessionSaved}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Запустити камеру" }));
+    await waitFor(() => expect(onLiveUpdate).toHaveBeenLastCalledWith(update), {
+      timeout: 1500,
+    });
+    await user.click(screen.getByRole("button", { name: "Зберегти" }));
+
+    await waitFor(() =>
+      expect(saveLiveRehabSession).toHaveBeenCalledWith("session-1", {
+        athleteId: 7,
+        athleteName: "Patient A",
+      }),
+    );
+    expect(onSessionSaved).toHaveBeenCalledOnce();
+    expect(onSessionSaved).toHaveBeenCalledWith(91);
   });
 });

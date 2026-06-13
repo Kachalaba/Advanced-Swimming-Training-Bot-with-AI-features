@@ -25,6 +25,7 @@ import {
   sendLiveRehabFrame,
   type LiveRehabUpdate,
   type RehabProtocol,
+  type RehabSaveTarget,
 } from "@/lib/rehabilitation";
 
 import { LiveMetricRail } from "./LiveMetricRail";
@@ -40,10 +41,16 @@ export function LiveRehabWorkspace({
   protocol,
   locale = "uk",
   onAnalysisChange,
+  onLiveUpdate,
+  saveTarget,
+  onSessionSaved,
 }: {
   protocol: RehabProtocol;
   locale?: RehabLocale;
   onAnalysisChange?: (snapshot: RehabAnalysisSnapshot | null) => void;
+  onLiveUpdate?: (update: LiveRehabUpdate | null) => void;
+  saveTarget?: RehabSaveTarget;
+  onSessionSaved?: (sessionId: number) => void;
 }) {
   const copy = rehabCopy[locale].live;
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -144,6 +151,10 @@ export function LiveRehabWorkspace({
       void stop();
     };
   }, [stop]);
+
+  useEffect(() => {
+    onLiveUpdate?.(update);
+  }, [onLiveUpdate, update]);
 
   useEffect(() => {
     if (!update?.report) {
@@ -259,8 +270,12 @@ export function LiveRehabWorkspace({
               const sessionId = sessionIdRef.current;
               if (!sessionId) return;
               try {
-                const saved = await saveLiveRehabSession(sessionId);
+                const saved = await saveLiveRehabSession(
+                  sessionId,
+                  saveTarget,
+                );
                 setSavedSessionId(saved.sessionId);
+                onSessionSaved?.(saved.sessionId);
               } catch {
                 setTransportError(copy.saveError);
               }
