@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import json
+import math
 import os
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from video_analysis.athlete_database import Athlete as DatabaseAthlete
 from video_analysis.athlete_database import TrainingSession, get_database
@@ -34,6 +36,36 @@ class SessionSummary(BaseModel):
     summary: str
     has_video: bool
     artifact_download_url: Optional[str] = None
+
+
+class RehabProgressSession(BaseModel):
+    id: int
+    date: str
+    protocol: str
+    left_rom: float = Field(serialization_alias="leftRom")
+    right_rom: float = Field(serialization_alias="rightRom")
+    symmetry: float
+    repetitions: int
+    completion_score: float = Field(serialization_alias="completionScore")
+    valid_frames: Optional[int] = Field(serialization_alias="validFrames")
+    has_video: bool = Field(serialization_alias="hasVideo")
+
+
+class RehabProgressResponse(BaseModel):
+    athlete: Athlete
+    sessions: list[RehabProgressSession]
+    protocols: list[str]
+
+
+REHAB_PROTOCOLS = frozenset(
+    {
+        "shoulder_flexion",
+        "shoulder_abduction",
+        "elbow_flexion",
+        "knee_extension",
+        "hip_abduction",
+    }
+)
 
 
 def _initials(name: str) -> str:
@@ -74,6 +106,60 @@ def _session_payload(session: TrainingSession) -> SessionSummary:
     )
 
 
+def _finite_number(value: Any) -> Optional[float]:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def _rehab_progress_payload(
+    session: TrainingSession,
+) -> Optional[RehabProgressSession]:
+    try:
+        stored = json.loads(session.full_analysis or "{}")
+    except (TypeError, json.JSONDecodeError):
+        return None
+
+    report = stored.get("rehab_analysis", stored)
+    if not isinstance(report, dict):
+        return None
+    protocol = report.get("protocol")
+    if protocol not in REHAB_PROTOCOLS:
+        return None
+
+    target_metrics = report.get("target_metrics")
+    symmetry_data = report.get("symmetry")
+    if not isinstance(target_metrics, dict) or not isinstance(symmetry_data, dict):
+        return None
+    left = target_metrics.get("left")
+    right = target_metrics.get("right")
+    if not isinstance(left, dict) or not isinstance(right, dict):
+        return None
+
+    left_rom = _finite_number(left.get("rom"))
+    right_rom = _finite_number(right.get("rom"))
+    symmetry = _finite_number(symmetry_data.get("score"))
+    completion = _finite_number(report.get("completion_score"))
+    if None in (left_rom, right_rom, symmetry, completion):
+        return None
+
+    valid_frames = report.get("valid_frames")
+    return RehabProgressSession(
+        id=int(session.id or 0),
+        date=session.date,
+        protocol=protocol,
+        left_rom=left_rom,
+        right_rom=right_rom,
+        symmetry=symmetry,
+        repetitions=int(report.get("total_correct_reps") or 0),
+        completion_score=completion,
+        valid_frames=int(valid_frames) if valid_frames is not None else None,
+        has_video=bool(session.video_path),
+    )
+
+
 @router.get("/me")
 def me() -> Athlete:
     database = get_database()
@@ -107,3 +193,31 @@ def list_sessions(
         limit=limit,
     )
     return [_session_payload(session) for session in sessions]
+
+
+@router.get(
+    "/{athlete_id}/rehabilitation/progress",
+    response_model=RehabProgressResponse,
+)
+def rehabilitation_progress(athlete_id: int) -> RehabProgressResponse:
+    database = get_database()
+    athlete = database.get_athlete(athlete_id=athlete_id)
+    if athlete is None:
+        raise HTTPException(status_code=404, detail="Athlete not found")
+
+    observations = [
+        observation
+        for session in database.get_sessions(
+            athlete_id=athlete_id,
+            session_type="rehab",
+            limit=500,
+        )
+        if (observation := _rehab_progress_payload(session)) is not None
+    ]
+    observations.sort(key=lambda item: item.date)
+    protocols = list(dict.fromkeys(item.protocol for item in observations))
+    return RehabProgressResponse(
+        athlete=_athlete_payload(athlete),
+        sessions=observations,
+        protocols=protocols,
+    )
