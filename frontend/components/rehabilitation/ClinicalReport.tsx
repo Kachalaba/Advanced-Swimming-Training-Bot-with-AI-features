@@ -4,9 +4,10 @@ import { FileDown, ShieldCheck, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
+import { clinicalCopy } from "@/lib/clinicalCopy";
 import { rehabCopy } from "@/lib/rehabCopy";
 
-import type { RehabHandoff } from "./rehabHandoff";
+import type { RehabDelta, RehabHandoff } from "./rehabHandoff";
 
 function Metric({
   label,
@@ -27,6 +28,22 @@ function Metric({
   );
 }
 
+function signed(value: number, suffix = ""): string {
+  return `${value >= 0 ? "+" : ""}${Math.round(value * 10) / 10}${suffix}`;
+}
+
+function comparisonText(
+  label: string,
+  delta: RehabDelta | null,
+  unavailable: string,
+): string {
+  if (!delta) return `${label}: ${unavailable}`;
+  return `${label}: L ${signed(delta.leftRom, "°")} · R ${signed(
+    delta.rightRom,
+    "°",
+  )} · symmetry ${signed(delta.symmetry, " pp")}`;
+}
+
 export function ClinicalReport({
   handoff,
   onClose,
@@ -35,6 +52,7 @@ export function ClinicalReport({
   onClose: () => void;
 }) {
   const copy = rehabCopy[handoff.locale];
+  const clinicalLabels = clinicalCopy[handoff.locale];
   const handoffCopy = copy.handoff;
   const closeRef = useRef<HTMLButtonElement>(null);
   const [patientCode, setPatientCode] = useState("");
@@ -157,38 +175,71 @@ export function ClinicalReport({
           </div>
         </section>
 
-        <section className="report-section mt-6 rounded-2xl border border-cyan-900/10 bg-cyan-50/50 p-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block">
-              <span className="text-[9px] font-semibold uppercase tracking-[0.15em] text-slate-500">
-                {handoffCopy.patientCode}
-              </span>
-              <input
-                aria-label={handoffCopy.patientCode}
-                value={patientCode}
-                onChange={(event) => setPatientCode(event.target.value)}
-                placeholder={handoffCopy.patientCodePlaceholder}
-                className="mt-2 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-cyan-600"
-              />
-            </label>
-            <label className="block">
-              <span className="text-[9px] font-semibold uppercase tracking-[0.15em] text-slate-500">
-                {handoffCopy.clinicianNote}
-              </span>
-              <textarea
-                aria-label={handoffCopy.clinicianNote}
-                value={clinicianNote}
-                onChange={(event) => setClinicianNote(event.target.value)}
-                placeholder={handoffCopy.clinicianNotePlaceholder}
-                rows={2}
-                className="mt-2 w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-cyan-600"
-              />
-            </label>
-          </div>
-          <p className="mt-2 text-[10px] text-slate-500 print:hidden">
-            {handoffCopy.localOnly}
-          </p>
-        </section>
+        {handoff.clinical ? (
+          <section className="report-section mt-6 rounded-2xl border border-cyan-900/10 bg-cyan-50/50 p-5">
+            <div className="grid gap-4 sm:grid-cols-2">
+              {[
+                [handoffCopy.patient, handoff.clinical.patientName],
+                [handoffCopy.episode, handoff.clinical.episodeTitle],
+                [
+                  handoffCopy.functionalGoal,
+                  handoff.clinical.functionalGoal,
+                ],
+                [
+                  handoffCopy.measurementQuality,
+                  clinicalLabels.quality[handoff.clinical.captureQuality],
+                ],
+              ].map(([label, value]) => (
+                <div key={label}>
+                  <div className="text-[9px] font-semibold uppercase tracking-[0.15em] text-slate-500">
+                    {label}
+                  </div>
+                  <div className="mt-1 text-sm font-semibold text-slate-900">
+                    {value}
+                  </div>
+                </div>
+              ))}
+            </div>
+            {handoff.clinical.qualityDetails ? (
+              <p className="mt-4 rounded-lg bg-white/70 px-3 py-2 text-xs leading-relaxed text-slate-600">
+                {handoff.clinical.qualityDetails}
+              </p>
+            ) : null}
+          </section>
+        ) : (
+          <section className="report-section mt-6 rounded-2xl border border-cyan-900/10 bg-cyan-50/50 p-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block">
+                <span className="text-[9px] font-semibold uppercase tracking-[0.15em] text-slate-500">
+                  {handoffCopy.patientCode}
+                </span>
+                <input
+                  aria-label={handoffCopy.patientCode}
+                  value={patientCode}
+                  onChange={(event) => setPatientCode(event.target.value)}
+                  placeholder={handoffCopy.patientCodePlaceholder}
+                  className="mt-2 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-cyan-600"
+                />
+              </label>
+              <label className="block">
+                <span className="text-[9px] font-semibold uppercase tracking-[0.15em] text-slate-500">
+                  {handoffCopy.clinicianNote}
+                </span>
+                <textarea
+                  aria-label={handoffCopy.clinicianNote}
+                  value={clinicianNote}
+                  onChange={(event) => setClinicianNote(event.target.value)}
+                  placeholder={handoffCopy.clinicianNotePlaceholder}
+                  rows={2}
+                  className="mt-2 w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-cyan-600"
+                />
+              </label>
+            </div>
+            <p className="mt-2 text-[10px] text-slate-500 print:hidden">
+              {handoffCopy.localOnly}
+            </p>
+          </section>
+        )}
 
         <section className="report-section mt-7">
           <h2 className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
@@ -223,6 +274,28 @@ export function ClinicalReport({
           </div>
         </section>
 
+        {handoff.clinical ? (
+          <section className="report-section mt-7 rounded-2xl border border-slate-200 p-5">
+            <h2 className="text-[10px] font-bold uppercase tracking-[0.17em] text-cyan-800">
+              {handoffCopy.baselineComparison}
+            </h2>
+            <p className="mt-3 text-sm font-semibold text-slate-800">
+              {comparisonText(
+                handoffCopy.baselineComparison,
+                handoff.clinical.baselineDelta,
+                unavailable,
+              )}
+            </p>
+            <p className="mt-2 text-xs text-slate-600">
+              {comparisonText(
+                handoffCopy.previousComparison,
+                handoff.clinical.previousDelta,
+                unavailable,
+              )}
+            </p>
+          </section>
+        ) : null}
+
         <section className="report-section mt-7 rounded-2xl border border-slate-200 p-5">
           <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.17em] text-cyan-800">
             <ShieldCheck className="h-4 w-4" />
@@ -234,6 +307,16 @@ export function ClinicalReport({
           <p className="mt-2 text-sm leading-relaxed text-slate-600">
             {handoff.findingBody}
           </p>
+          {handoff.clinical ? (
+            <div className="mt-4 border-t border-slate-200 pt-4">
+              <div className="text-[9px] font-semibold uppercase tracking-[0.15em] text-slate-500">
+                {handoffCopy.specialistObservation}
+              </div>
+              <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-800">
+                {handoff.clinical.specialistObservation}
+              </p>
+            </div>
+          ) : null}
         </section>
 
         <section className="report-section mt-7 border-t border-slate-200 pt-5">

@@ -92,4 +92,44 @@ describe("ClinicalReport", () => {
     expect(screen.getAllByText("Not available")).toHaveLength(3);
     expect(screen.getByText("Uploaded session")).toBeInTheDocument();
   });
+
+  it("renders persisted clinical identity, progress, quality, and observation", () => {
+    render(
+      <ClinicalReport
+        handoff={createReportHandoff({
+          source: "live",
+          locale: "en",
+          protocol: "shoulder_flexion",
+          report,
+          clinical: {
+            patientName: "Patient A",
+            episodeTitle: "Shoulder recovery",
+            functionalGoal: "Reach an overhead shelf",
+            captureSource: "live",
+            captureQuality: "accepted_with_warning",
+            qualityDetails: "Camera tilt acknowledged.",
+            specialistObservation: "ROM remains asymmetric.",
+            baselineDelta: {
+              leftRom: 18,
+              rightRom: 18,
+              symmetry: 6,
+              repetitions: 1,
+              completionScore: 12,
+            },
+            previousDelta: null,
+          },
+        })}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Patient A")).toBeInTheDocument();
+    expect(screen.getByText("Reach an overhead shelf")).toBeInTheDocument();
+    expect(screen.getByText(/Baseline.*\+18°/i)).toBeInTheDocument();
+    expect(screen.getByText("Accepted with warning")).toBeInTheDocument();
+    expect(screen.getByText("ROM remains asymmetric.")).toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Patient or session code"),
+    ).not.toBeInTheDocument();
+  });
 });

@@ -1,9 +1,30 @@
+import type { CaptureQuality } from "@/lib/clinical";
 import { rehabCopy, type RehabLocale } from "@/lib/rehabCopy";
 import type { RehabProtocol, RehabReport } from "@/lib/rehabilitation";
 
 import { demoFrames } from "./demoSession";
 
 export type RehabHandoffSource = "demo" | "live" | "upload";
+
+export type RehabDelta = {
+  leftRom: number;
+  rightRom: number;
+  symmetry: number;
+  repetitions: number;
+  completionScore: number;
+};
+
+export type ClinicalHandoffContext = {
+  patientName: string;
+  episodeTitle: string;
+  functionalGoal: string;
+  captureSource: "live" | "upload";
+  captureQuality: CaptureQuality;
+  qualityDetails: string;
+  specialistObservation: string;
+  baselineDelta: RehabDelta | null;
+  previousDelta: RehabDelta | null;
+};
 
 export type RehabHandoff = {
   source: RehabHandoffSource;
@@ -21,6 +42,7 @@ export type RehabHandoff = {
   findingTitle: string;
   findingBody: string;
   disclaimer: string;
+  clinical?: ClinicalHandoffContext;
 };
 
 export type RehabAnalysisSnapshot = {
@@ -34,6 +56,7 @@ type ReportHandoffInput = RehabAnalysisSnapshot & {
   locale: RehabLocale;
   protocol: RehabProtocol;
   recordedAt?: string;
+  clinical?: ClinicalHandoffContext;
 };
 
 function normalizePercentage(value: number | null | undefined): number | null {
@@ -108,6 +131,7 @@ export function createReportHandoff({
   confidence = null,
   poseCoverage = null,
   recordedAt = new Date().toISOString(),
+  clinical,
 }: ReportHandoffInput): RehabHandoff {
   const leftRom = report.target_metrics.left.rom;
   const rightRom = report.target_metrics.right.rom;
@@ -129,5 +153,6 @@ export function createReportHandoff({
     findingTitle: finding.title,
     findingBody: finding.body,
     disclaimer: rehabCopy[locale].limitationBody,
+    clinical,
   };
 }

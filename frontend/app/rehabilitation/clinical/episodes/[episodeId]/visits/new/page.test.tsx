@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -270,6 +270,12 @@ describe("NewClinicalVisitPage", () => {
     await waitFor(() => expect(mocks.finalizeVisit).toHaveBeenCalledWith(31));
     expect(mocks.createVisit).toHaveBeenCalledOnce();
     expect(await screen.findByText("Visit finalized")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Open report" }));
+    const reportDialog = screen.getByRole("dialog", {
+      name: "Clinical movement report",
+    });
+    expect(reportDialog).toBeInTheDocument();
+    expect(within(reportDialog).getByText("Patient A")).toBeInTheDocument();
   });
 
   it("does not start analysis while readiness is blocked", async () => {

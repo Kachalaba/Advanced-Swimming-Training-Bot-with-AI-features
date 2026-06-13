@@ -6,6 +6,7 @@ import {
   Check,
   ChevronRight,
   FileUp,
+  FileText,
   Languages,
   RefreshCw,
   ShieldAlert,
@@ -15,10 +16,12 @@ import { useParams } from "next/navigation";
 import {
   useCallback,
   useEffect,
+  useMemo,
   useReducer,
   useState,
 } from "react";
 
+import { ClinicalReport } from "@/components/rehabilitation/ClinicalReport";
 import { LiveRehabWorkspace } from "@/components/rehabilitation/LiveRehabWorkspace";
 import { RehabUploader } from "@/components/rehabilitation/RehabUploader";
 import { CaptureReadinessPanel } from "@/components/rehabilitation/clinical/CaptureReadinessPanel";
@@ -44,6 +47,10 @@ import {
 import type { LiveRehabUpdate } from "@/lib/rehabilitation";
 
 import type { RehabAnalysisSnapshot } from "@/components/rehabilitation/rehabHandoff";
+import {
+  createReportHandoff,
+  type RehabDelta,
+} from "@/components/rehabilitation/rehabHandoff";
 
 type VisitStep =
   | "context"
@@ -164,6 +171,22 @@ const uploadReady: CaptureReadinessResult = {
   issues: [],
 };
 
+function createDelta(
+  snapshot: RehabAnalysisSnapshot,
+  reference: EpisodeDetail["progress"][number] | undefined,
+): RehabDelta | null {
+  if (!reference) return null;
+  return {
+    leftRom: snapshot.report.target_metrics.left.rom - reference.leftRom,
+    rightRom: snapshot.report.target_metrics.right.rom - reference.rightRom,
+    symmetry: snapshot.report.symmetry.score - reference.symmetry,
+    repetitions:
+      snapshot.report.total_correct_reps - reference.repetitions,
+    completionScore:
+      snapshot.report.completion_score - reference.completionScore,
+  };
+}
+
 export default function NewClinicalVisitPage() {
   const params = useParams<{ episodeId: string }>();
   const episodeId = params.episodeId;
@@ -171,6 +194,7 @@ export default function NewClinicalVisitPage() {
   const [episode, setEpisode] = useState<EpisodeDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   const [state, dispatch] = useReducer(reducer, initialState);
   const copy = clinicalCopy[locale];
   const steps: VisitStep[] = [
@@ -308,6 +332,43 @@ export default function NewClinicalVisitPage() {
       dispatch({ type: "error", value: true });
     }
   };
+
+  const handoff = useMemo(() => {
+    if (!episode || !state.snapshot || state.step !== "summary") return null;
+    return createReportHandoff({
+      source: state.source,
+      locale,
+      protocol: episode.protocol,
+      report: state.snapshot.report,
+      confidence: state.snapshot.confidence,
+      poseCoverage: state.snapshot.poseCoverage,
+      recordedAt: state.visit?.visitedAt,
+      clinical: {
+        patientName: episode.patient.displayName,
+        episodeTitle: episode.title,
+        functionalGoal: episode.functionalGoal,
+        captureSource: state.source,
+        captureQuality: state.quality,
+        qualityDetails: state.qualityDetails,
+        specialistObservation: state.specialistObservation,
+        baselineDelta: createDelta(state.snapshot, episode.progress[0]),
+        previousDelta: createDelta(
+          state.snapshot,
+          episode.progress.at(-1),
+        ),
+      },
+    });
+  }, [
+    episode,
+    locale,
+    state.quality,
+    state.qualityDetails,
+    state.snapshot,
+    state.source,
+    state.specialistObservation,
+    state.step,
+    state.visit?.visitedAt,
+  ]);
 
   if (loading) {
     return (
@@ -543,6 +604,16 @@ export default function NewClinicalVisitPage() {
             {episode.patient.displayName} · {episode.title}
           </p>
           <div className="mt-6 flex flex-wrap justify-center gap-2">
+            {handoff ? (
+              <button
+                type="button"
+                onClick={() => setReportOpen(true)}
+                className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.05] px-5 py-3 text-sm font-semibold text-slate-100"
+              >
+                <FileText className="h-4 w-4 text-cyan-300" />
+                {copy.visit.openReport}
+              </button>
+            ) : null}
             <Link
               href={`/rehabilitation/clinical/patients/${episode.patient.id}`}
               className="rounded-xl bg-cyan-300 px-5 py-3 text-sm font-semibold text-[#031016]"
@@ -557,6 +628,12 @@ export default function NewClinicalVisitPage() {
         <p className="rounded-xl border border-rose-400/20 bg-rose-400/[0.06] px-4 py-3 text-xs text-rose-200">
           {copy.visit.saveError}
         </p>
+      ) : null}
+      {reportOpen && handoff ? (
+        <ClinicalReport
+          handoff={handoff}
+          onClose={() => setReportOpen(false)}
+        />
       ) : null}
     </div>
   );
