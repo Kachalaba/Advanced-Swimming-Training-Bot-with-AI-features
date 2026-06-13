@@ -5,13 +5,14 @@ from __future__ import annotations
 import json
 import math
 import os
-from typing import Any, Optional
+from typing import Any, Dict, Literal, Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from video_analysis.athlete_database import Athlete as DatabaseAthlete
 from video_analysis.athlete_database import TrainingSession, get_database
+from video_analysis.sport_sessions import build_sport_overview
 
 router = APIRouter(tags=["athletes"])
 
@@ -55,6 +56,53 @@ class RehabProgressResponse(BaseModel):
     athlete: Athlete
     sessions: list[RehabProgressSession]
     protocols: list[str]
+
+
+SportName = Literal["swimming", "running", "cycling", "dryland"]
+
+
+class SportMetricPayload(BaseModel):
+    key: str
+    label: str
+    value: float
+    unit: str
+    higher_is_better: Optional[bool]
+
+
+class SportInsightPayload(BaseModel):
+    code: str
+    level: str
+    title: str
+    detail: str
+
+
+class SportScorePointPayload(BaseModel):
+    date: str
+    value: float
+
+
+class SportSessionPayload(BaseModel):
+    id: int
+    date: str
+    duration_sec: float
+    score: Optional[float]
+    summary: str
+    has_video: bool
+    metrics: Dict[str, SportMetricPayload]
+    quality: Dict[str, float]
+    insights: list[SportInsightPayload]
+
+
+class SportOverviewResponse(BaseModel):
+    athlete: Athlete
+    sport: SportName
+    total_sessions: int
+    latest_session_date: Optional[str]
+    latest_score: Optional[float]
+    headline_metrics: Dict[str, SportMetricPayload]
+    insights: list[SportInsightPayload]
+    score_series: list[SportScorePointPayload]
+    sessions: list[SportSessionPayload]
 
 
 REHAB_PROTOCOLS = frozenset(
@@ -176,6 +224,32 @@ def me() -> Athlete:
 @router.get("")
 def list_athletes() -> list[Athlete]:
     return [_athlete_payload(athlete) for athlete in get_database().get_all_athletes()]
+
+
+@router.get(
+    "/{athlete_id}/sports/{sport}/overview",
+    response_model=SportOverviewResponse,
+)
+def sport_overview(
+    athlete_id: int,
+    sport: SportName,
+) -> SportOverviewResponse:
+    database = get_database()
+    athlete = database.get_athlete(athlete_id=athlete_id)
+    if athlete is None:
+        raise HTTPException(status_code=404, detail="Athlete not found")
+    overview = build_sport_overview(
+        sport,
+        database.get_sessions(
+            athlete_id=athlete_id,
+            session_type=sport,
+            limit=500,
+        ),
+    )
+    return SportOverviewResponse(
+        athlete=_athlete_payload(athlete),
+        **overview,
+    )
 
 
 @router.get("/{athlete_id}/sessions")
