@@ -88,6 +88,7 @@ type ClinicalCopy = {
     patientRecord: string;
     repeatMeasurement: string;
     saveError: string;
+    baselineComparison: string;
   };
   readiness: {
     title: string;
@@ -195,6 +196,7 @@ const uk: ClinicalCopy = {
     patientRecord: "До картки пацієнта",
     repeatMeasurement: "Повторити вимірювання",
     saveError: "Не вдалося зберегти або фіналізувати візит",
+    baselineComparison: "Порівняння з базовим вимірюванням",
   },
   readiness: {
     title: "Готовність до вимірювання",
@@ -318,6 +320,7 @@ const en: ClinicalCopy = {
     patientRecord: "Patient record",
     repeatMeasurement: "Repeat measurement",
     saveError: "Could not save or finalize the visit",
+    baselineComparison: "Baseline comparison",
   },
   readiness: {
     title: "Measurement readiness",

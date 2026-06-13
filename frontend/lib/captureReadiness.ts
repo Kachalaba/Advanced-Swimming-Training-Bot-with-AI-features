@@ -16,7 +16,8 @@ export type CaptureReadinessCode =
   | "confidence_low"
   | "confidence_warning"
   | "camera_adjust"
-  | "contralateral_landmarks_missing";
+  | "contralateral_landmarks_missing"
+  | "upload_ready";
 
 export type CaptureReadinessInput = {
   protocol: RehabProtocol;
