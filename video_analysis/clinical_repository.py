@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import math
 import os
 import shutil
 import sqlite3
@@ -9,7 +11,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterator, Literal, Optional
+from typing import Any, Iterator, Literal, Optional
 
 AffectedSide = Literal["left", "right", "bilateral", "unspecified"]
 PatientStatus = Literal["active", "archived"]
@@ -94,6 +96,23 @@ class ClinicalVisit:
     status: VisitStatus
     created_at: str
     updated_at: str
+
+
+@dataclass(frozen=True)
+class ClinicalProgressObservation:
+    visit_id: int
+    training_session_id: int
+    date: str
+    protocol: str
+    left_rom: float
+    right_rom: float
+    symmetry: float
+    repetitions: int
+    completion_score: float
+    valid_frames: Optional[int]
+    has_video: bool
+    capture_quality: Literal["acceptable", "accepted_with_warning"]
+    capture_quality_details: str
 
 
 def _utc_now() -> str:
@@ -656,3 +675,92 @@ class ClinicalRepository:
                 (_utc_now(), visit_id),
             )
         return self.get_visit(visit_id)
+
+    @staticmethod
+    def _finite_number(value: Any) -> Optional[float]:
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return None
+        return number if math.isfinite(number) else None
+
+    def list_episode_progress(self, episode_id: int) -> list[ClinicalProgressObservation]:
+        episode = self.get_episode(episode_id)
+        with self._connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    clinical_visits.id AS visit_id,
+                    clinical_visits.training_session_id,
+                    clinical_visits.capture_quality,
+                    clinical_visits.capture_quality_details,
+                    sessions.date,
+                    sessions.full_analysis,
+                    sessions.video_path
+                FROM clinical_visits
+                JOIN sessions
+                    ON sessions.id = clinical_visits.training_session_id
+                WHERE clinical_visits.rehab_episode_id = ?
+                    AND clinical_visits.status = 'finalized'
+                    AND clinical_visits.capture_quality IN (
+                        'acceptable', 'accepted_with_warning'
+                    )
+                ORDER BY clinical_visits.visited_at, clinical_visits.id
+                """,
+                (episode_id,),
+            ).fetchall()
+
+        observations: list[ClinicalProgressObservation] = []
+        for row in rows:
+            try:
+                stored = json.loads(row["full_analysis"] or "{}")
+            except (TypeError, json.JSONDecodeError):
+                continue
+            report = stored.get("rehab_analysis", stored)
+            if not isinstance(report, dict) or report.get("protocol") != episode.protocol:
+                continue
+            target_metrics = report.get("target_metrics")
+            symmetry_data = report.get("symmetry")
+            if not isinstance(target_metrics, dict) or not isinstance(symmetry_data, dict):
+                continue
+            left = target_metrics.get("left")
+            right = target_metrics.get("right")
+            if not isinstance(left, dict) or not isinstance(right, dict):
+                continue
+            left_rom = self._finite_number(left.get("rom"))
+            right_rom = self._finite_number(right.get("rom"))
+            symmetry = self._finite_number(symmetry_data.get("score"))
+            completion = self._finite_number(report.get("completion_score"))
+            if None in (left_rom, right_rom, symmetry, completion):
+                continue
+            valid_frames = report.get("valid_frames")
+            observations.append(
+                ClinicalProgressObservation(
+                    visit_id=int(row["visit_id"]),
+                    training_session_id=int(row["training_session_id"]),
+                    date=str(row["date"]),
+                    protocol=episode.protocol,
+                    left_rom=float(left_rom),
+                    right_rom=float(right_rom),
+                    symmetry=float(symmetry),
+                    repetitions=int(report.get("total_correct_reps") or 0),
+                    completion_score=float(completion),
+                    valid_frames=(int(valid_frames) if valid_frames is not None else None),
+                    has_video=bool(row["video_path"]),
+                    capture_quality=row["capture_quality"],
+                    capture_quality_details=str(row["capture_quality_details"]),
+                )
+            )
+        return observations
+
+
+_repository: Optional[ClinicalRepository] = None
+
+
+def get_clinical_repository() -> ClinicalRepository:
+    """Return the process-wide clinical repository."""
+
+    global _repository
+    if _repository is None:
+        _repository = ClinicalRepository()
+    return _repository

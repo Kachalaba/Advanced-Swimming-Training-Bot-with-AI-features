@@ -1,5 +1,6 @@
 """Tests for local Clinical Pilot persistence and domain rules."""
 
+import json
 import sqlite3
 from pathlib import Path
 
@@ -32,12 +33,42 @@ def _repository_with_athlete(tmp_path: Path) -> ClinicalRepository:
             """
             CREATE TABLE sessions (
                 id INTEGER PRIMARY KEY,
-                athlete_id INTEGER NOT NULL
+                athlete_id INTEGER NOT NULL,
+                date TEXT NOT NULL,
+                full_analysis TEXT,
+                video_path TEXT
             )
             """
         )
         connection.execute("INSERT INTO athletes (id, name) VALUES (7, 'Patient A')")
-        connection.execute("INSERT INTO sessions (id, athlete_id) VALUES (31, 7)")
+        connection.execute(
+            """
+            INSERT INTO sessions (
+                id, athlete_id, date, full_analysis, video_path
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                31,
+                7,
+                "2026-06-13T12:00:00+00:00",
+                json.dumps(
+                    {
+                        "rehab_analysis": {
+                            "protocol": "shoulder_flexion",
+                            "valid_frames": 30,
+                            "target_metrics": {
+                                "left": {"rom": 142.0},
+                                "right": {"rom": 130.0},
+                            },
+                            "symmetry": {"score": 91.0},
+                            "total_correct_reps": 4,
+                            "completion_score": 88.0,
+                        }
+                    }
+                ),
+                "/data/session-videos/rehab.mp4",
+            ),
+        )
     return ClinicalRepository(path)
 
 
@@ -190,3 +221,28 @@ def test_archiving_patient_archives_active_episodes(tmp_path: Path):
     assert repository.get_episode(int(episode.id or 0)).status == "archived"
     assert repository.list_patients() == []
     assert repository.list_patients(include_archived=True) == [archived]
+
+
+def test_episode_progress_uses_finalized_compatible_session_report(tmp_path: Path):
+    repository = _repository_with_athlete(tmp_path)
+    _, episode = _patient_and_episode(repository)
+    visit = repository.create_visit(
+        rehab_episode_id=int(episode.id or 0),
+        capture_source="live",
+        pre_session_note="Stable",
+    )
+    repository.update_visit(
+        int(visit.id or 0),
+        training_session_id=31,
+        capture_quality="acceptable",
+        specialist_observation="Review completed.",
+    )
+    repository.finalize_visit(int(visit.id or 0))
+
+    observations = repository.list_episode_progress(int(episode.id or 0))
+
+    assert len(observations) == 1
+    assert observations[0].visit_id == visit.id
+    assert observations[0].left_rom == 142.0
+    assert observations[0].right_rom == 130.0
+    assert observations[0].has_video is True
