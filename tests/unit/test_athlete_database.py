@@ -171,6 +171,31 @@ class TestTrainingSessions:
 
 class TestSaveAnalysis:
 
+    def test_save_analysis_to_existing_athlete_id(self, tmp_path):
+        import video_analysis.athlete_database as athlete_database
+
+        database = AthleteDatabase(str(tmp_path / "clinical-save.db"))
+        athlete_id = database.add_athlete(Athlete(name="Patient A"))
+
+        session_id = athlete_database.save_analysis_to_athlete(
+            athlete_id=athlete_id,
+            session_type="rehab",
+            analysis={
+                "rehab_analysis": {
+                    "protocol": "shoulder_flexion",
+                    "total_correct_reps": 2,
+                    "completion_score": 80,
+                    "symmetry": {"score": 90},
+                }
+            },
+            database=database,
+        )
+
+        session = database.get_session(session_id)
+        assert session is not None
+        assert session.athlete_id == athlete_id
+        assert len(database.get_all_athletes()) == 1
+
     def test_waterline_swimming_analysis_populates_history_fields(self, tmp_path):
         import video_analysis.athlete_database as athlete_database
 

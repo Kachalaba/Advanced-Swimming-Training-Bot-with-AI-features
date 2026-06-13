@@ -130,6 +130,31 @@ def test_live_report_can_be_saved_to_history(monkeypatch):
     assert saved["analysis"]["rehab_analysis"]["protocol"] == "shoulder_flexion"
 
 
+def test_live_report_prefers_explicit_athlete_id(monkeypatch):
+    client = _client(monkeypatch)
+    saved = {}
+
+    def fake_save_to_athlete(**kwargs):
+        saved.update(kwargs)
+        return 43
+
+    monkeypatch.setattr(
+        rehabilitation,
+        "save_analysis_to_athlete",
+        fake_save_to_athlete,
+    )
+
+    response = client.post(
+        "/api/analysis/rehabilitation/live/session-123/save",
+        json={"athlete_id": 7, "athlete_name": "Fallback Name"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"session_id": 43}
+    assert saved["athlete_id"] == 7
+    assert saved["session_type"] == "rehab"
+
+
 def test_uploaded_report_can_be_saved_once(monkeypatch, tmp_path):
     client = _client(monkeypatch)
     saved = {}
