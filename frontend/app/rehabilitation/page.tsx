@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  BriefcaseMedical,
   Camera,
   ChevronDown,
   FileText,
@@ -38,6 +39,7 @@ import {
 } from "@/components/rehabilitation/rehabHandoff";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { clinicalCopy } from "@/lib/clinicalCopy";
 import {
   REHAB_LOCALE_STORAGE_KEY,
   rehabCopy,
@@ -303,7 +305,14 @@ export default function RehabilitationPage() {
               : copy.handoff.waiting}
           </p>
         </div>
-        <div className="grid gap-2 sm:grid-cols-3">
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          <Link
+            href="/rehabilitation/clinical"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-cyan-300/20 bg-cyan-300/[0.07] px-4 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-300/[0.12]"
+          >
+            <BriefcaseMedical className="h-4 w-4" />
+            {clinicalCopy[locale].workspace.title}
+          </Link>
           <Link
             href="/rehabilitation/progress"
             className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-emerald-300/15 bg-emerald-300/[0.055] px-4 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-300/[0.1]"

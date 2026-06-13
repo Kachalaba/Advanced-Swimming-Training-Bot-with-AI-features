@@ -1,4 +1,3 @@
-import type { Athlete } from "./api";
 import type { RehabProgressSession } from "./rehabProgress";
 import type { RehabProtocol } from "./rehabilitation";
 
@@ -19,7 +18,10 @@ export type CaptureQuality =
   | "repeat_required";
 export type VisitStatus = "draft" | "finalized";
 
-export type ClinicalAthlete = Pick<Athlete, "id" | "name">;
+export type ClinicalAthlete = {
+  id: number;
+  name: string;
+};
 
 export type RehabEpisode = {
   id: number;

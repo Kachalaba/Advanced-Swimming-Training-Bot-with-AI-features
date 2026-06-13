@@ -160,6 +160,14 @@ describe("RehabilitationPage", () => {
     ).toHaveAttribute("href", "/rehabilitation/progress");
   });
 
+  it("links to the clinical specialist workspace", () => {
+    render(<RehabilitationPage />);
+
+    expect(
+      screen.getByRole("link", { name: "Кабінет фахівця" }),
+    ).toHaveAttribute("href", "/rehabilitation/clinical");
+  });
+
   it("gates real handoff actions until analysis results exist", async () => {
     const user = userEvent.setup();
     render(<RehabilitationPage />);
