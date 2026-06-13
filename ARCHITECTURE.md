@@ -119,7 +119,8 @@ docker compose up --build
 ## Current Limitations
 
 - FastAPI jobs are in-memory and not durable across restarts.
-- Only running analysis is exposed through the new API.
+- The new API now exposes analysis, swimming, rehabilitation, clinical, and
+  video-tools routers; some still share duplicated pipeline code with `pages/`.
 - Athlete endpoints in `backend/app/api/athletes.py` are still stubbed.
 - Raw SQLite and ORM persistence coexist.
 - Some Streamlit pages still contain page-local tracking pipelines that should

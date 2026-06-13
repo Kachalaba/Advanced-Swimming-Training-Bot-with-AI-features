@@ -1,6 +1,8 @@
 """
-🏊 SPRINT AI - Професійний аналіз спортсменів
-Плавання • Суходіл • AI-біомеханіка
+⚡ SPRINT AI — професійний відеоаналіз спортсменів.
+
+Streamlit-оболонка з вкладками для плавання, бігу, велоспорту, суходолу,
+реабілітації, історії атлета, AI-асистента та відеоінструментів.
 """
 
 import logging
@@ -12,6 +14,16 @@ import streamlit as st
 logger = logging.getLogger(__name__)
 
 sys.path.insert(0, str(Path(__file__).parent))
+
+
+def _load_static_css() -> str:
+    """Return the static premium stylesheet, or an empty string if missing."""
+    css_path = Path(__file__).parent / "assets" / "styles.css"
+    try:
+        return css_path.read_text(encoding="utf-8")
+    except OSError as exc:  # pragma: no cover - cosmetic fallback
+        logger.warning("Could not load styles.css: %s", exc)
+        return ""
 
 
 # ============================================================================
@@ -64,256 +76,10 @@ else:
         --bg-app-end: #e8f0fe;
     """
 
-st.markdown(
-    f"""
-<style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-
-    :root {{
-        {_theme_vars}
-        --accent-blue: #3b82f6;
-        --accent-purple: #8b5cf6;
-        --accent-cyan: #06b6d4;
-        --accent-green: #10b981;
-        --accent-orange: #f59e0b;
-    }}
-
-    .stApp {{
-        background: linear-gradient(135deg, var(--bg-app-start) 0%, var(--bg-app-end) 100%);
-        color: var(--text-primary);
-    }}
-
-    /* === HEADER === */
-    .premium-header {{
-        text-align: center;
-        padding: 1.5rem 0 1rem 0;
-        margin-bottom: 0.5rem;
-    }}
-    .logo-text {{
-        font-family: 'Inter', sans-serif;
-        font-size: 3.5rem;
-        font-weight: 800;
-        background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 50%, #06b6d4 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        letter-spacing: -2px;
-        margin-bottom: 0.25rem;
-    }}
-    .tagline {{
-        font-family: 'Inter', sans-serif;
-        font-size: 0.95rem;
-        color: var(--text-secondary);
-        font-weight: 400;
-        letter-spacing: 3px;
-        text-transform: uppercase;
-    }}
-
-    /* === TAB NAVIGATION === */
-    .stTabs [data-baseweb="tab-list"] {{
-        gap: 6px;
-        background: var(--bg-card);
-        padding: 6px;
-        border-radius: 16px;
-        border: 1px solid var(--border-color);
-        box-shadow: var(--shadow-card);
-    }}
-    .stTabs [data-baseweb="tab"] {{
-        background: transparent;
-        border-radius: 12px;
-        color: var(--text-secondary);
-        font-weight: 600;
-        padding: 10px 28px;
-        font-size: 0.95rem;
-        transition: all 0.2s ease;
-    }}
-    .stTabs [aria-selected="true"] {{
-        background: linear-gradient(135deg, var(--accent-blue) 0%, var(--accent-purple) 100%);
-        color: white !important;
-        box-shadow: 0 4px 12px rgba(59,130,246,0.35);
-    }}
-
-    /* === CARDS === */
-    .glass-card {{
-        background: var(--bg-glass);
-        backdrop-filter: blur(20px);
-        border: 1px solid var(--border-color);
-        border-radius: 20px;
-        padding: 2rem;
-        margin: 1rem 0;
-        box-shadow: var(--shadow-card);
-    }}
-
-    .metric-grid {{
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 1rem;
-        margin: 1rem 0;
-    }}
-    .metric-item {{
-        background: linear-gradient(135deg, rgba(59,130,246,0.08) 0%, rgba(139,92,246,0.08) 100%);
-        border: 1px solid var(--border-color);
-        border-radius: 16px;
-        padding: 1.5rem;
-        text-align: center;
-        transition: all 0.2s ease;
-        box-shadow: var(--shadow-card);
-    }}
-    .metric-item:hover {{
-        transform: translateY(-3px);
-        border-color: var(--accent-blue);
-        box-shadow: 0 12px 32px rgba(59,130,246,0.18);
-    }}
-    .metric-value {{
-        font-size: 2.5rem;
-        font-weight: 800;
-        background: linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        line-height: 1.1;
-    }}
-    .metric-label {{
-        font-size: 0.85rem;
-        color: var(--text-secondary);
-        margin-top: 0.5rem;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        font-weight: 500;
-    }}
-
-    /* === BUTTONS === */
-    .stButton>button {{
-        background: linear-gradient(135deg, var(--accent-blue) 0%, var(--accent-purple) 100%);
-        color: white;
-        border: none;
-        border-radius: 12px;
-        padding: 0.9rem 2rem;
-        font-size: 1rem;
-        font-weight: 600;
-        font-family: 'Inter', sans-serif;
-        transition: all 0.2s ease;
-        box-shadow: 0 4px 16px rgba(59,130,246,0.28);
-    }}
-    .stButton>button:hover {{
-        transform: translateY(-2px);
-        box-shadow: 0 8px 28px rgba(59,130,246,0.45);
-    }}
-
-    /* === STATUS BOXES === */
-    .status-success {{
-        background: linear-gradient(135deg, rgba(16,185,129,0.12) 0%, rgba(6,182,212,0.12) 100%);
-        border: 1px solid rgba(16,185,129,0.5);
-        border-radius: 10px;
-        padding: 0.85rem 1.25rem;
-        margin: 0.4rem 0;
-        color: var(--accent-green);
-        font-weight: 500;
-    }}
-    .status-info {{
-        background: linear-gradient(135deg, rgba(59,130,246,0.1) 0%, rgba(139,92,246,0.1) 100%);
-        border: 1px solid rgba(59,130,246,0.4);
-        border-radius: 10px;
-        padding: 0.85rem 1.25rem;
-        margin: 0.4rem 0;
-        color: var(--accent-blue);
-        font-weight: 500;
-    }}
-    .status-warning {{
-        background: linear-gradient(135deg, rgba(245,158,11,0.12) 0%, rgba(249,115,22,0.12) 100%);
-        border: 1px solid rgba(245,158,11,0.5);
-        border-radius: 10px;
-        padding: 0.85rem 1.25rem;
-        margin: 0.4rem 0;
-        color: var(--accent-orange);
-        font-weight: 500;
-    }}
-
-    /* === UPLOAD AREA === */
-    .upload-zone {{
-        border: 2px dashed var(--border-color);
-        border-radius: 20px;
-        padding: 3rem;
-        text-align: center;
-        background: var(--bg-glass);
-        transition: all 0.2s ease;
-    }}
-    .upload-zone:hover {{
-        border-color: var(--accent-blue);
-        background: rgba(59,130,246,0.04);
-    }}
-
-    /* === SECTION HEADERS === */
-    .section-title {{
-        font-family: 'Inter', sans-serif;
-        font-size: 1.4rem;
-        font-weight: 700;
-        color: var(--text-primary);
-        margin: 1.75rem 0 0.75rem 0;
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-    }}
-    .section-title::before {{
-        content: '';
-        width: 3px;
-        height: 22px;
-        background: linear-gradient(180deg, var(--accent-blue) 0%, var(--accent-purple) 100%);
-        border-radius: 2px;
-        flex-shrink: 0;
-    }}
-
-    /* === SIDEBAR === */
-    [data-testid="stSidebar"] {{
-        background: var(--bg-card);
-        border-right: 1px solid var(--border-color);
-    }}
-
-    /* === INPUTS === */
-    .stTextInput>div>div>input, .stSelectbox>div>div, .stSlider {{
-        background: var(--bg-card) !important;
-        border-color: var(--border-color) !important;
-        color: var(--text-primary) !important;
-    }}
-
-    /* === EXPANDER === */
-    .streamlit-expanderHeader {{
-        background: var(--bg-card);
-        border: 1px solid var(--border-color);
-        border-radius: 12px;
-    }}
-
-    /* === HIDE STREAMLIT BRANDING === */
-    #MainMenu {{visibility: hidden;}}
-    footer {{visibility: hidden;}}
-    header {{visibility: hidden;}}
-
-    /* === LEGACY COMPAT === */
-    .success-box {{
-        background: linear-gradient(135deg, rgba(16,185,129,0.12) 0%, rgba(6,182,212,0.12) 100%);
-        border: 1px solid rgba(16,185,129,0.5);
-        border-radius: 10px;
-        padding: 0.85rem 1.25rem;
-        margin: 0.4rem 0;
-    }}
-    .warning-box {{
-        background: linear-gradient(135deg, rgba(245,158,11,0.12) 0%, rgba(249,115,22,0.12) 100%);
-        border: 1px solid rgba(245,158,11,0.5);
-        border-radius: 10px;
-        padding: 0.85rem 1.25rem;
-        margin: 0.4rem 0;
-    }}
-    .info-box {{
-        background: linear-gradient(135deg, rgba(59,130,246,0.1) 0%, rgba(139,92,246,0.1) 100%);
-        border: 1px solid rgba(59,130,246,0.4);
-        border-radius: 10px;
-        padding: 0.85rem 1.25rem;
-        margin: 0.4rem 0;
-    }}
-</style>
-""",
-    unsafe_allow_html=True,
-)
+# Theme-specific custom properties are dynamic (light/dark); the rest of the
+# premium stylesheet lives in assets/styles.css and is loaded once below.
+st.markdown(f"<style>:root {{{_theme_vars}}}</style>", unsafe_allow_html=True)
+st.markdown(f"<style>{_load_static_css()}</style>", unsafe_allow_html=True)
 
 
 # ============================================================================

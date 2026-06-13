@@ -2,21 +2,30 @@
 
 ## Project overview
 
-AI-powered triathlon video analysis platform. Analyzes swimming, running, cycling,
-and dryland exercises via computer vision (YOLOv8 + MediaPipe). Built with Streamlit.
+AI-powered triathlon + rehabilitation video analysis platform. Analyzes swimming,
+running, cycling, dryland exercises, and physiotherapy/ROM via computer vision
+(YOLOv8 + MediaPipe). Two app shells share one CV core:
+
+- **Streamlit shell** (`app.py` + `pages/`) — trainer-facing prototype/fallback UI.
+- **Web app** (`backend/` FastAPI + `frontend/` Next.js) — the production stack
+  served by `docker compose up`.
 
 ## Architecture
 
 ```
-app.py                       # Entry point: Streamlit 7-tab UI
+app.py                       # Entry point: Streamlit 8-tab UI
 pages/
   swimming.py                # Swimming analysis page
   running.py                 # Running analysis page
   cycling.py                 # Cycling analysis page
   dryland.py                 # Dryland exercise page
+  rehabilitation.py          # Rehab / ROM analysis page
   history.py                 # Athlete history + charts
   ai_assistant.py            # Claude API chat
   tools.py                   # Video utilities
+assets/styles.css            # Static premium stylesheet loaded by app.py
+backend/app/                 # FastAPI: api/ routers + services/ pipelines
+frontend/                    # Next.js 16 / React 19 web UI
 video_analysis/
   base_analyzer.py           # Shared utilities (BaseAnalyzer mixin)
   analyzer_factory.py        # @st.cache_resource factory functions
@@ -142,9 +151,10 @@ Run `pytest tests/unit/ -v` in any Python env after `pip install numpy pytest`.
 
 ## CI/CD
 
-Three GitHub Actions workflows:
-- `lint.yml`  — ruff, black, isort, mypy
-- `tests.yml` — pytest + coverage
-- `docker.yml`— Docker build + push (on tag)
+Four GitHub Actions workflows:
+- `lint.yml`     — ruff, black, isort, mypy
+- `tests.yml`    — pytest + coverage
+- `frontend.yml` — Next.js typecheck, build, npm audit
+- `docker.yml`   — Docker build + push (on tag)
 
-Branches: `main`, `codex/**`, `claude/**` trigger lint on push.
+Branches: `main`, `codex/**`, `claude/**` trigger lint/tests on push.
