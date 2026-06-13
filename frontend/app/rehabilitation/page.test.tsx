@@ -2,17 +2,77 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { RehabAnalysisSnapshot } from "@/components/rehabilitation/rehabHandoff";
+
 import RehabilitationPage from "./page";
 
 vi.mock("@/components/rehabilitation/LiveRehabWorkspace", () => ({
-  LiveRehabWorkspace: ({ locale }: { locale: string }) => (
-    <div data-testid="live-workspace">{locale}</div>
+  LiveRehabWorkspace: ({
+    locale,
+    onAnalysisChange,
+  }: {
+    locale: string;
+    onAnalysisChange?: (snapshot: RehabAnalysisSnapshot | null) => void;
+  }) => (
+    <div data-testid="live-workspace">
+      {locale}
+      <button
+        type="button"
+        onClick={() =>
+          onAnalysisChange?.({
+            report: {
+              protocol: "shoulder_flexion",
+              total_correct_reps: 2,
+              completion_score: 86,
+              target_metrics: {
+                left: { rom: 154 },
+                right: { rom: 136 },
+              },
+              symmetry: { asymmetry_index: 12, score: 88 },
+            },
+            confidence: 0.92,
+            poseCoverage: null,
+          })
+        }
+      >
+        emit live result
+      </button>
+    </div>
   ),
 }));
 
 vi.mock("@/components/rehabilitation/RehabUploader", () => ({
-  RehabUploader: ({ locale }: { locale: string }) => (
-    <div data-testid="rehab-uploader">{locale}</div>
+  RehabUploader: ({
+    locale,
+    onAnalysisChange,
+  }: {
+    locale: string;
+    onAnalysisChange?: (snapshot: RehabAnalysisSnapshot | null) => void;
+  }) => (
+    <div data-testid="rehab-uploader">
+      {locale}
+      <button
+        type="button"
+        onClick={() =>
+          onAnalysisChange?.({
+            report: {
+              protocol: "shoulder_flexion",
+              total_correct_reps: 3,
+              completion_score: 84,
+              target_metrics: {
+                left: { rom: 150 },
+                right: { rom: 132 },
+              },
+              symmetry: { asymmetry_index: 12, score: 88 },
+            },
+            confidence: null,
+            poseCoverage: 75,
+          })
+        }
+      >
+        emit upload result
+      </button>
+    </div>
   ),
 }));
 
@@ -71,5 +131,64 @@ describe("RehabilitationPage", () => {
       screen.getByRole("button", { name: "Завантажити відео" }),
     );
     expect(screen.getByTestId("rehab-uploader")).toHaveTextContent("uk");
+  });
+
+  it("opens presentation and report from the completed demo", async () => {
+    const user = userEvent.setup();
+    render(<RehabilitationPage />);
+
+    await user.click(
+      screen.getByRole("button", { name: "Режим презентації" }),
+    );
+    expect(
+      screen.getByRole("dialog", { name: "Режим презентації" }),
+    ).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: "Відкрити клінічний звіт" }),
+    );
+    expect(
+      screen.getByRole("dialog", { name: "Клінічний звіт про рух" }),
+    ).toBeInTheDocument();
+  });
+
+  it("gates real handoff actions until analysis results exist", async () => {
+    const user = userEvent.setup();
+    render(<RehabilitationPage />);
+
+    await user.click(screen.getByRole("button", { name: "Камера наживо" }));
+    expect(
+      screen.getByRole("button", { name: "Режим презентації" }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Клінічний звіт" }),
+    ).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: "emit live result" }));
+    expect(
+      screen.getByRole("button", { name: "Режим презентації" }),
+    ).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: "Клінічний звіт" }),
+    ).toBeEnabled();
+  });
+
+  it("clears a real handoff when the protocol changes", async () => {
+    const user = userEvent.setup();
+    render(<RehabilitationPage />);
+
+    await user.click(screen.getByRole("button", { name: "Камера наживо" }));
+    await user.click(screen.getByRole("button", { name: "emit live result" }));
+    expect(
+      screen.getByRole("button", { name: "Клінічний звіт" }),
+    ).toBeEnabled();
+
+    await user.selectOptions(
+      screen.getByRole("combobox", { name: "Протокол" }),
+      "knee_extension",
+    );
+    expect(
+      screen.getByRole("button", { name: "Клінічний звіт" }),
+    ).toBeDisabled();
   });
 });

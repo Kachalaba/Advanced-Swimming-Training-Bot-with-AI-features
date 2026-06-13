@@ -3,21 +3,37 @@
 import {
   Camera,
   ChevronDown,
+  FileText,
   Languages,
+  MonitorPlay,
   Play,
   RotateCcw,
   ShieldAlert,
   ShieldCheck,
   Upload,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
+import { ClinicalReport } from "@/components/rehabilitation/ClinicalReport";
 import { LiveRehabWorkspace } from "@/components/rehabilitation/LiveRehabWorkspace";
 import { RehabDemoStage } from "@/components/rehabilitation/RehabDemoStage";
 import { RehabEvidencePanel } from "@/components/rehabilitation/RehabEvidencePanel";
 import { RehabInsightRail } from "@/components/rehabilitation/RehabInsightRail";
+import { RehabPresentationMode } from "@/components/rehabilitation/RehabPresentationMode";
 import { RehabUploader } from "@/components/rehabilitation/RehabUploader";
 import { demoFrames } from "@/components/rehabilitation/demoSession";
+import {
+  createDemoHandoff,
+  createReportHandoff,
+  type RehabAnalysisSnapshot,
+  type RehabHandoff,
+} from "@/components/rehabilitation/rehabHandoff";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import {
@@ -28,6 +44,11 @@ import {
 import { rehabProtocols, type RehabProtocol } from "@/lib/rehabilitation";
 
 type InputMode = "demo" | "live" | "upload";
+type HandoffOverlay = "presentation" | "report" | null;
+type CapturedAnalysis = {
+  snapshot: RehabAnalysisSnapshot;
+  recordedAt: string;
+};
 
 export default function RehabilitationPage() {
   const [protocol, setProtocol] =
@@ -36,8 +57,31 @@ export default function RehabilitationPage() {
   const [locale, setLocale] = useState<RehabLocale>("uk");
   const [demoIndex, setDemoIndex] = useState(demoFrames.length - 1);
   const [demoRunning, setDemoRunning] = useState(false);
+  const [liveAnalysis, setLiveAnalysis] = useState<CapturedAnalysis | null>(
+    null,
+  );
+  const [uploadAnalysis, setUploadAnalysis] =
+    useState<CapturedAnalysis | null>(null);
+  const [handoffOverlay, setHandoffOverlay] =
+    useState<HandoffOverlay>(null);
+  const handoffTriggerRef = useRef<HTMLButtonElement | null>(null);
   const copy = rehabCopy[locale];
   const frame = demoFrames[demoIndex];
+
+  const currentHandoff = useMemo<RehabHandoff | null>(() => {
+    if (mode === "demo") return createDemoHandoff(locale, protocol);
+    const captured = mode === "live" ? liveAnalysis : uploadAnalysis;
+    if (!captured) return null;
+    return createReportHandoff({
+      source: mode,
+      locale,
+      protocol,
+      report: captured.snapshot.report,
+      confidence: captured.snapshot.confidence,
+      poseCoverage: captured.snapshot.poseCoverage,
+      recordedAt: captured.recordedAt,
+    });
+  }, [liveAnalysis, locale, mode, protocol, uploadAnalysis]);
 
   useEffect(() => {
     const stored = window.localStorage.getItem(REHAB_LOCALE_STORAGE_KEY);
@@ -63,6 +107,53 @@ export default function RehabilitationPage() {
     window.dispatchEvent(
       new CustomEvent("rehab-locale-change", { detail: value }),
     );
+  };
+
+  const changeProtocol = (value: RehabProtocol) => {
+    setProtocol(value);
+    setLiveAnalysis(null);
+    setUploadAnalysis(null);
+    setHandoffOverlay(null);
+  };
+
+  const captureAnalysis = useCallback(
+    (
+      setter: (value: CapturedAnalysis | null) => void,
+      snapshot: RehabAnalysisSnapshot | null,
+    ) => {
+      setter(
+        snapshot
+          ? { snapshot, recordedAt: new Date().toISOString() }
+          : null,
+      );
+    },
+    [],
+  );
+
+  const onLiveAnalysisChange = useCallback(
+    (snapshot: RehabAnalysisSnapshot | null) =>
+      captureAnalysis(setLiveAnalysis, snapshot),
+    [captureAnalysis],
+  );
+
+  const onUploadAnalysisChange = useCallback(
+    (snapshot: RehabAnalysisSnapshot | null) =>
+      captureAnalysis(setUploadAnalysis, snapshot),
+    [captureAnalysis],
+  );
+
+  const openHandoff = (
+    overlay: Exclude<HandoffOverlay, null>,
+    trigger: HTMLButtonElement,
+  ) => {
+    if (!currentHandoff) return;
+    handoffTriggerRef.current = trigger;
+    setHandoffOverlay(overlay);
+  };
+
+  const closeHandoff = () => {
+    setHandoffOverlay(null);
+    window.setTimeout(() => handoffTriggerRef.current?.focus(), 0);
   };
 
   const runDemo = () => {
@@ -104,7 +195,7 @@ export default function RehabilitationPage() {
               <select
                 value={protocol}
                 onChange={(event) =>
-                  setProtocol(event.target.value as RehabProtocol)
+                  changeProtocol(event.target.value as RehabProtocol)
                 }
                 className="h-9 min-w-[210px] rounded-lg border border-white/10 bg-[#0b1118] px-3 text-xs font-medium text-slate-200 outline-none transition focus:border-cyan-400/50"
               >
@@ -177,6 +268,7 @@ export default function RehabilitationPage() {
               key={`${protocol}-${locale}`}
               protocol={protocol}
               locale={locale}
+              onAnalysisChange={onLiveAnalysisChange}
             />
           </div>
         ) : (
@@ -185,9 +277,52 @@ export default function RehabilitationPage() {
               <Upload className="h-4 w-4 text-cyan-300" />
               {copy.uploadMode}
             </div>
-            <RehabUploader protocol={protocol} locale={locale} />
+            <RehabUploader
+              protocol={protocol}
+              locale={locale}
+              onAnalysisChange={onUploadAnalysisChange}
+            />
           </section>
         )}
+      </section>
+
+      <section className="flex flex-col justify-between gap-4 rounded-2xl border border-white/[0.07] bg-[#091017] p-4 md:flex-row md:items-center">
+        <div>
+          <div
+            className={`text-[10px] font-semibold uppercase tracking-[0.17em] ${
+              currentHandoff ? "text-emerald-300" : "text-slate-500"
+            }`}
+          >
+            {currentHandoff ? copy.handoff.ready : copy.handoff.waiting}
+          </div>
+          <p className="mt-1 text-xs text-slate-500">
+            {currentHandoff
+              ? copy.handoff.localExport
+              : copy.handoff.waiting}
+          </p>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <button
+            type="button"
+            disabled={!currentHandoff}
+            onClick={(event) =>
+              openHandoff("presentation", event.currentTarget)
+            }
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-cyan-300/20 bg-cyan-300/[0.07] px-4 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-300/[0.12] disabled:cursor-not-allowed disabled:border-white/[0.06] disabled:bg-white/[0.02] disabled:text-slate-600"
+          >
+            <MonitorPlay className="h-4 w-4" />
+            {copy.handoff.presentation}
+          </button>
+          <button
+            type="button"
+            disabled={!currentHandoff}
+            onClick={(event) => openHandoff("report", event.currentTarget)}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.035] px-4 text-xs font-semibold text-slate-200 transition hover:border-cyan-300/25 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:border-white/[0.06] disabled:bg-white/[0.02] disabled:text-slate-600"
+          >
+            <FileText className="h-4 w-4" />
+            {copy.handoff.report}
+          </button>
+        </div>
       </section>
 
       {mode === "demo" ? (
@@ -211,6 +346,26 @@ export default function RehabilitationPage() {
       <p className="pb-2 text-center text-[11px] leading-relaxed text-slate-600">
         {copy.footer}
       </p>
+
+      {handoffOverlay === "presentation" && currentHandoff ? (
+        <RehabPresentationMode
+          handoff={currentHandoff}
+          onClose={closeHandoff}
+          onOpenReport={() => setHandoffOverlay("report")}
+          onReplayDemo={
+            currentHandoff.source === "demo"
+              ? () => {
+                  runDemo();
+                  closeHandoff();
+                }
+              : undefined
+          }
+        />
+      ) : null}
+
+      {handoffOverlay === "report" && currentHandoff ? (
+        <ClinicalReport handoff={currentHandoff} onClose={closeHandoff} />
+      ) : null}
     </div>
   );
 }
