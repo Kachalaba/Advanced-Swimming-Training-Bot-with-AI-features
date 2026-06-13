@@ -72,6 +72,13 @@ export type RehabAnalysisEvent =
   | ({ type: "result"; report: RehabReport; frames_total: number; frames_with_pose: number; video_path: string | null })
   | { type: "error"; message: string };
 
+export type RehabSaveTarget =
+  | string
+  | {
+      athleteId: number;
+      athleteName: string;
+    };
+
 async function readJson<T>(response: Response): Promise<T> {
   if (!response.ok) {
     let detail = `${response.status}`;
@@ -122,14 +129,21 @@ export async function deleteLiveRehabSession(sessionId: string): Promise<void> {
 
 export async function saveLiveRehabSession(
   sessionId: string,
-  athleteName = "Nikita K.",
+  target: RehabSaveTarget = "Nikita K.",
 ): Promise<{ sessionId: number }> {
+  const payload =
+    typeof target === "string"
+      ? { athlete_name: target }
+      : {
+          athlete_id: target.athleteId,
+          athlete_name: target.athleteName,
+        };
   const response = await fetch(
     `${BACKEND_URL}/api/analysis/rehabilitation/live/${sessionId}/save`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ athlete_name: athleteName }),
+      body: JSON.stringify(payload),
     },
   );
   const data = await readJson<{ session_id: number }>(response);
@@ -138,14 +152,21 @@ export async function saveLiveRehabSession(
 
 export async function saveUploadedRehabSession(
   jobId: string,
-  athleteName = "Nikita K.",
+  target: RehabSaveTarget = "Nikita K.",
 ): Promise<{ sessionId: number }> {
+  const payload =
+    typeof target === "string"
+      ? { athlete_name: target }
+      : {
+          athlete_id: target.athleteId,
+          athlete_name: target.athleteName,
+        };
   const response = await fetch(
     `${BACKEND_URL}/api/analysis/rehabilitation/${jobId}/save`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ athlete_name: athleteName }),
+      body: JSON.stringify(payload),
     },
   );
   const data = await readJson<{ session_id: number }>(response);
