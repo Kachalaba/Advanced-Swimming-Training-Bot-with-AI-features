@@ -131,11 +131,7 @@ def _rehab_session(
             "id": session_id,
             "date": date,
             "exercise_type": protocol,
-            "full_analysis": (
-                json.dumps({"rehab_analysis": report})
-                if full_analysis is None
-                else full_analysis
-            ),
+            "full_analysis": (json.dumps({"rehab_analysis": report}) if full_analysis is None else full_analysis),
         }
     )
 
@@ -224,9 +220,7 @@ def test_rehabilitation_progress_filters_invalid_stored_reports(monkeypatch):
     app = FastAPI()
     app.include_router(athletes.router, prefix="/api/athletes")
 
-    payload = TestClient(app).get(
-        "/api/athletes/3/rehabilitation/progress"
-    ).json()
+    payload = TestClient(app).get("/api/athletes/3/rehabilitation/progress").json()
 
     assert [session["id"] for session in payload["sessions"]] == [23]
     assert payload["protocols"] == ["knee_extension"]
@@ -237,8 +231,6 @@ def test_rehabilitation_progress_unknown_athlete_returns_404(monkeypatch):
     app = FastAPI()
     app.include_router(athletes.router, prefix="/api/athletes")
 
-    response = TestClient(app).get(
-        "/api/athletes/999/rehabilitation/progress"
-    )
+    response = TestClient(app).get("/api/athletes/999/rehabilitation/progress")
 
     assert response.status_code == 404
