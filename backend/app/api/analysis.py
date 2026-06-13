@@ -14,7 +14,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
-from video_analysis.athlete_database import save_analysis_to_db
+from video_analysis.athlete_database import save_analysis_to_athlete, save_analysis_to_db
 
 from ..services import running as running_pipeline
 from ..services import swimming as swimming_pipeline
@@ -27,6 +27,7 @@ router = APIRouter(tags=["analysis"])
 
 
 class SaveAnalysisRequest(BaseModel):
+    athlete_id: Optional[int] = Field(default=None, ge=1)
     athlete_name: str = Field(default="Athlete", min_length=1, max_length=120)
 
 
@@ -100,14 +101,21 @@ def _get_swimming_job(job_id: str) -> Job:
     return job
 
 
-def _persist_swimming_video(job: Job) -> str:
+def _get_running_job(job_id: str) -> Job:
+    job = registry.get(job_id)
+    if job is None or job.kind != "running":
+        raise HTTPException(status_code=404, detail="Job not found")
+    return job
+
+
+def _persist_sport_video(job: Job, sport: str) -> str:
     source = job.workspace / "annotated.mp4"
     if not source.exists():
         return ""
     default_dir = Path(os.environ.get("ATHLETE_DB_PATH", "data/athletes.db")).parent / "session-videos"
     video_dir = Path(os.environ.get("SESSION_VIDEO_DIR", str(default_dir)))
     video_dir.mkdir(parents=True, exist_ok=True)
-    target = video_dir / f"swimming-{job.id}.mp4"
+    target = video_dir / f"{sport}-{job.id}.mp4"
     shutil.copy2(source, target)
     return str(target)
 
@@ -149,24 +157,21 @@ async def upload_running(
 
 @router.get("/running/{job_id}")
 async def get_job_status(job_id: str) -> dict:
-    job = registry.get(job_id)
-    if job is None:
-        raise HTTPException(404, "Job not found")
+    job = _get_running_job(job_id)
     return {
         "id": job.id,
         "status": job.status,
         "result": job.result,
         "error": job.error,
         "event_count": len(job.events),
+        "saved_session_id": job.saved_session_id,
     }
 
 
 @router.get("/running/{job_id}/events")
 async def stream_events(job_id: str):
     """Server-Sent Events stream of progress updates and final result."""
-    job = registry.get(job_id)
-    if job is None:
-        raise HTTPException(404, "Job not found")
+    job = _get_running_job(job_id)
 
     return StreamingResponse(
         stream_job_events(job),
@@ -180,13 +185,43 @@ async def stream_events(job_id: str):
 
 @router.get("/running/{job_id}/video")
 async def stream_video(job_id: str):
-    job = registry.get(job_id)
-    if job is None:
-        raise HTTPException(404, "Job not found")
+    job = _get_running_job(job_id)
     video_path = job.workspace / "annotated.mp4"
     if not video_path.exists():
         raise HTTPException(404, "Annotated video not ready")
     return FileResponse(video_path, media_type="video/mp4")
+
+
+@router.post("/running/{job_id}/save")
+async def save_running_job(
+    job_id: str,
+    request: SaveAnalysisRequest,
+) -> dict[str, int]:
+    job = _get_running_job(job_id)
+    if job.status != "done" or not job.result:
+        raise HTTPException(status_code=409, detail="Running analysis is not ready")
+    if job.saved_session_id is None:
+        kwargs = {
+            "session_type": "running",
+            "analysis": {"running_analysis": job.result},
+            "video_path": _persist_sport_video(job, "running"),
+        }
+        try:
+            if request.athlete_id is not None:
+                job.saved_session_id = await asyncio.to_thread(
+                    save_analysis_to_athlete,
+                    athlete_id=request.athlete_id,
+                    **kwargs,
+                )
+            else:
+                job.saved_session_id = await asyncio.to_thread(
+                    save_analysis_to_db,
+                    athlete_name=request.athlete_name,
+                    **kwargs,
+                )
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"session_id": job.saved_session_id}
 
 
 @router.post("/swimming")
@@ -265,11 +300,24 @@ async def save_swimming_job(
     if job.status != "done" or not job.result:
         raise HTTPException(status_code=409, detail="Swimming analysis is not ready")
     if job.saved_session_id is None:
-        job.saved_session_id = await asyncio.to_thread(
-            save_analysis_to_db,
-            athlete_name=request.athlete_name,
-            session_type="swimming",
-            analysis={"swimming_analysis": job.result},
-            video_path=_persist_swimming_video(job),
-        )
+        kwargs = {
+            "session_type": "swimming",
+            "analysis": {"swimming_analysis": job.result},
+            "video_path": _persist_sport_video(job, "swimming"),
+        }
+        try:
+            if request.athlete_id is not None:
+                job.saved_session_id = await asyncio.to_thread(
+                    save_analysis_to_athlete,
+                    athlete_id=request.athlete_id,
+                    **kwargs,
+                )
+            else:
+                job.saved_session_id = await asyncio.to_thread(
+                    save_analysis_to_db,
+                    athlete_name=request.athlete_name,
+                    **kwargs,
+                )
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
     return {"session_id": job.saved_session_id}
