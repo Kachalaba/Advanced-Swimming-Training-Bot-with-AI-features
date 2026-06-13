@@ -15,6 +15,8 @@ from typing import Dict, List, Optional
 import cv2
 import numpy as np
 
+from video_analysis.base_analyzer import BaseAnalyzer
+
 logger = logging.getLogger(__name__)
 
 
@@ -46,7 +48,7 @@ class ExerciseStats:
     angle_history: List[float] = field(default_factory=list)
 
 
-class ExerciseAnalyzer:
+class ExerciseAnalyzer(BaseAnalyzer):
     """Analyzes dryland exercises for rep counting, tempo, and form."""
 
     # Thresholds for rep detection
@@ -56,6 +58,7 @@ class ExerciseAnalyzer:
     }
 
     def __init__(self, fps: float = 10.0):
+        super().__init__()
         self.fps = fps
         self.angle_history = []
         self.reps: List[RepData] = []
@@ -84,7 +87,7 @@ class ExerciseAnalyzer:
             return self._empty_stats(exercise_type)
 
         # Smooth angles
-        smoothed = self._smooth(angles)
+        smoothed = self._smooth(angles, window=3)
 
         # Detect reps
         self.reps = self._detect_reps(smoothed, joint)
@@ -125,12 +128,8 @@ class ExerciseAnalyzer:
 
         return arr.tolist()
 
-    def _smooth(self, angles: List[float], window: int = 3) -> List[float]:
-        """Smooth angle series."""
-        if len(angles) < window:
-            return angles
-        kernel = np.ones(window) / window
-        return np.convolve(angles, kernel, mode="same").tolist()
+    # ``_smooth`` is inherited from BaseAnalyzer; callers pass window=3 to keep
+    # the original rep-detection smoothing behaviour.
 
     def _detect_reps(self, angles: List[float], joint: str) -> List[RepData]:
         """Detect repetitions from angle series."""

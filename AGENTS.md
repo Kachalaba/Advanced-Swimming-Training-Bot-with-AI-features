@@ -2,20 +2,24 @@
 
 ## Project overview
 
-AI-powered triathlon video analysis platform. Analyzes swimming, running, cycling,
-and dryland exercises via computer vision (YOLOv8 + MediaPipe). Built with Streamlit.
+AI-powered triathlon + rehabilitation video analysis platform. Analyzes swimming,
+running, cycling, dryland exercises, and physiotherapy/ROM via computer vision
+(YOLOv8 + MediaPipe). Two shells share one CV core: a Streamlit prototype
+(`app.py` + `pages/`) and the production web app (`backend/` FastAPI +
+`frontend/` Next.js).
 
 ## Architecture
 
 ```
-app.py                       # Entry point: Streamlit 7-tab UI
+app.py                       # Entry point: Streamlit 8-tab UI
 pages/
   swimming.py                # Swimming analysis page
   running.py                 # Running analysis page
   cycling.py                 # Cycling analysis page
   dryland.py                 # Dryland exercise page
+  rehabilitation.py          # Rehab / ROM analysis page
   history.py                 # Athlete history + charts
-  ai_assistant.py            # Codex API chat
+  ai_assistant.py            # Claude API chat
   tools.py                   # Video utilities
 video_analysis/
   base_analyzer.py           # Shared utilities (BaseAnalyzer mixin)
@@ -31,8 +35,8 @@ video_analysis/
   biomechanics_visualizer.py # Premium skeleton rendering (EMA + triple-guard)
   swimming_pose_analyzer.py  # Rotation-compensated pose analysis
   swimmer_detector.py        # YOLO + IoU tracking
-  ai_coach.py                # Rule-based + Codex/OpenAI coaching
-  ai_chat.py                 # Codex API chat with athlete context
+  ai_coach.py                # Rule-based + Claude/OpenAI coaching
+  ai_chat.py                 # Claude API chat with athlete context
   athlete_database.py        # Raw SQLite (legacy, active backend)
 i18n/
   translations.py            # EN/UA translations via t("key")
@@ -125,7 +129,7 @@ Add new keys to **both** `"uk"` and `"en"` sections in `i18n/translations.py`.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ANTHROPIC_API_KEY` | — | Codex API key for AI coaching + chat |
+| `ANTHROPIC_API_KEY` | — | Claude API key for AI coaching + chat |
 | `OPENAI_API_KEY` | — | OpenAI fallback for AI coaching |
 | `ATHLETE_DB_PATH` | `data/athletes_orm.db` | SQLAlchemy DB path |
 | `SENTRY_DSN` | — | Sentry error tracking DSN |
@@ -142,9 +146,10 @@ Run `pytest tests/unit/ -v` in any Python env after `pip install numpy pytest`.
 
 ## CI/CD
 
-Three GitHub Actions workflows:
-- `lint.yml`  — ruff, black, isort, mypy
-- `tests.yml` — pytest + coverage
-- `docker.yml`— Docker build + push (on tag)
+Four GitHub Actions workflows:
+- `lint.yml`     — ruff, black, isort, mypy
+- `tests.yml`    — pytest + coverage
+- `frontend.yml` — Next.js typecheck, build, npm audit
+- `docker.yml`   — Docker build + push (on tag)
 
-Branches: `main`, `codex/**`, `Codex/**` trigger lint on push.
+Branches: `main`, `codex/**`, `Codex/**`, `claude/**` trigger lint/tests on push.

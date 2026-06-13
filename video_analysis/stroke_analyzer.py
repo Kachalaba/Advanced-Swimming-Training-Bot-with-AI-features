@@ -18,6 +18,7 @@ from typing import Dict, List, Optional, Tuple
 import cv2
 import numpy as np
 
+from video_analysis.base_analyzer import BaseAnalyzer
 from video_analysis.constants import (
     BODY_ROLL_MAX_VALID,
     BREATHING_REGULARITY_MULTIPLIER,
@@ -111,7 +112,7 @@ class StrokeAnalysis:
     kick_symmetry: float = 0.0  # 0-100
 
 
-class StrokeAnalyzer:
+class StrokeAnalyzer(BaseAnalyzer):
     """Analyzes swimming strokes from pose keypoints."""
 
     # Keypoint indices (MediaPipe)
@@ -133,7 +134,29 @@ class StrokeAnalyzer:
     LEFT_EAR = 7
     RIGHT_EAR = 8
 
+    # Name → MediaPipe index map consumed by ``BaseAnalyzer._get_point`` so that
+    # raw integer-indexed keypoint dicts (the canonical MediaPipe format) resolve
+    # by anatomical name.
+    LANDMARKS = {
+        "nose": NOSE,
+        "left_ear": LEFT_EAR,
+        "right_ear": RIGHT_EAR,
+        "left_shoulder": LEFT_SHOULDER,
+        "right_shoulder": RIGHT_SHOULDER,
+        "left_elbow": LEFT_ELBOW,
+        "right_elbow": RIGHT_ELBOW,
+        "left_wrist": LEFT_WRIST,
+        "right_wrist": RIGHT_WRIST,
+        "left_hip": LEFT_HIP,
+        "right_hip": RIGHT_HIP,
+        "left_knee": LEFT_KNEE,
+        "right_knee": RIGHT_KNEE,
+        "left_ankle": LEFT_ANKLE,
+        "right_ankle": RIGHT_ANKLE,
+    }
+
     def __init__(self, fps: float = 10.0, pool_length: float = POOL_LENGTH_METERS):
+        super().__init__()
         self.fps = fps
         self.pool_length = pool_length  # meters
         self.strokes: List[StrokeData] = []
@@ -367,33 +390,8 @@ class StrokeAnalyzer:
             )
         )
 
-    def _get_point(self, kps: Dict, name: str) -> Optional[Tuple[float, float]]:
-        """Get keypoint coordinates by name."""
-        # Handle different keypoint formats
-        if name in kps:
-            p = kps[name]
-            if isinstance(p, (list, tuple)) and len(p) >= 2:
-                return (p[0], p[1])
-            elif hasattr(p, "x") and hasattr(p, "y"):
-                return (p.x, p.y)
-
-        # Try alternative names
-        alt_names = {
-            "left_shoulder": ["L.shoulder", "left_shoulder", 11],
-            "right_shoulder": ["R.shoulder", "right_shoulder", 12],
-            "left_wrist": ["L.wrist", "left_wrist", 15],
-            "right_wrist": ["R.wrist", "right_wrist", 16],
-            "left_hip": ["L.hip", "left_hip", 23],
-            "right_hip": ["R.hip", "right_hip", 24],
-        }
-
-        for alt in alt_names.get(name, []):
-            if alt in kps:
-                p = kps[alt]
-                if isinstance(p, (list, tuple)) and len(p) >= 2:
-                    return (p[0], p[1])
-
-        return None
+    # ``_get_point`` is inherited from BaseAnalyzer; the LANDMARKS map above lets
+    # it resolve raw integer-indexed MediaPipe keypoints by anatomical name.
 
     # =========================================================================
     # NEW: Advanced Analysis Methods

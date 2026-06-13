@@ -2,13 +2,23 @@
 
 ## [Unreleased]
 ### Added
-- Nothing yet.
+- Extracted the static Streamlit theme into `assets/styles.css`, loaded once by
+  `app.py` (only the light/dark `:root` variables remain dynamic).
 
 ### Changed
-- Nothing yet.
+- `StrokeAnalyzer` and `ExerciseAnalyzer` now inherit `BaseAnalyzer`, removing
+  duplicated `_get_point` / `_smooth` helpers (per the architecture guideline).
+- Refreshed `CLAUDE.md`, `AGENTS.md`, and `ARCHITECTURE.md` to match the current
+  8-tab Streamlit shell, the FastAPI + Next.js web app, and the four CI workflows.
 
 ### Fixed
-- Nothing yet.
+- `StrokeAnalyzer` keypoint lookup now resolves the canonical integer-indexed
+  MediaPipe format (`{11: {"x", "y"}}`) via the inherited `_get_point`, which the
+  previous duplicate silently dropped.
+
+### Removed
+- Deleted the stray root-level `test_simple.py`, a leftover manual script from the
+  retired Telegram-bot project (referenced non-existent `bot.py`/`handlers/`).
 
 ## [1.0.0] - 2025-10-15
 ### Added
