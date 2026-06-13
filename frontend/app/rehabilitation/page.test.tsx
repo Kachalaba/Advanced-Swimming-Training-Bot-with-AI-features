@@ -152,6 +152,14 @@ describe("RehabilitationPage", () => {
     ).toBeInTheDocument();
   });
 
+  it("links to longitudinal patient progress independently of analysis state", () => {
+    render(<RehabilitationPage />);
+
+    expect(
+      screen.getByRole("link", { name: "Прогрес пацієнта" }),
+    ).toHaveAttribute("href", "/rehabilitation/progress");
+  });
+
   it("gates real handoff actions until analysis results exist", async () => {
     const user = userEvent.setup();
     render(<RehabilitationPage />);

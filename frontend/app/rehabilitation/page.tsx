@@ -4,6 +4,7 @@ import {
   Camera,
   ChevronDown,
   FileText,
+  History,
   Languages,
   MonitorPlay,
   Play,
@@ -12,6 +13,7 @@ import {
   ShieldCheck,
   Upload,
 } from "lucide-react";
+import Link from "next/link";
 import {
   useCallback,
   useEffect,
@@ -301,7 +303,14 @@ export default function RehabilitationPage() {
               : copy.handoff.waiting}
           </p>
         </div>
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className="grid gap-2 sm:grid-cols-3">
+          <Link
+            href="/rehabilitation/progress"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-emerald-300/15 bg-emerald-300/[0.055] px-4 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-300/[0.1]"
+          >
+            <History className="h-4 w-4" />
+            {copy.handoff.progress}
+          </Link>
           <button
             type="button"
             disabled={!currentHandoff}

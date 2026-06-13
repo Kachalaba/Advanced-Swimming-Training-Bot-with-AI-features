@@ -51,6 +51,7 @@ const uk = {
       "Стабільне збільшення амплітуди з контрольованою асиметрією.",
   },
   handoff: {
+    progress: "Прогрес пацієнта",
     presentation: "Режим презентації",
     closePresentation: "Закрити презентацію",
     openReport: "Відкрити клінічний звіт",
@@ -228,6 +229,7 @@ const en = {
       "A stable increase in range with controlled asymmetry.",
   },
   handoff: {
+    progress: "Patient progress",
     presentation: "Presentation mode",
     closePresentation: "Close presentation",
     openReport: "Open clinical report",

@@ -1,3 +1,5 @@
+import type { RehabProgressSession } from "./rehabProgress";
+
 export type Athlete = {
   id: string;
   name: string;
@@ -20,6 +22,12 @@ export type SessionSummary = {
   artifact_download_url: string | null;
 };
 
+export type RehabProgressResponse = {
+  athlete: Athlete;
+  sessions: RehabProgressSession[];
+  protocols: RehabProgressSession["protocol"][];
+};
+
 const BACKEND_URL =
   process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
 
@@ -40,4 +48,8 @@ export const api = {
   listAthletes: () => get<Athlete[]>("/api/athletes"),
   listSessions: (athleteId: string) =>
     get<SessionSummary[]>(`/api/athletes/${athleteId}/sessions`),
+  rehabilitationProgress: (athleteId: string) =>
+    get<RehabProgressResponse>(
+      `/api/athletes/${athleteId}/rehabilitation/progress`,
+    ),
 };
