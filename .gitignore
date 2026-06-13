@@ -59,6 +59,7 @@ test_results2/
 test_videos/
 data/session-artifacts/
 data/session-videos/
+data/*.pre-clinical-*.db
 
 # Media files
 *.mp4
