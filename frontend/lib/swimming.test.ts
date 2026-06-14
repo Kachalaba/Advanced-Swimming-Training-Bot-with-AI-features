@@ -59,14 +59,14 @@ describe("swimming API client", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const result = await saveSwimmingAnalysis("swim-123", "Nikita K.");
+    const result = await saveSwimmingAnalysis("swim-123", { athleteId: 7 });
 
     expect(result).toEqual({ sessionId: 91 });
     expect(fetchMock.mock.calls[0][0]).toContain(
       "/api/analysis/swimming/swim-123/save",
     );
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
-      athlete_name: "Nikita K.",
+      athlete_id: 7,
     });
   });
 });

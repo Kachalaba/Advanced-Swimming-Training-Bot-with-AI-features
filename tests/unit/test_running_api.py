@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import time
 from pathlib import Path
 
 import pytest
@@ -70,6 +72,32 @@ def test_running_save_uses_stable_athlete_id_and_is_idempotent(monkeypatch, tmp_
     assert saved[0]["analysis"]["running_analysis"] == job.result
     assert Path(saved[0]["video_path"]).read_bytes() == b"running-video"
     assert registry.get(job.id).saved_session_id == 42
+
+
+def test_running_save_is_idempotent_under_concurrent_requests(monkeypatch, tmp_path):
+    _, registry = _client(monkeypatch, tmp_path)
+    job = _completed_job(registry)
+    calls = 0
+
+    def fake_save(**kwargs):
+        nonlocal calls
+        calls += 1
+        time.sleep(0.05)
+        return 44
+
+    monkeypatch.setattr(analysis, "save_analysis_to_athlete", fake_save)
+
+    async def save_twice():
+        request = analysis.SaveAnalysisRequest(athlete_id=7)
+        return await asyncio.gather(
+            analysis.save_running_job(job.id, request),
+            analysis.save_running_job(job.id, request),
+        )
+
+    results = asyncio.run(save_twice())
+
+    assert results == [{"session_id": 44}, {"session_id": 44}]
+    assert calls == 1
 
 
 def test_running_save_keeps_name_fallback(monkeypatch, tmp_path):

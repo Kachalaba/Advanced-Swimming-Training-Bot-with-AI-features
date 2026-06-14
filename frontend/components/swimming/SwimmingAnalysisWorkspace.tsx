@@ -19,6 +19,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { ChartContainer } from "@/components/ui/ChartContainer";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { api, type Athlete } from "@/lib/api";
 import {
   saveSwimmingAnalysis,
   subscribeSwimmingAnalysis,
@@ -229,6 +230,9 @@ export function SwimmingAnalysisWorkspace({
   const [error, setError] = useState<SwimmingErrorEvent | null>(null);
   const [saving, setSaving] = useState(false);
   const [savedSessionId, setSavedSessionId] = useState<number | null>(null);
+  const [athletes, setAthletes] = useState<Athlete[]>([]);
+  const [selectedAthleteId, setSelectedAthleteId] = useState("");
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     if (initialResult) return;
@@ -247,25 +251,48 @@ export function SwimmingAnalysisWorkspace({
     });
   }, [initialResult, jobId]);
 
+  useEffect(() => {
+    let active = true;
+    api
+      .listAthletes()
+      .then((items) => {
+        if (!active) return;
+        setAthletes(items);
+        setSelectedAthleteId((current) => current || items[0]?.id || "");
+      })
+      .catch((athleteError: unknown) => {
+        if (!active) return;
+        setSaveError(
+          athleteError instanceof Error
+            ? athleteError.message
+            : "Could not load athletes",
+        );
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   function seekTo(seconds: number) {
     if (!videoRef.current) return;
     videoRef.current.currentTime = seconds;
   }
 
   async function saveResult() {
+    if (!selectedAthleteId || saving || savedSessionId !== null) return;
     setSaving(true);
+    setSaveError(null);
     try {
-      const saved = await saveSwimmingAnalysis(jobId);
+      const saved = await saveSwimmingAnalysis(jobId, {
+        athleteId: Number(selectedAthleteId),
+      });
       setSavedSessionId(saved.sessionId);
     } catch (saveError) {
-      setError({
-        type: "error",
-        code: "save_failed",
-        message:
-          saveError instanceof Error
-            ? saveError.message
-            : "Could not save this analysis.",
-      });
+      setSaveError(
+        saveError instanceof Error
+          ? saveError.message
+          : "Could not save this analysis.",
+      );
     } finally {
       setSaving(false);
     }
@@ -526,7 +553,7 @@ export function SwimmingAnalysisWorkspace({
             </section>
           ) : null}
 
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-surface p-4">
+          <div className="flex flex-wrap items-end justify-between gap-4 rounded-xl border border-white/[0.06] bg-surface p-4">
             <div>
               <p className="text-sm font-medium text-slate-200">
                 Keep this result in athlete history
@@ -535,25 +562,58 @@ export function SwimmingAnalysisWorkspace({
                 Save zone confidence, selected cycles, main issue and video.
               </p>
             </div>
-            <button
-              type="button"
-              disabled={saving || savedSessionId !== null}
-              onClick={() => void saveResult()}
-              className="inline-flex h-9 items-center gap-2 rounded-lg border border-cyan-400/25 bg-cyan-400/10 px-4 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-400/15 disabled:cursor-default disabled:border-emerald-400/20 disabled:bg-emerald-400/10 disabled:text-emerald-200"
-            >
-              {savedSessionId !== null ? (
-                <Check className="h-3.5 w-3.5" />
-              ) : saving ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Save className="h-3.5 w-3.5" />
-              )}
-              {savedSessionId !== null
-                ? `Saved to history #${savedSessionId}`
-                : saving
-                  ? "Saving…"
-                  : "Save to history"}
-            </button>
+            <div className="w-full space-y-2 sm:w-auto sm:min-w-64">
+              <label
+                htmlFor="swimming-athlete"
+                className="block text-xs font-medium text-slate-400"
+              >
+                Save for athlete
+              </label>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <select
+                  id="swimming-athlete"
+                  value={selectedAthleteId}
+                  onChange={(event) =>
+                    setSelectedAthleteId(event.target.value)
+                  }
+                  disabled={saving || savedSessionId !== null}
+                  className="h-9 min-w-44 rounded-lg border border-white/[0.08] bg-bg px-3 text-xs text-slate-100 outline-none focus:border-cyan-400/50"
+                >
+                  {athletes.length === 0 ? (
+                    <option value="">No athletes available</option>
+                  ) : null}
+                  {athletes.map((athlete) => (
+                    <option key={athlete.id} value={athlete.id}>
+                      {athlete.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  disabled={
+                    !selectedAthleteId || saving || savedSessionId !== null
+                  }
+                  onClick={() => void saveResult()}
+                  className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-cyan-400/25 bg-cyan-400/10 px-4 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-400/15 disabled:cursor-default disabled:border-emerald-400/20 disabled:bg-emerald-400/10 disabled:text-emerald-200"
+                >
+                  {savedSessionId !== null ? (
+                    <Check className="h-3.5 w-3.5" />
+                  ) : saving ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Save className="h-3.5 w-3.5" />
+                  )}
+                  {savedSessionId !== null
+                    ? `Saved to history #${savedSessionId}`
+                    : saving
+                      ? "Saving…"
+                      : "Save to history"}
+                </button>
+              </div>
+              {saveError ? (
+                <p className="text-xs text-rose-300">{saveError}</p>
+              ) : null}
+            </div>
           </div>
         </>
       ) : null}

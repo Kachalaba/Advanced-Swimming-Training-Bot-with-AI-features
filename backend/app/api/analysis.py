@@ -120,6 +120,43 @@ def _persist_sport_video(job: Job, sport: str) -> str:
     return str(target)
 
 
+def _save_completed_sport_job(
+    job: Job,
+    request: SaveAnalysisRequest,
+    sport: str,
+) -> int:
+    """Persist a completed job exactly once, including concurrent requests."""
+
+    with job.save_lock:
+        if job.saved_session_id is not None:
+            return job.saved_session_id
+
+        video_path = ""
+        try:
+            video_path = _persist_sport_video(job, sport)
+            kwargs = {
+                "session_type": sport,
+                "analysis": {f"{sport}_analysis": job.result},
+                "video_path": video_path,
+            }
+            if request.athlete_id is not None:
+                job.saved_session_id = save_analysis_to_athlete(
+                    athlete_id=request.athlete_id,
+                    **kwargs,
+                )
+            else:
+                job.saved_session_id = save_analysis_to_db(
+                    athlete_name=request.athlete_name,
+                    **kwargs,
+                )
+        except Exception:
+            if video_path:
+                Path(video_path).unlink(missing_ok=True)
+            raise
+
+        return job.saved_session_id
+
+
 @router.post("/running")
 async def upload_running(
     video: UploadFile = File(...),
@@ -200,28 +237,16 @@ async def save_running_job(
     job = _get_running_job(job_id)
     if job.status != "done" or not job.result:
         raise HTTPException(status_code=409, detail="Running analysis is not ready")
-    if job.saved_session_id is None:
-        kwargs = {
-            "session_type": "running",
-            "analysis": {"running_analysis": job.result},
-            "video_path": _persist_sport_video(job, "running"),
-        }
-        try:
-            if request.athlete_id is not None:
-                job.saved_session_id = await asyncio.to_thread(
-                    save_analysis_to_athlete,
-                    athlete_id=request.athlete_id,
-                    **kwargs,
-                )
-            else:
-                job.saved_session_id = await asyncio.to_thread(
-                    save_analysis_to_db,
-                    athlete_name=request.athlete_name,
-                    **kwargs,
-                )
-        except ValueError as exc:
-            raise HTTPException(status_code=404, detail=str(exc)) from exc
-    return {"session_id": job.saved_session_id}
+    try:
+        session_id = await asyncio.to_thread(
+            _save_completed_sport_job,
+            job,
+            request,
+            "running",
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"session_id": session_id}
 
 
 @router.post("/swimming")
@@ -299,25 +324,13 @@ async def save_swimming_job(
     job = _get_swimming_job(job_id)
     if job.status != "done" or not job.result:
         raise HTTPException(status_code=409, detail="Swimming analysis is not ready")
-    if job.saved_session_id is None:
-        kwargs = {
-            "session_type": "swimming",
-            "analysis": {"swimming_analysis": job.result},
-            "video_path": _persist_sport_video(job, "swimming"),
-        }
-        try:
-            if request.athlete_id is not None:
-                job.saved_session_id = await asyncio.to_thread(
-                    save_analysis_to_athlete,
-                    athlete_id=request.athlete_id,
-                    **kwargs,
-                )
-            else:
-                job.saved_session_id = await asyncio.to_thread(
-                    save_analysis_to_db,
-                    athlete_name=request.athlete_name,
-                    **kwargs,
-                )
-        except ValueError as exc:
-            raise HTTPException(status_code=404, detail=str(exc)) from exc
-    return {"session_id": job.saved_session_id}
+    try:
+        session_id = await asyncio.to_thread(
+            _save_completed_sport_job,
+            job,
+            request,
+            "swimming",
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"session_id": session_id}

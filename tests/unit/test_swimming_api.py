@@ -119,21 +119,42 @@ def test_swimming_save_is_idempotent(monkeypatch, tmp_path):
         saved.update(kwargs)
         return 91
 
-    monkeypatch.setattr(analysis, "save_analysis_to_db", fake_save)
+    monkeypatch.setattr(analysis, "save_analysis_to_athlete", fake_save)
     job_id = client.post("/api/analysis/swimming", files=_video_file()).json()["job_id"]
 
     first = client.post(
         f"/api/analysis/swimming/{job_id}/save",
-        json={"athlete_name": "Nikita K."},
+        json={"athlete_id": 7},
     )
     second = client.post(
         f"/api/analysis/swimming/{job_id}/save",
-        json={"athlete_name": "Nikita K."},
+        json={"athlete_id": 7},
     )
 
     assert first.json() == {"session_id": 91}
     assert second.json() == {"session_id": 91}
+    assert saved["athlete_id"] == 7
     assert saved["session_type"] == "swimming"
     assert saved["analysis"]["swimming_analysis"]["analysis_type"] == "swimming_freestyle_side"
     assert Path(saved["video_path"]).read_bytes() == b"h264-video"
     assert registry.get(job_id).saved_session_id == 91
+
+
+def test_swimming_save_removes_orphan_video_when_athlete_is_missing(monkeypatch, tmp_path):
+    client, _ = _client(monkeypatch, tmp_path)
+    persistent_dir = tmp_path / "persistent-videos"
+    monkeypatch.setenv("SESSION_VIDEO_DIR", str(persistent_dir))
+
+    def reject_save(**kwargs):
+        raise ValueError("Athlete not found")
+
+    monkeypatch.setattr(analysis, "save_analysis_to_athlete", reject_save)
+    job_id = client.post("/api/analysis/swimming", files=_video_file()).json()["job_id"]
+
+    response = client.post(
+        f"/api/analysis/swimming/{job_id}/save",
+        json={"athlete_id": 999},
+    )
+
+    assert response.status_code == 404
+    assert list(persistent_dir.glob("*")) == []
