@@ -654,11 +654,7 @@ def _save_analysis_for_athlete(
 
     elif session_type == "running":
         running_result = analysis.get("running_analysis", analysis)
-        running = (
-            running_result.get("analysis", running_result)
-            if isinstance(running_result, dict)
-            else {}
-        )
+        running = running_result.get("analysis", running_result) if isinstance(running_result, dict) else {}
         if isinstance(running, dict):
             cadence = float(running.get("cadence") or 0)
             foot_strike = str(running.get("foot_strike_type") or "").strip()

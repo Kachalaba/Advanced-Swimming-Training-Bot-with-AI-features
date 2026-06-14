@@ -6,11 +6,11 @@ import pytest
 
 pytest.importorskip("fastapi")
 
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
+from fastapi import FastAPI  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
 
-from backend.app.api import athletes
-from video_analysis.athlete_database import Athlete, AthleteDatabase, TrainingSession
+from backend.app.api import athletes  # noqa: E402
+from video_analysis.athlete_database import Athlete, AthleteDatabase, TrainingSession  # noqa: E402
 
 
 def _client(monkeypatch, tmp_path):

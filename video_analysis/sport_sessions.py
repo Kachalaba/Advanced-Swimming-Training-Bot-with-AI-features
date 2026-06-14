@@ -261,17 +261,11 @@ def build_sport_overview(
 
     if sport not in SUPPORTED_SPORTS:
         raise ValueError(f"Unsupported sport: {sport}")
-    normalized = [
-        item
-        for session in sessions
-        if (item := normalize_sport_session(session, sport)) is not None
-    ]
+    normalized = [item for session in sessions if (item := normalize_sport_session(session, sport)) is not None]
     normalized.sort(key=lambda item: item["date"], reverse=True)
     latest = next((item for item in normalized if item["metrics"]), None)
     score_series = [
-        {"date": item["date"], "value": item["score"]}
-        for item in reversed(normalized)
-        if item["score"] is not None
+        {"date": item["date"], "value": item["score"]} for item in reversed(normalized) if item["score"] is not None
     ]
     return {
         "sport": sport,
