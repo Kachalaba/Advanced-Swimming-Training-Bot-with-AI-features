@@ -223,14 +223,18 @@ export function swimmingVideoUrl(jobId: string): string {
 
 export async function saveSwimmingAnalysis(
   jobId: string,
-  athleteName = "Nikita K.",
+  input: { athleteId?: number; athleteName?: string },
 ): Promise<{ sessionId: number }> {
   const response = await fetch(
     `${BACKEND_URL}/api/analysis/swimming/${jobId}/save`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ athlete_name: athleteName }),
+      body: JSON.stringify(
+        input.athleteId
+          ? { athlete_id: input.athleteId }
+          : { athlete_name: input.athleteName ?? "Athlete" },
+      ),
     },
   );
   const data = await readJson<{ session_id: number }>(response);

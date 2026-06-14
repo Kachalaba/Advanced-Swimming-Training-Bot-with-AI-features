@@ -652,6 +652,23 @@ def _save_analysis_for_athlete(
         swimming_pose = biomech.get("swimming_pose", {})
         session.streamline_score = swimming_pose.get("avg_streamline", 0)
 
+    elif session_type == "running":
+        running_result = analysis.get("running_analysis", analysis)
+        running = running_result.get("analysis", running_result) if isinstance(running_result, dict) else {}
+        if isinstance(running, dict):
+            cadence = float(running.get("cadence") or 0)
+            foot_strike = str(running.get("foot_strike_type") or "").strip()
+            session.duration_sec = float(running.get("duration_sec") or 0)
+            session.symmetry_score = float(running.get("arm_symmetry") or 0)
+            session.ai_score = int(round(float(running.get("efficiency_score") or 0)))
+            session.exercise_type = foot_strike
+            parts = []
+            if cadence:
+                parts.append(f"{cadence:.0f} spm")
+            if foot_strike:
+                parts.append(f"{foot_strike.title()} strike")
+            session.ai_summary = " · ".join(parts)
+
     elif session_type == "dryland":
         exercise_stats = analysis.get("exercise_stats")
         if exercise_stats:

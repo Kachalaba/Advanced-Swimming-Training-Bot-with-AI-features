@@ -6,6 +6,7 @@ import {
   Check,
   Footprints,
   Loader2,
+  Save,
 } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -13,8 +14,10 @@ import { useEffect, useState } from "react";
 
 import { ChartContainer } from "@/components/ui/ChartContainer";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { api, type Athlete } from "@/lib/api";
 import {
   annotatedVideoUrl,
+  saveRunningAnalysis,
   subscribeAnalysis,
   type AnalysisEvent,
   type ResultEvent,
@@ -39,6 +42,11 @@ export default function RunningResultPage() {
   });
   const [result, setResult] = useState<ResultEvent | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [athletes, setAthletes] = useState<Athlete[]>([]);
+  const [selectedAthleteId, setSelectedAthleteId] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [savedSessionId, setSavedSessionId] = useState<number | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!jobId) return;
@@ -53,6 +61,49 @@ export default function RunningResultPage() {
     });
     return unsub;
   }, [jobId]);
+
+  useEffect(() => {
+    let active = true;
+    api
+      .listAthletes()
+      .then((items) => {
+        if (!active) return;
+        setAthletes(items);
+        setSelectedAthleteId((current) => current || items[0]?.id || "");
+      })
+      .catch((athleteError: unknown) => {
+        if (active) {
+          setSaveError(
+            athleteError instanceof Error
+              ? athleteError.message
+              : "Could not load athletes",
+          );
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  async function saveSession() {
+    if (!selectedAthleteId || saving || savedSessionId !== null) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const saved = await saveRunningAnalysis(jobId, {
+        athleteId: Number(selectedAthleteId),
+      });
+      setSavedSessionId(saved.sessionId);
+    } catch (saveFailure) {
+      setSaveError(
+        saveFailure instanceof Error
+          ? saveFailure.message
+          : "Could not save session",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
 
   const a = (result?.analysis ?? {}) as Record<string, unknown>;
   const done = !!result;
@@ -193,6 +244,63 @@ export default function RunningResultPage() {
                     </span>
                   </div>
                 ))}
+              </div>
+            </ChartContainer>
+
+            <ChartContainer
+              title="Save to athlete history"
+              subtitle="Persist this measurement for future comparison"
+            >
+              <div className="space-y-3">
+                <label
+                  htmlFor="running-athlete"
+                  className="block text-xs font-medium text-slate-400"
+                >
+                  Save for athlete
+                </label>
+                <select
+                  id="running-athlete"
+                  value={selectedAthleteId}
+                  onChange={(event) =>
+                    setSelectedAthleteId(event.target.value)
+                  }
+                  disabled={saving || savedSessionId !== null}
+                  className="h-10 w-full rounded-lg border border-white/[0.08] bg-bg px-3 text-sm text-slate-100 outline-none focus:border-cyan-400/50"
+                >
+                  {athletes.length === 0 ? (
+                    <option value="">No athletes available</option>
+                  ) : null}
+                  {athletes.map((athlete) => (
+                    <option key={athlete.id} value={athlete.id}>
+                      {athlete.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={saveSession}
+                  disabled={
+                    !selectedAthleteId || saving || savedSessionId !== null
+                  }
+                  className="flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-cyan-400 px-4 text-xs font-semibold text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {saving ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : savedSessionId !== null ? (
+                    <Check className="h-3.5 w-3.5" />
+                  ) : (
+                    <Save className="h-3.5 w-3.5" />
+                  )}
+                  {savedSessionId !== null ? "Session saved" : "Save session"}
+                </button>
+                {savedSessionId !== null ? (
+                  <p className="text-xs text-emerald-300">
+                    Saved as session #{savedSessionId}
+                  </p>
+                ) : null}
+                {saveError ? (
+                  <p className="text-xs text-rose-300">{saveError}</p>
+                ) : null}
               </div>
             </ChartContainer>
           </div>

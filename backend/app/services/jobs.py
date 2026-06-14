@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class Job:
     id: str
-    kind: str  # "running" for now
+    kind: str  # running | swimming | rehabilitation | tool
     workspace: Path
     status: str = "queued"  # queued | running | done | error
     events: list[dict[str, Any]] = field(default_factory=list)
@@ -34,6 +34,7 @@ class Job:
     source_name: str | None = None
     operation: str | None = None
     _lock: threading.Lock = field(default_factory=threading.Lock)
+    save_lock: threading.Lock = field(default_factory=threading.Lock)
 
     def push_event(self, event: dict[str, Any]) -> None:
         with self._lock:

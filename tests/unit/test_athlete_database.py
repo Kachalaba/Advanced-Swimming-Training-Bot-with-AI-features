@@ -228,6 +228,39 @@ class TestSaveAnalysis:
         finally:
             athlete_database._db_instance = original_instance
 
+    def test_running_analysis_populates_history_fields(self, tmp_path):
+        import video_analysis.athlete_database as athlete_database
+
+        database = AthleteDatabase(str(tmp_path / "running.db"))
+        athlete_id = database.add_athlete(Athlete(name="Runner"))
+
+        session_id = athlete_database.save_analysis_to_athlete(
+            athlete_id=athlete_id,
+            session_type="running",
+            analysis={
+                "running_analysis": {
+                    "type": "result",
+                    "analysis": {
+                        "cadence": 176.4,
+                        "foot_strike_type": "midfoot",
+                        "arm_symmetry": 91.2,
+                        "efficiency_score": 86.7,
+                        "duration_sec": 12.5,
+                    },
+                }
+            },
+            database=database,
+        )
+
+        saved = database.get_session(session_id)
+        assert saved is not None
+        assert saved.session_type == "running"
+        assert saved.duration_sec == 12.5
+        assert saved.symmetry_score == 91.2
+        assert saved.ai_score == 87
+        assert saved.exercise_type == "midfoot"
+        assert saved.ai_summary == "176 spm · Midfoot strike"
+
     def test_rehab_analysis_populates_existing_session_fields(self, tmp_path):
         import json
 

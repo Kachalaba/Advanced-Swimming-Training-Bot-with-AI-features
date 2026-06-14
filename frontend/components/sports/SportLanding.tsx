@@ -1,9 +1,6 @@
 "use client";
 
 import {
-  ArrowUpRight,
-  Filter,
-  Play,
   Plus,
   Sparkles,
   Target,
@@ -32,8 +29,9 @@ export type SportSession = {
   title: string;
   duration: string;
   date: string;
-  score: number;
+  score: number | null;
   thumb: string;
+  hasVideo?: boolean;
 };
 
 export type SportLandingProps = {
@@ -47,6 +45,9 @@ export type SportLandingProps = {
   insights: { tag: string; variant: "success" | "warn" | "info"; title: string; detail: string }[];
   uploader?: React.ReactNode;
   uploadSubtitle?: string;
+  uploadAvailable?: boolean;
+  dataState?: "ready" | "loading" | "error";
+  onRetry?: () => void;
   secondaryPanel?: {
     title: string;
     subtitle?: string;
@@ -65,6 +66,9 @@ export function SportLanding({
   insights,
   uploader,
   uploadSubtitle = "Multi-angle video supported",
+  uploadAvailable = true,
+  dataState = "ready",
+  onRetry,
   secondaryPanel,
 }: SportLandingProps) {
   function scrollToUploader() {
@@ -109,11 +113,16 @@ export function SportLanding({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={scrollToUploader}
-              className="flex items-center gap-2 px-3 h-8 bg-cyan-400 hover:bg-cyan-300 text-slate-900 text-xs font-semibold rounded-lg transition-all duration-200 active:scale-[0.98]"
+              onClick={uploadAvailable ? scrollToUploader : undefined}
+              disabled={!uploadAvailable}
+              className="flex h-8 items-center gap-2 rounded-lg bg-cyan-400 px-3 text-xs font-semibold text-slate-900 transition-all duration-200 hover:bg-cyan-300 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-white/[0.06] disabled:text-slate-400"
             >
-              <Upload className="w-3.5 h-3.5" />
-              Upload session
+              {uploadAvailable ? (
+                <Upload className="w-3.5 h-3.5" />
+              ) : (
+                <Target className="w-3.5 h-3.5" />
+              )}
+              {uploadAvailable ? "Upload session" : "Workflow planned"}
             </button>
           </div>
         </div>
@@ -143,41 +152,77 @@ export function SportLanding({
         <div className="lg:col-span-2">
           <ChartContainer
             title="Recent sessions"
-            subtitle="Click to open the analysis view"
+            subtitle="Latest persisted measurements"
             action={
-              <button className="text-xs text-slate-400 hover:text-slate-200 flex items-center gap-1">
-                <Filter className="w-3 h-3" /> Filter
-              </button>
+              <span className="text-[11px] uppercase tracking-wider text-slate-600">
+                Newest first
+              </span>
             }
           >
-            {sessions.length === 0 ? (
+            {dataState === "loading" ? (
               <EmptyState
                 icon={Target}
-                title="No sessions yet"
-                message="Upload your first video to start building a baseline for this discipline."
+                title="Loading saved sessions…"
+                message="Reading this athlete's persisted analysis history."
+              />
+            ) : dataState === "error" ? (
+              <EmptyState
+                icon={Target}
+                title="Could not load saved sessions"
+                message="The analyzer is still available. Retry the history request when the backend is ready."
                 action={
-                  <button
-                    type="button"
-                    onClick={scrollToUploader}
-                    className="flex items-center gap-1.5 px-3 h-8 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.06] text-xs font-medium text-slate-200 rounded-lg transition-colors"
-                  >
-                    <Plus className="w-3 h-3" /> Upload first session
-                  </button>
+                  onRetry ? (
+                    <button
+                      type="button"
+                      onClick={onRetry}
+                      className="flex h-8 items-center rounded-lg border border-white/[0.08] bg-white/[0.05] px-3 text-xs font-medium text-slate-200"
+                    >
+                      Retry
+                    </button>
+                  ) : undefined
+                }
+              />
+            ) : sessions.length === 0 ? (
+              <EmptyState
+                icon={Target}
+                title={
+                  uploadAvailable ? "No sessions yet" : "No saved sessions yet"
+                }
+                message={
+                  uploadAvailable
+                    ? "Upload your first video to start building a baseline for this discipline."
+                    : "No saved web sessions yet. This workflow opens after the analysis adapter is connected."
+                }
+                action={
+                  uploadAvailable ? (
+                    <button
+                      type="button"
+                      onClick={scrollToUploader}
+                      className="flex items-center gap-1.5 px-3 h-8 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.06] text-xs font-medium text-slate-200 rounded-lg transition-colors"
+                    >
+                      <Plus className="w-3 h-3" /> Upload first session
+                    </button>
+                  ) : undefined
                 }
               />
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {sessions.map((s) => (
-                  <button
+                  <article
                     key={s.id}
-                    className="text-left bg-bg border border-white/[0.06] rounded-xl overflow-hidden hover:border-white/[0.12] hover:bg-elevated transition-all duration-200 group active:scale-[0.99]"
+                    className="overflow-hidden rounded-xl border border-white/[0.06] bg-bg text-left"
                   >
                     <div
                       className={`relative aspect-video bg-gradient-to-br ${s.thumb} flex items-center justify-center`}
                     >
-                      <div className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center group-hover:scale-110 transition-transform duration-200">
-                        <Play className="w-4 h-4 text-white fill-white ml-0.5" />
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-black/35 text-white/80 backdrop-blur-sm">
+                        <Target className="h-4 w-4" />
                       </div>
+                      {s.hasVideo ? (
+                        <span className="absolute left-2 top-2 rounded bg-black/55 px-1.5 py-0.5 text-[10px] text-slate-200 backdrop-blur-sm">
+                          Video saved
+                        </span>
+                      ) : null}
                       <div className="absolute bottom-2 right-2 px-1.5 py-0.5 bg-black/60 backdrop-blur-sm rounded text-[10px] font-mono text-white tnum">
                         {s.duration}
                       </div>
@@ -190,17 +235,19 @@ export function SportLanding({
                         <span className="text-[11px] text-slate-500">
                           {s.date}
                         </span>
-                        <div className="flex items-center gap-1">
+                        {s.score !== null ? (
+                          <div className="flex items-center gap-1">
                           <span className="text-[10px] text-slate-500 uppercase tracking-wider">
                             Score
                           </span>
                           <span className="text-xs font-bold text-cyan-400 tnum">
                             {s.score}
                           </span>
-                        </div>
+                          </div>
+                        ) : null}
                       </div>
                     </div>
-                  </button>
+                  </article>
                 ))}
               </div>
             )}
@@ -213,7 +260,13 @@ export function SportLanding({
           action={<Sparkles className="w-3.5 h-3.5 text-cyan-400" />}
         >
           <div className="space-y-3">
-            {insights.map((insight, i) => (
+            {insights.length === 0 ? (
+              <EmptyState
+                icon={Sparkles}
+                title="Insights appear after a saved analysis"
+                message="SPRINT only shows observations supported by a completed measurement."
+              />
+            ) : insights.map((insight, i) => (
               <div
                 key={i}
                 className="p-3 rounded-lg bg-white/[0.02] border border-white/[0.04] hover:border-white/[0.08] transition-colors cursor-pointer"
@@ -240,8 +293,10 @@ export function SportLanding({
         className="grid scroll-mt-24 grid-cols-1 gap-6 lg:grid-cols-2"
       >
         <ChartContainer
-          title="Upload new session"
-          subtitle={uploadSubtitle}
+          title={uploadAvailable ? "Upload new session" : "Analysis workflow"}
+          subtitle={
+            uploadAvailable ? uploadSubtitle : "Web adapter not connected yet"
+          }
         >
           {uploader ?? <FileDropZone />}
         </ChartContainer>
@@ -258,11 +313,6 @@ export function SportLanding({
               icon={Target}
               title="Coming soon"
               message="A curated library of drills tied to detected weaknesses in your video analysis."
-              action={
-                <button className="flex items-center gap-1.5 px-3 h-8 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.06] text-xs font-medium text-slate-200 rounded-lg transition-colors">
-                  <ArrowUpRight className="w-3 h-3" /> Notify me
-                </button>
-              }
             />
           </ChartContainer>
         )}

@@ -1,12 +1,13 @@
 # SPRINT AI Architecture
 
-SPRINT AI is a triathlon video-analysis platform. The current repository has
-two application shells that share the same computer-vision and biomechanics
-core:
+SPRINT AI is a triathlon and rehabilitation video-analysis platform. The
+repository has one primary product surface and one frozen compatibility shell.
+Both use the same computer-vision and biomechanics core:
 
-- `app.py` and `pages/` — Streamlit prototype and trainer-facing fallback UI.
-- `backend/` — FastAPI API for the new web app.
-- `frontend/` — Next.js UI for the new web app.
+- `frontend/` — primary Next.js product UI.
+- `backend/` — primary FastAPI product API.
+- `app.py` and `pages/` — legacy Streamlit demo/fallback. Keep it operational,
+  but do not add new product workflows there.
 - `video_analysis/` — shared analysis domain: frame extraction, YOLO tracking,
   MediaPipe pose processing, sport-specific analyzers, AI coaching, reports,
   and persistence helpers.
@@ -51,34 +52,45 @@ flowchart LR
 
 ## Main Components
 
-### Streamlit Shell
+### Primary Product: Next.js + FastAPI
 
-`app.py` configures the seven-tab UI and loads pages from `pages/`. This path is
-still the broadest UI surface: swimming, running, cycling, dryland, athlete
-history, AI assistant, and video tools.
+`frontend/` is the trainer and clinician product. It talks to FastAPI through
+`NEXT_PUBLIC_BACKEND_URL`. New user journeys, persistence contracts, and
+browser QA belong here.
 
-Sport pages should prefer cached factories from
+`backend/app/main.py` exposes health, athletes, analysis, rehabilitation,
+clinical, and video-tools routers. Running and swimming use the same web
+contract:
+
+1. upload a video and receive a job ID;
+2. subscribe to progress and result events over Server-Sent Events;
+3. review the annotated video and measured result;
+4. save the completed result to a stable athlete ID;
+5. read normalized, persisted sport history from the athlete overview API.
+
+Key endpoints:
+
+- `POST /api/analysis/{running|swimming}`
+- `GET /api/analysis/{running|swimming}/{job_id}/events`
+- `GET /api/analysis/{running|swimming}/{job_id}/video`
+- `POST /api/analysis/{running|swimming}/{job_id}/save`
+- `GET /api/athletes/{athlete_id}/sports/{sport}/overview`
+
+The overview supports `swimming`, `running`, `cycling`, and `dryland`, but only
+returns measurements that were actually persisted. Cycling and dryland do not
+yet expose a web upload pipeline and their pages deliberately show capability
+and readiness information instead of fabricated athlete metrics.
+
+### Legacy Streamlit Shell
+
+`app.py` configures the Streamlit UI and loads pages from `pages/`. This is a
+legacy demo and fallback for analyzer capabilities that have not yet migrated.
+Compatibility and defect fixes are allowed; new product workflows should not
+be implemented here.
+
+Legacy sport pages should still prefer cached factories from
 `video_analysis/analyzer_factory.py` for heavy analyzers. Shared geometry and
 smoothing helpers belong in `video_analysis/base_analyzer.py`.
-
-### FastAPI Backend
-
-`backend/app/main.py` wires health, athlete, and analysis routers. The current
-production-ready analysis endpoint is running upload + Server-Sent Events:
-
-1. `POST /api/analysis/running` validates and stores a video upload.
-2. A background thread runs `backend/app/services/running.py`.
-3. `GET /api/analysis/running/{job_id}/events` streams progress and final data.
-4. `GET /api/analysis/running/{job_id}/video` serves the annotated MP4.
-
-The job registry is intentionally in-memory for Phase 1. It is single-process
-only and should be replaced by a durable queue before multi-worker deployment.
-
-### Next.js Frontend
-
-`frontend/` is the new trainer UI. It talks to FastAPI through
-`NEXT_PUBLIC_BACKEND_URL`, uploads running videos, subscribes to SSE progress,
-and renders the annotated result video.
 
 ### Analysis Core
 
@@ -89,23 +101,19 @@ equivalent service-layer boundary.
 
 ### Persistence
 
-There are two persistence layers:
+There are two persistence implementations:
 
-- Active Streamlit backend: raw SQLite in `video_analysis/athlete_database.py`.
-- Migration target: SQLAlchemy models in `video_analysis/models.py`.
+- Active product storage: raw SQLite in
+  `video_analysis/athlete_database.py`, shared by FastAPI and Streamlit.
+- Incomplete migration target: SQLAlchemy models in `video_analysis/models.py`.
 
-New API-facing work should prefer the ORM path, but existing Streamlit pages
-still depend on raw SQLite. A migration plan should consolidate these paths
-before athlete history becomes a shared web feature.
+Do not create a third path. Until an explicit migration is completed, new
+product features must use the active database helpers and stable athlete IDs so
+that all saved history remains visible through the API.
 
 ## Deployment
 
-### Streamlit
-
-Use the root `Dockerfile`. It runs `entrypoint.sh`, serving Streamlit on
-`PORT` or `8443` by default.
-
-### Web App
+### Primary Web App
 
 Use `docker-compose.yml` for the FastAPI + Next.js stack:
 
@@ -116,12 +124,18 @@ docker compose up --build
 - Frontend: `http://localhost:3000`
 - Backend health: `http://localhost:8000/api/health`
 
+### Legacy Streamlit
+
+Use the root `Dockerfile`. It runs `entrypoint.sh`, serving Streamlit on
+`PORT` or `8443` by default.
+
 ## Current Limitations
 
 - FastAPI jobs are in-memory and not durable across restarts.
-- The new API now exposes analysis, swimming, rehabilitation, clinical, and
-  video-tools routers; some still share duplicated pipeline code with `pages/`.
-- Athlete endpoints in `backend/app/api/athletes.py` are still stubbed.
+- The API exposes running, swimming, rehabilitation, clinical, and video-tools
+  workflows; cycling and dryland web analysis are not connected yet.
+- Some API workflows still share duplicated pipeline code with `pages/`.
 - Raw SQLite and ORM persistence coexist.
-- Some Streamlit pages still contain page-local tracking pipelines that should
-  gradually move into service modules.
+- Authentication, authorization, cloud synchronization, and a durable worker
+  queue are not implemented. The current deployment target is a trusted local
+  pilot, not an internet-facing multi-user service.

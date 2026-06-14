@@ -10,10 +10,19 @@ import type {
 import { SwimmingAnalysisWorkspace } from "./SwimmingAnalysisWorkspace";
 
 const mocks = vi.hoisted(() => ({
+  listAthletes: vi.fn(),
   subscribeSwimmingAnalysis: vi.fn(),
   saveSwimmingAnalysis: vi.fn(),
   swimmingVideoUrl: vi.fn((jobId: string) => `/video/${jobId}`),
 }));
+
+vi.mock("@/lib/api", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api")>();
+  return {
+    ...actual,
+    api: { ...actual.api, listAthletes: mocks.listAthletes },
+  };
+});
 
 vi.mock("@/lib/swimming", async () => {
   const actual =
@@ -133,6 +142,10 @@ describe("SwimmingAnalysisWorkspace", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.listAthletes.mockResolvedValue([
+      { id: "7", name: "Swimmer A", initials: "SA", handle: null },
+      { id: "8", name: "Swimmer B", initials: "SB", handle: null },
+    ]);
     mocks.subscribeSwimmingAnalysis.mockImplementation(
       (_jobId: string, callback: typeof emit) => {
         emit = callback;
@@ -217,12 +230,35 @@ describe("SwimmingAnalysisWorkspace", () => {
       />,
     );
 
+    await screen.findByRole("option", { name: "Swimmer A" });
+    await user.selectOptions(screen.getByLabelText("Save for athlete"), "8");
     await user.click(screen.getByRole("button", { name: "Save to history" }));
 
-    expect(mocks.saveSwimmingAnalysis).toHaveBeenCalledWith("swim-123");
+    expect(mocks.saveSwimmingAnalysis).toHaveBeenCalledWith("swim-123", {
+      athleteId: 8,
+    });
     expect(
       screen.getByRole("button", { name: "Saved to history #91" }),
     ).toBeDisabled();
+  });
+
+  it("keeps the analysis visible when history saving fails", async () => {
+    const user = userEvent.setup();
+    mocks.saveSwimmingAnalysis.mockRejectedValue(new Error("Database offline"));
+    render(
+      <SwimmingAnalysisWorkspace
+        jobId="swim-123"
+        initialResult={_result()}
+      />,
+    );
+
+    await screen.findByRole("option", { name: "Swimmer A" });
+    await user.click(screen.getByRole("button", { name: "Save to history" }));
+
+    expect(await screen.findByText("Database offline")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Hips drop below the body line" }),
+    ).toBeInTheDocument();
   });
 
   it("shows actionable reshoot guidance on a quality error", () => {
