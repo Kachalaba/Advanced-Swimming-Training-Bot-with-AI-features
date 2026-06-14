@@ -261,6 +261,39 @@ class TestSaveAnalysis:
         assert saved.exercise_type == "midfoot"
         assert saved.ai_summary == "176 spm · Midfoot strike"
 
+    def test_cycling_analysis_populates_history_fields(self, tmp_path):
+        import video_analysis.athlete_database as athlete_database
+
+        database = AthleteDatabase(str(tmp_path / "cycling.db"))
+        athlete_id = database.add_athlete(Athlete(name="Cyclist"))
+
+        session_id = athlete_database.save_analysis_to_athlete(
+            athlete_id=athlete_id,
+            session_type="cycling",
+            analysis={
+                "cycling_analysis": {
+                    "type": "result",
+                    "analysis": {
+                        "cadence": 91.6,
+                        "avg_knee_angle_bottom": 146.5,
+                        "upper_body_stability": 88.4,
+                        "bike_fit_score": 86.7,
+                        "duration_sec": 12.5,
+                    },
+                }
+            },
+            database=database,
+        )
+
+        saved = database.get_session(session_id)
+        assert saved is not None
+        assert saved.session_type == "cycling"
+        assert saved.duration_sec == 12.5
+        assert saved.stability_score == 88.4
+        assert saved.ai_score == 87
+        assert saved.exercise_type == "side_view_bike_fit"
+        assert saved.ai_summary == "92 rpm · 146° knee extension"
+
     def test_rehab_analysis_populates_existing_session_fields(self, tmp_path):
         import json
 

@@ -12,6 +12,11 @@ export type ResultEvent = {
   analysis: Record<string, unknown>;
   frames_total: number;
   frames_with_pose: number;
+  quality?: {
+    status: "pass" | "fail";
+    pose_coverage: number;
+    warnings?: string[];
+  };
   video_path: string;
 };
 
@@ -22,14 +27,17 @@ export type ErrorEvent = {
 
 export type AnalysisEvent = ProgressEvent | ResultEvent | ErrorEvent;
 
-export async function uploadRunningVideo(
+type AnalysisSport = "running" | "cycling";
+
+async function uploadSportVideo(
+  sport: AnalysisSport,
   file: File,
   fps = 30,
 ): Promise<{ jobId: string }> {
   const fd = new FormData();
   fd.append("video", file);
   fd.append("fps", String(fps));
-  const res = await fetch(`${BACKEND_URL}/api/analysis/running`, {
+  const res = await fetch(`${BACKEND_URL}/api/analysis/${sport}`, {
     method: "POST",
     body: fd,
   });
@@ -40,12 +48,13 @@ export async function uploadRunningVideo(
   return { jobId: data.job_id };
 }
 
-export async function saveRunningAnalysis(
+async function saveSportAnalysis(
+  sport: AnalysisSport,
   jobId: string,
   input: { athleteId?: number; athleteName?: string },
 ): Promise<{ sessionId: number }> {
   const res = await fetch(
-    `${BACKEND_URL}/api/analysis/running/${jobId}/save`,
+    `${BACKEND_URL}/api/analysis/${sport}/${jobId}/save`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -63,11 +72,12 @@ export async function saveRunningAnalysis(
   return { sessionId: data.session_id };
 }
 
-export function subscribeAnalysis(
+function subscribeSportAnalysis(
+  sport: AnalysisSport,
   jobId: string,
   onEvent: (event: AnalysisEvent) => void,
 ): () => void {
-  const url = `${BACKEND_URL}/api/analysis/running/${jobId}/events`;
+  const url = `${BACKEND_URL}/api/analysis/${sport}/${jobId}/events`;
   const source = new EventSource(url);
   source.onmessage = (e) => {
     try {
@@ -86,6 +96,53 @@ export function subscribeAnalysis(
   return () => source.close();
 }
 
+function sportAnnotatedVideoUrl(
+  sport: AnalysisSport,
+  jobId: string,
+): string {
+  return `${BACKEND_URL}/api/analysis/${sport}/${jobId}/video`;
+}
+
+export function uploadRunningVideo(file: File, fps = 30) {
+  return uploadSportVideo("running", file, fps);
+}
+
+export function saveRunningAnalysis(
+  jobId: string,
+  input: { athleteId?: number; athleteName?: string },
+) {
+  return saveSportAnalysis("running", jobId, input);
+}
+
+export function subscribeAnalysis(
+  jobId: string,
+  onEvent: (event: AnalysisEvent) => void,
+) {
+  return subscribeSportAnalysis("running", jobId, onEvent);
+}
+
 export function annotatedVideoUrl(jobId: string): string {
-  return `${BACKEND_URL}/api/analysis/running/${jobId}/video`;
+  return sportAnnotatedVideoUrl("running", jobId);
+}
+
+export function uploadCyclingVideo(file: File, fps = 30) {
+  return uploadSportVideo("cycling", file, fps);
+}
+
+export function saveCyclingAnalysis(
+  jobId: string,
+  input: { athleteId?: number; athleteName?: string },
+) {
+  return saveSportAnalysis("cycling", jobId, input);
+}
+
+export function subscribeCyclingAnalysis(
+  jobId: string,
+  onEvent: (event: AnalysisEvent) => void,
+) {
+  return subscribeSportAnalysis("cycling", jobId, onEvent);
+}
+
+export function cyclingAnnotatedVideoUrl(jobId: string): string {
+  return sportAnnotatedVideoUrl("cycling", jobId);
 }

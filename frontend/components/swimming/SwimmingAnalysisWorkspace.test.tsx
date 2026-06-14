@@ -39,6 +39,15 @@ function _result(kickAvailable = true): SwimmingResultEvent {
       status: kickAvailable ? "pass" : "partial",
       warnings: kickAvailable ? [] : ["Feet leave the frame"],
     },
+    waterline_baseline: {
+      available: true,
+      position_y_pct: 46.4,
+      slope_pct: 1.8,
+      confidence_pct: 90,
+      observed_coverage_pct: 80,
+      usable_coverage_pct: 100,
+      drift_pct: 0.8,
+    },
     coverage: {
       available_zones: kickAvailable ? 5 : 4,
       total_zones: 5,
@@ -172,6 +181,22 @@ describe("SwimmingAnalysisWorkspace", () => {
       mainIssue.compareDocumentPosition(zones) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
+  });
+
+  it("shows the measured waterline baseline quality", () => {
+    render(
+      <SwimmingAnalysisWorkspace
+        jobId="swim-123"
+        initialResult={_result()}
+      />,
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "Waterline baseline" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("46.4%")).toBeInTheDocument();
+    expect(screen.getAllByText("90%").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("±0.8%")).toBeInTheDocument();
   });
 
   it("seeks the video to the evidence peak", async () => {

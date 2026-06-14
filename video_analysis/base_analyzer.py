@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import math
+import threading
 from collections.abc import Mapping
 from typing import Dict, List, Optional, Tuple, Union
 
@@ -29,6 +30,7 @@ logger = logging.getLogger(__name__)
 # Avoids re-loading heavy model weights on every analyzer instantiation.
 # ---------------------------------------------------------------------------
 _pose_cache: dict = {}
+_pose_processing_lock = threading.Lock()
 
 
 def get_pose_detector(video_mode: bool = False):
@@ -49,6 +51,12 @@ def get_pose_detector(video_mode: bool = False):
             logger.error("Failed to initialize MediaPipe Pose: %s", exc)
             raise
     return _pose_cache[key]
+
+
+def get_pose_processing_lock() -> threading.Lock:
+    """Return the shared lock protecting cached MediaPipe Pose inference."""
+
+    return _pose_processing_lock
 
 
 Point2D = Tuple[float, float]

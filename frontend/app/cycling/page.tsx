@@ -1,38 +1,80 @@
 "use client";
 
-import { Bike, Camera, Gauge, Target } from "lucide-react";
+import { Bike, Camera, CheckCircle2, Gauge, Target } from "lucide-react";
 
+import { CyclingUploader } from "@/components/sports/CyclingUploader";
 import { SportLanding } from "@/components/sports/SportLanding";
+import {
+  toSportLandingData,
+  useSportOverview,
+} from "@/lib/sportOverview";
 
 export default function CyclingPage() {
+  const { overview, loading, error, retry } = useSportOverview("cycling");
+  const data = overview
+    ? toSportLandingData(overview)
+    : { metrics: [], sessions: [], insights: [] };
+
   return (
     <SportLanding
-      title="Cycling · Power, posture, pedalling"
-      subtitle="Bike fit and pedal-stroke analysis from a single side-on video. Knee tracking, hip drop, saddle height heuristics, and torque distribution."
+      uploader={<CyclingUploader />}
+      title="Cycling · Position, posture, pedalling"
+      subtitle="Side-view bike-fit screening with knee extension, hip position, upper-body stability, cadence, and pedal-cycle evidence."
       badges={[
-        { icon: Bike, label: "Road · TT · Indoor" },
-        { variant: "success", label: "Analyzer core available" },
-        { variant: "warn", label: "Web analysis adapter planned" },
+        { icon: Bike, label: "Road · TT · Indoor trainer" },
+        {
+          variant: "success",
+          icon: CheckCircle2,
+          label: "Persisted athlete history",
+        },
+        { variant: "info", label: "Quality-gated evidence" },
       ]}
-      hint="Best results with a 30s clip in a steady aero or seated position. SPRINT will compute knee-extension angle, hip drop, and pedal-stroke smoothness."
+      hint="Video supports movement and position screening, not measured power. Compare clips recorded from the same fixed side view and riding position."
       accentRgb="16,185,129"
-      metrics={[
-        { label: "Input", value: "Side view", icon: Camera, accent: true, hint: "Steady seated or aero position" },
-        { label: "Fit", value: "Knee angles", icon: Target, hint: "Top and bottom pedal positions" },
-        { label: "Pedalling", value: "Cycle phases", icon: Gauge, hint: "Cadence, smoothness and dead spots" },
-        { label: "Web workflow", value: "Planned", icon: Bike, hint: "Upload, evidence video and persisted history" },
-      ]}
-      sessions={[]}
-      insights={[
-        { tag: "Available", variant: "success", title: "Cycling analyzer exists in the shared core", detail: "The next product step is a FastAPI adapter with quality gates and annotated output." },
-        { tag: "Boundary", variant: "info", title: "Power is not estimated from video", detail: "Video supports posture and movement analysis; power requires a connected sensor or imported activity." },
-      ]}
-      uploadAvailable={false}
-      uploader={
-        <p className="py-10 text-center text-sm text-slate-400">
-          Cycling upload will open after the web adapter and confidence checks are connected.
-        </p>
-      }
+      metrics={data.metrics}
+      sessions={data.sessions}
+      insights={data.insights}
+      dataState={loading ? "loading" : error ? "error" : "ready"}
+      onRetry={retry}
+      uploadSubtitle="Fixed side view · Full rider and bike visible"
+      secondaryPanel={{
+        title: "Capture checklist",
+        subtitle: "A comparable clip produces a useful baseline",
+        content: (
+          <div className="space-y-3">
+            {[
+              {
+                icon: Camera,
+                title: "Lock the camera",
+                detail: "Place it perpendicular to the bike at crank height.",
+              },
+              {
+                icon: Target,
+                title: "Show the complete system",
+                detail: "Keep the rider, crank and both wheels inside frame.",
+              },
+              {
+                icon: Gauge,
+                title: "Hold one position",
+                detail: "Ride seated at a steady cadence for 15–30 seconds.",
+              },
+            ].map(({ icon: Icon, title, detail }) => (
+              <div
+                key={title}
+                className="flex gap-3 rounded-lg border border-white/[0.05] bg-white/[0.02] p-3"
+              >
+                <Icon className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
+                <div>
+                  <p className="text-sm font-medium text-slate-200">{title}</p>
+                  <p className="mt-0.5 text-xs leading-relaxed text-slate-500">
+                    {detail}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        ),
+      }}
     />
   );
 }

@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import math
 import sys
-import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 from statistics import mean, median
@@ -18,7 +17,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from video_analysis.base_analyzer import get_pose_detector  # noqa: E402
+from video_analysis.base_analyzer import get_pose_detector, get_pose_processing_lock  # noqa: E402
 from video_analysis.constants import (  # noqa: E402
     SWIM_CONFIDENCE_HIGH,
     SWIM_CONFIDENCE_MEDIUM,
@@ -33,7 +32,7 @@ from video_analysis.waterline_analyzer import WaterlineAnalyzer, WaterlineEstima
 from .video_encoding import finalize_browser_video, open_intermediate_writer
 
 logger = logging.getLogger(__name__)
-_POSE_PROCESSING_LOCK = threading.Lock()
+_POSE_PROCESSING_LOCK = get_pose_processing_lock()
 
 LANDMARK_NAMES = {
     0: "nose",
@@ -201,6 +200,11 @@ def analyze_swimming_video(
             "status": batch.quality_status,
             "warnings": list(batch.quality_warnings),
         },
+        "waterline_baseline": _waterline_baseline(
+            batch.observations,
+            batch.width,
+            batch.height,
+        ),
         "coverage": technique["coverage"],
         "overall_score": technique["overall_score"],
         "cycles": [dict(cycle.to_dict()) for cycle in selected_cycles],
@@ -213,6 +217,51 @@ def analyze_swimming_video(
     }
     yield ProgressEvent("completed", 100, "Analysis complete")
     yield ResultEvent(payload)
+
+
+def _waterline_baseline(
+    observations: Sequence[Mapping[str, Any]],
+    frame_width: int,
+    frame_height: int,
+) -> Dict[str, Any]:
+    """Summarize the temporal water surface used by the hybrid pose model."""
+
+    estimates = [item.get("waterline") for item in observations if isinstance(item.get("waterline"), WaterlineEstimate)]
+    usable = [estimate for estimate in estimates if estimate.confidence >= SWIM_CONFIDENCE_MEDIUM]
+    total = len(observations)
+    if not usable or frame_width <= 0 or frame_height <= 0:
+        return {
+            "available": False,
+            "position_y_pct": None,
+            "slope_pct": None,
+            "confidence_pct": 0.0,
+            "observed_coverage_pct": 0.0,
+            "usable_coverage_pct": 0.0,
+            "drift_pct": None,
+        }
+
+    centre_x = frame_width / 2.0
+    positions = np.array(
+        [estimate.y_at(centre_x) / frame_height * 100 for estimate in usable],
+        dtype=float,
+    )
+    slopes = np.array(
+        [estimate.slope * frame_width / frame_height * 100 for estimate in usable],
+        dtype=float,
+    )
+    confidence = mean(estimate.confidence for estimate in usable) * 100
+    observed = sum(estimate.observed for estimate in estimates)
+    lower, upper = np.percentile(positions, [10, 90])
+
+    return {
+        "available": True,
+        "position_y_pct": round(float(np.median(positions)), 1),
+        "slope_pct": round(float(np.median(slopes)), 1),
+        "confidence_pct": round(confidence, 1),
+        "observed_coverage_pct": round(observed / max(total, 1) * 100, 1),
+        "usable_coverage_pct": round(len(usable) / max(total, 1) * 100, 1),
+        "drift_pct": round(float(upper - lower) / 2.0, 1),
+    }
 
 
 def _collect_observations(video_path: Path, output_dir: Path, fps: Optional[float]) -> ObservationBatch:

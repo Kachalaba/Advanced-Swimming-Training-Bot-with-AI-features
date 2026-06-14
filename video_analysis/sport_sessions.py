@@ -237,6 +237,98 @@ def _swimming_session(session: TrainingSession, stored: Dict[str, Any]) -> Dict[
     return normalized
 
 
+def _cycling_session(session: TrainingSession, stored: Dict[str, Any]) -> Dict[str, Any]:
+    normalized = _base_session(session)
+    result = stored.get("cycling_analysis", stored)
+    if not isinstance(result, dict):
+        return normalized
+    analysis = result.get("analysis", result)
+    if not isinstance(analysis, dict):
+        return normalized
+
+    pairs = [
+        _metric(
+            "cadence",
+            "Cadence",
+            analysis.get("cadence"),
+            "rpm",
+            higher_is_better=None,
+        ),
+        _metric(
+            "knee_extension",
+            "Knee extension",
+            analysis.get("avg_knee_angle_bottom"),
+            "deg",
+            higher_is_better=None,
+        ),
+        _metric(
+            "pedal_smoothness",
+            "Pedal smoothness",
+            analysis.get("pedal_smoothness"),
+            "/100",
+            higher_is_better=True,
+        ),
+        _metric(
+            "upper_body_stability",
+            "Upper-body stability",
+            analysis.get("upper_body_stability"),
+            "%",
+            higher_is_better=True,
+        ),
+        _metric(
+            "bike_fit_score",
+            "Bike-fit score",
+            analysis.get("bike_fit_score"),
+            "/100",
+            higher_is_better=True,
+        ),
+    ]
+    normalized["metrics"] = {key: value for pair in pairs if pair for key, value in [pair]}
+    normalized["score"] = _number(analysis.get("bike_fit_score"))
+    normalized["quality"] = _pose_quality(result)
+
+    cadence = _number(analysis.get("cadence"))
+    knee_extension = _number(analysis.get("avg_knee_angle_bottom"))
+    summary_parts = []
+    if cadence is not None:
+        summary_parts.append(f"{cadence:.0f} rpm")
+    if knee_extension is not None:
+        summary_parts.append(f"{knee_extension:.0f}° knee extension")
+    if summary_parts:
+        normalized["summary"] = " · ".join(summary_parts)
+
+    insights = []
+    if analysis.get("rock_detected"):
+        insights.append(
+            {
+                "code": "upper_body_rock",
+                "level": "warning",
+                "title": "Upper-body movement repeats under load",
+                "detail": "Compare the annotated clip at the same cadence before changing fit.",
+            }
+        )
+    if knee_extension is not None and not 140 <= knee_extension <= 150:
+        insights.append(
+            {
+                "code": "knee_extension_outside_reference",
+                "level": "info",
+                "title": "Knee extension is outside the side-view reference range",
+                "detail": "Use this as a fit-screening signal, not a standalone saddle prescription.",
+            }
+        )
+    if not insights and normalized["score"] is not None:
+        insights.append(
+            {
+                "code": "cycling_baseline",
+                "level": "success",
+                "title": "A comparable bike-fit baseline is saved",
+                "detail": "Repeat the same camera angle and riding position to track change.",
+            }
+        )
+    normalized["insights"] = insights
+    return normalized
+
+
 def normalize_sport_session(
     session: TrainingSession,
     sport: str,
@@ -250,6 +342,8 @@ def normalize_sport_session(
         return _running_session(session, stored)
     if sport == "swimming":
         return _swimming_session(session, stored)
+    if sport == "cycling":
+        return _cycling_session(session, stored)
     return _base_session(session)
 
 

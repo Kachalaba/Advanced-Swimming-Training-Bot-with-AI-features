@@ -59,6 +59,8 @@ export function toSportLandingData(overview: SportOverview) {
       thumb:
         overview.sport === "swimming"
           ? "from-cyan-500/30 to-blue-500/20"
+          : overview.sport === "cycling"
+            ? "from-emerald-500/30 to-teal-500/20"
           : "from-orange-500/30 to-rose-500/20",
     })),
     insights: overview.insights.map((insight) => ({

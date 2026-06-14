@@ -11,7 +11,14 @@ const config: Config = {
         elevated: "#141A23",
       },
       fontFamily: {
-        sans: ["var(--font-inter)", "ui-sans-serif", "system-ui", "sans-serif"],
+        sans: [
+          "-apple-system",
+          "BlinkMacSystemFont",
+          '"Segoe UI"',
+          "ui-sans-serif",
+          "system-ui",
+          "sans-serif",
+        ],
         mono: ["ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
       },
       keyframes: {

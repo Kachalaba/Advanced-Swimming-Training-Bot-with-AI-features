@@ -25,7 +25,7 @@ const seedConversation: Message[] = [
   {
     role: "assistant",
     content:
-      "I've reviewed your last 14 days. Three patterns stand out — running cadence dropping under fatigue, swimming body-roll asymmetry on the right, and cycling hip drop above 280W. Want me to dig into one?",
+      "I've reviewed your last 14 days. Three patterns stand out — running cadence dropping under fatigue, swimming body-roll asymmetry on the right, and elevated upper-body movement in the latest side-view cycling clip. Want me to dig into one?",
     meta: "Pattern detection · 14d window",
   },
   {

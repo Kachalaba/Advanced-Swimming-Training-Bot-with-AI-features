@@ -59,8 +59,8 @@ flowchart LR
 browser QA belong here.
 
 `backend/app/main.py` exposes health, athletes, analysis, rehabilitation,
-clinical, and video-tools routers. Running and swimming use the same web
-contract:
+clinical, and video-tools routers. Running, swimming, and cycling use the same
+web contract:
 
 1. upload a video and receive a job ID;
 2. subscribe to progress and result events over Server-Sent Events;
@@ -70,16 +70,23 @@ contract:
 
 Key endpoints:
 
-- `POST /api/analysis/{running|swimming}`
-- `GET /api/analysis/{running|swimming}/{job_id}/events`
-- `GET /api/analysis/{running|swimming}/{job_id}/video`
-- `POST /api/analysis/{running|swimming}/{job_id}/save`
+- `POST /api/analysis/{running|swimming|cycling}`
+- `GET /api/analysis/{running|swimming|cycling}/{job_id}/events`
+- `GET /api/analysis/{running|swimming|cycling}/{job_id}/video`
+- `POST /api/analysis/{running|swimming|cycling}/{job_id}/save`
 - `GET /api/athletes/{athlete_id}/sports/{sport}/overview`
 
 The overview supports `swimming`, `running`, `cycling`, and `dryland`, but only
-returns measurements that were actually persisted. Cycling and dryland do not
-yet expose a web upload pipeline and their pages deliberately show capability
-and readiness information instead of fabricated athlete metrics.
+returns measurements that were actually persisted. Dryland does not yet expose
+a web upload pipeline and its page deliberately shows capability and readiness
+information instead of fabricated athlete metrics.
+
+Swimming analysis also exposes a waterline baseline evidence contract. The
+pipeline estimates and temporally smooths the surface line, classifies pose
+landmarks relative to it, enhances underwater evidence, and reports baseline
+position, confidence, observed and usable frame coverage, and drift. The
+baseline is supporting computer-vision evidence rather than a clinical
+measurement.
 
 ### Legacy Streamlit Shell
 
@@ -132,8 +139,11 @@ Use the root `Dockerfile`. It runs `entrypoint.sh`, serving Streamlit on
 ## Current Limitations
 
 - FastAPI jobs are in-memory and not durable across restarts.
-- The API exposes running, swimming, rehabilitation, clinical, and video-tools
-  workflows; cycling and dryland web analysis are not connected yet.
+- The API exposes running, swimming, cycling, rehabilitation, clinical, and
+  video-tools workflows; dryland web analysis is not connected yet.
+- Cycling is a fixed-camera, side-view screening workflow. It estimates visible
+  joint geometry and cadence but does not measure power, force, or bike-fit
+  dimensions that are not present in the video.
 - Some API workflows still share duplicated pipeline code with `pages/`.
 - Raw SQLite and ORM persistence coexist.
 - Authentication, authorization, cloud synchronization, and a durable worker
