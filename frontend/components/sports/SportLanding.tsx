@@ -32,7 +32,7 @@ export type SportSession = {
   title: string;
   duration: string;
   date: string;
-  score: number;
+  score: number | null;
   thumb: string;
 };
 
@@ -47,6 +47,8 @@ export type SportLandingProps = {
   insights: { tag: string; variant: "success" | "warn" | "info"; title: string; detail: string }[];
   uploader?: React.ReactNode;
   uploadSubtitle?: string;
+  dataState?: "ready" | "loading" | "error";
+  onRetry?: () => void;
   secondaryPanel?: {
     title: string;
     subtitle?: string;
@@ -65,6 +67,8 @@ export function SportLanding({
   insights,
   uploader,
   uploadSubtitle = "Multi-angle video supported",
+  dataState = "ready",
+  onRetry,
   secondaryPanel,
 }: SportLandingProps) {
   function scrollToUploader() {
@@ -150,7 +154,30 @@ export function SportLanding({
               </button>
             }
           >
-            {sessions.length === 0 ? (
+            {dataState === "loading" ? (
+              <EmptyState
+                icon={Target}
+                title="Loading saved sessions…"
+                message="Reading this athlete's persisted analysis history."
+              />
+            ) : dataState === "error" ? (
+              <EmptyState
+                icon={Target}
+                title="Could not load saved sessions"
+                message="The analyzer is still available. Retry the history request when the backend is ready."
+                action={
+                  onRetry ? (
+                    <button
+                      type="button"
+                      onClick={onRetry}
+                      className="flex h-8 items-center rounded-lg border border-white/[0.08] bg-white/[0.05] px-3 text-xs font-medium text-slate-200"
+                    >
+                      Retry
+                    </button>
+                  ) : undefined
+                }
+              />
+            ) : sessions.length === 0 ? (
               <EmptyState
                 icon={Target}
                 title="No sessions yet"
@@ -190,14 +217,16 @@ export function SportLanding({
                         <span className="text-[11px] text-slate-500">
                           {s.date}
                         </span>
-                        <div className="flex items-center gap-1">
+                        {s.score !== null ? (
+                          <div className="flex items-center gap-1">
                           <span className="text-[10px] text-slate-500 uppercase tracking-wider">
                             Score
                           </span>
                           <span className="text-xs font-bold text-cyan-400 tnum">
                             {s.score}
                           </span>
-                        </div>
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                   </button>
@@ -213,7 +242,13 @@ export function SportLanding({
           action={<Sparkles className="w-3.5 h-3.5 text-cyan-400" />}
         >
           <div className="space-y-3">
-            {insights.map((insight, i) => (
+            {insights.length === 0 ? (
+              <EmptyState
+                icon={Sparkles}
+                title="Insights appear after a saved analysis"
+                message="SPRINT only shows observations supported by a completed measurement."
+              />
+            ) : insights.map((insight, i) => (
               <div
                 key={i}
                 className="p-3 rounded-lg bg-white/[0.02] border border-white/[0.04] hover:border-white/[0.08] transition-colors cursor-pointer"

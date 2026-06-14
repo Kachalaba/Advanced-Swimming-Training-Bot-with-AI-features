@@ -7,8 +7,17 @@ import {
   SwimmingFilmingGuide,
   SwimmingUploader,
 } from "@/components/swimming/SwimmingUploader";
+import {
+  toSportLandingData,
+  useSportOverview,
+} from "@/lib/sportOverview";
 
 export default function SwimmingPage() {
+  const { overview, loading, error, retry } = useSportOverview("swimming");
+  const saved = overview
+    ? toSportLandingData(overview)
+    : { metrics: [], sessions: [], insights: [] };
+
   return (
     <SportLanding
       title="Swimming · Waterline-aware analysis"
@@ -48,8 +57,8 @@ export default function SwimmingPage() {
           hint: "Exact moment · drill · next-workout mini-set",
         },
       ]}
-      sessions={[]}
-      insights={[
+      sessions={saved.sessions}
+      insights={saved.insights.length > 0 ? saved.insights : [
         {
           tag: "Evidence",
           variant: "success",
@@ -69,6 +78,8 @@ export default function SwimmingPage() {
           detail: "The main repeated issue becomes a drill and a concrete mini-set.",
         },
       ]}
+      dataState={loading ? "loading" : error ? "error" : "ready"}
+      onRetry={retry}
       uploader={<SwimmingUploader />}
       uploadSubtitle="Side-on freestyle · MP4, MOV, AVI or MKV"
       secondaryPanel={{

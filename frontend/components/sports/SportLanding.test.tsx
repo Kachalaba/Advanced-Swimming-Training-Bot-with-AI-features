@@ -45,4 +45,62 @@ describe("SportLanding", () => {
       block: "start",
     });
   });
+
+  it("renders loading and retryable error states without fake sessions", async () => {
+    const user = userEvent.setup();
+    const retry = vi.fn();
+    const { rerender } = render(
+      <SportLanding
+        title="Running"
+        subtitle="Analysis"
+        badges={[]}
+        hint="Measured data only"
+        accentRgb="34,211,238"
+        metrics={[]}
+        sessions={[]}
+        insights={[]}
+        dataState="loading"
+      />,
+    );
+
+    expect(screen.getByText("Loading saved sessions…")).toBeInTheDocument();
+
+    rerender(
+      <SportLanding
+        title="Running"
+        subtitle="Analysis"
+        badges={[]}
+        hint="Measured data only"
+        accentRgb="34,211,238"
+        metrics={[]}
+        sessions={[]}
+        insights={[]}
+        dataState="error"
+        onRetry={retry}
+      />,
+    );
+
+    expect(screen.getByText("Could not load saved sessions")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Retry" }));
+    expect(retry).toHaveBeenCalledOnce();
+  });
+
+  it("shows an honest empty insight state", () => {
+    render(
+      <SportLanding
+        title="Running"
+        subtitle="Analysis"
+        badges={[]}
+        hint="Measured data only"
+        accentRgb="34,211,238"
+        metrics={[]}
+        sessions={[]}
+        insights={[]}
+      />,
+    );
+
+    expect(
+      screen.getByText("Insights appear after a saved analysis"),
+    ).toBeInTheDocument();
+  });
 });
