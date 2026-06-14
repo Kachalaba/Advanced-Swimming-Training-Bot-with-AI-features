@@ -422,49 +422,98 @@ export function SwimmingAnalysisWorkspace({
               </div>
             </div>
 
-            <ChartContainer
-              title="Evidence quality"
-              subtitle={`${result.coverage.available_zones} of ${result.coverage.total_zones} zones analyzed`}
-              action={<Eye className="h-4 w-4 text-cyan-300" />}
-            >
-              <div className="space-y-3 text-xs">
-                <div className="flex items-center justify-between border-b border-white/[0.05] pb-3">
-                  <span className="text-slate-500">Selected cycles</span>
-                  <span className="font-mono font-semibold text-slate-200 tnum">
-                    {result.cycles.length}
-                  </span>
+            <div className="space-y-4">
+              <ChartContainer
+                title="Evidence quality"
+                subtitle={`${result.coverage.available_zones} of ${result.coverage.total_zones} zones analyzed`}
+                action={<Eye className="h-4 w-4 text-cyan-300" />}
+              >
+                <div className="space-y-3 text-xs">
+                  <div className="flex items-center justify-between border-b border-white/[0.05] pb-3">
+                    <span className="text-slate-500">Selected cycles</span>
+                    <span className="font-mono font-semibold text-slate-200 tnum">
+                      {result.cycles.length}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between border-b border-white/[0.05] pb-3">
+                    <span className="text-slate-500">Pose coverage</span>
+                    <span className="font-mono font-semibold text-slate-200 tnum">
+                      {result.frames_total > 0
+                        ? Math.round(
+                            (result.frames_with_pose / result.frames_total) *
+                              100,
+                          )
+                        : 0}
+                      %
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500">Analysis contract</span>
+                    <span className="font-mono text-slate-300">
+                      v{result.contract_version}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex items-center justify-between border-b border-white/[0.05] pb-3">
-                  <span className="text-slate-500">Pose coverage</span>
-                  <span className="font-mono font-semibold text-slate-200 tnum">
-                    {result.frames_total > 0
-                      ? Math.round(
-                          (result.frames_with_pose / result.frames_total) * 100,
-                        )
-                      : 0}
-                    %
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-500">Analysis contract</span>
-                  <span className="font-mono text-slate-300">
-                    v{result.contract_version}
-                  </span>
-                </div>
-              </div>
-              {result.quality.warnings.length > 0 ? (
-                <div className="mt-4 space-y-2">
-                  {result.quality.warnings.map((warning) => (
-                    <p
-                      key={warning}
-                      className="rounded-lg border border-amber-400/15 bg-amber-400/[0.05] px-3 py-2 text-[11px] leading-relaxed text-amber-200"
-                    >
-                      {warning}
-                    </p>
-                  ))}
-                </div>
-              ) : null}
-            </ChartContainer>
+                {result.quality.warnings.length > 0 ? (
+                  <div className="mt-4 space-y-2">
+                    {result.quality.warnings.map((warning) => (
+                      <p
+                        key={warning}
+                        className="rounded-lg border border-amber-400/15 bg-amber-400/[0.05] px-3 py-2 text-[11px] leading-relaxed text-amber-200"
+                      >
+                        {warning}
+                      </p>
+                    ))}
+                  </div>
+                ) : null}
+              </ChartContainer>
+
+              <ChartContainer
+                title="Waterline baseline"
+                subtitle="Temporal surface lock used to split air and water"
+                action={<Waves className="h-4 w-4 text-cyan-300" />}
+              >
+                {result.waterline_baseline.available ? (
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    {[
+                      {
+                        label: "Surface position",
+                        value: `${result.waterline_baseline.position_y_pct?.toFixed(1)}%`,
+                      },
+                      {
+                        label: "Confidence",
+                        value: `${Math.round(result.waterline_baseline.confidence_pct)}%`,
+                      },
+                      {
+                        label: "Observed frames",
+                        value: `${Math.round(result.waterline_baseline.observed_coverage_pct)}%`,
+                      },
+                      {
+                        label: "Baseline drift",
+                        value: `±${result.waterline_baseline.drift_pct?.toFixed(1)}%`,
+                      },
+                    ].map((item) => (
+                      <div
+                        key={item.label}
+                        className="rounded-lg border border-white/[0.05] bg-white/[0.02] p-3"
+                      >
+                        <p className="text-[10px] uppercase tracking-wider text-slate-600">
+                          {item.label}
+                        </p>
+                        <p className="mt-1 font-mono text-sm font-semibold text-cyan-100 tnum">
+                          {item.value}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs leading-relaxed text-amber-200">
+                    The surface could not be locked reliably. Water-adjacent
+                    joints remain confidence-limited.
+                  </p>
+                )}
+              </ChartContainer>
+            </div>
           </section>
 
           <section>

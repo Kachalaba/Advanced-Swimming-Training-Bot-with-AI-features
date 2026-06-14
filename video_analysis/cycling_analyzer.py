@@ -162,6 +162,13 @@ class CyclingAnalyzer(BaseAnalyzer):
 
         self.pedal_strokes = []
         self.phases = []
+        self.ankle_angles_top = []
+        self.ankle_angles_bottom = []
+        self.dead_spot_frames_top = []
+        self.dead_spot_frames_bottom = []
+        self.shoulder_x_positions = []
+        self.shoulder_y_positions = []
+        self.arm_angles = []
 
         # Track metrics per frame
         knee_angles_left = []
@@ -404,10 +411,10 @@ class CyclingAnalyzer(BaseAnalyzer):
         cadence = (total_revs / duration) * 30 if duration > 0 else 0  # *30 because we count each leg
 
         # Knee angles
-        all_knee = knee_left + knee_right
-        avg_knee_bottom = min(all_knee) if all_knee else 0  # Most extended
-        avg_knee_top = max(all_knee) if all_knee else 0  # Most flexed
-        knee_range = avg_knee_top - avg_knee_bottom
+        all_knee = [angle for angle in knee_left + knee_right if angle > 0]
+        avg_knee_top = float(np.percentile(all_knee, 10)) if all_knee else 0
+        avg_knee_bottom = float(np.percentile(all_knee, 90)) if all_knee else 0
+        knee_range = avg_knee_bottom - avg_knee_top
 
         # Hip angle (aero position)
         avg_hip = np.mean(hip_angles) if hip_angles else 0
@@ -433,9 +440,11 @@ class CyclingAnalyzer(BaseAnalyzer):
         # Phase distribution
         phase_counts = {}
         for phase in self.phases:
+            if phase == PedalPhase.UNKNOWN:
+                continue
             phase_counts[phase.value] = phase_counts.get(phase.value, 0) + 1
 
-        total_phases = len(self.phases)
+        total_phases = sum(phase_counts.values())
         phase_dist = {k: (v / total_phases * 100) if total_phases > 0 else 0 for k, v in phase_counts.items()}
 
         power_phase_pct = phase_dist.get("Power", 0)
@@ -475,7 +484,9 @@ class CyclingAnalyzer(BaseAnalyzer):
         avg_ankle_bottom = np.mean(self.ankle_angles_bottom) if self.ankle_angles_bottom else 0
         ankling_range = abs(avg_ankle_top - avg_ankle_bottom)
         # Good ankling: 20-40 degree range
-        if 20 <= ankling_range <= 40:
+        if not self.ankle_angles_top or not self.ankle_angles_bottom:
+            ankling_score = 0
+        elif 20 <= ankling_range <= 40:
             ankling_score = 100
         elif 10 <= ankling_range < 20 or 40 < ankling_range <= 50:
             ankling_score = 80
@@ -485,11 +496,11 @@ class CyclingAnalyzer(BaseAnalyzer):
         # Dead spot analysis
         dead_spot_top_frames = len(self.dead_spot_frames_top)
         dead_spot_bottom_frames = len(self.dead_spot_frames_bottom)
-        dead_spot_top_ms = (dead_spot_top_frames / self.fps) * 1000 if total_revs > 0 else 0
-        dead_spot_bottom_ms = (dead_spot_bottom_frames / self.fps) * 1000 if total_revs > 0 else 0
+        dead_spot_top_ms = (dead_spot_top_frames / self.fps) * 1000 / total_revs if total_revs > 0 else 0
+        dead_spot_bottom_ms = (dead_spot_bottom_frames / self.fps) * 1000 / total_revs if total_revs > 0 else 0
         # Less dead spot time = better
         total_dead_spot = dead_spot_top_ms + dead_spot_bottom_ms
-        dead_spot_score = max(0, 100 - total_dead_spot / 10)
+        dead_spot_score = max(0, 100 - total_dead_spot / 10) if total_revs > 0 else 0
 
         # Pedal smoothness (based on phase distribution evenness)
         if phase_dist:
@@ -497,7 +508,7 @@ class CyclingAnalyzer(BaseAnalyzer):
             phase_std = np.std(phase_values) if phase_values else 0
             pedal_smoothness = max(0, 100 - phase_std * 2)
         else:
-            pedal_smoothness = 50
+            pedal_smoothness = 0
 
         # Torque effectiveness (estimated from power phase)
         torque_effectiveness = min(100, power_phase_pct * 2.5)
@@ -520,7 +531,9 @@ class CyclingAnalyzer(BaseAnalyzer):
         # Reach angle
         avg_arm_angle = np.mean(self.arm_angles) if self.arm_angles else 0
         # Stack score (arm angle should be 140-160 for good position)
-        if 140 <= avg_arm_angle <= 160:
+        if not self.arm_angles:
+            stack_score = 0
+        elif 140 <= avg_arm_angle <= 160:
             stack_score = 100
         elif 120 <= avg_arm_angle < 140 or 160 < avg_arm_angle <= 170:
             stack_score = 80
@@ -528,17 +541,28 @@ class CyclingAnalyzer(BaseAnalyzer):
             stack_score = 60
 
         # Overall efficiency score
-        efficiency_score = (
-            saddle_score * 0.2
-            + aero_score * 0.2
-            + stability * 0.2
-            + pedal_smoothness * 0.2
-            + ankling_score * 0.1
-            + dead_spot_score * 0.1
+        efficiency_score = self._weighted_available_score(
+            [
+                (saddle_score, 0.2, bool(all_knee)),
+                (aero_score, 0.2, bool(hip_angles)),
+                (stability, 0.2, len(shoulder_positions) > 1),
+                (pedal_smoothness, 0.2, bool(phase_dist)),
+                (
+                    ankling_score,
+                    0.1,
+                    bool(self.ankle_angles_top and self.ankle_angles_bottom),
+                ),
+                (dead_spot_score, 0.1, total_revs > 0),
+            ]
         )
 
-        # Bike fit score
-        bike_fit_score = (saddle_score + aero_score + stack_score) / 3
+        bike_fit_score = self._weighted_available_score(
+            [
+                (saddle_score, 1.0, bool(all_knee)),
+                (aero_score, 1.0, bool(hip_angles)),
+                (stack_score, 1.0, bool(self.arm_angles)),
+            ]
+        )
 
         return CyclingAnalysis(
             total_revolutions=total_revs,
@@ -575,6 +599,14 @@ class CyclingAnalyzer(BaseAnalyzer):
             efficiency_score=round(efficiency_score, 1),
             bike_fit_score=round(bike_fit_score, 1),
         )
+
+    @staticmethod
+    def _weighted_available_score(components) -> float:
+        available = [(float(score), float(weight)) for score, weight, is_available in components if is_available]
+        total_weight = sum(weight for _, weight in available)
+        if total_weight <= 0:
+            return 0.0
+        return sum(score * weight for score, weight in available) / total_weight
 
     def _empty_analysis(self) -> CyclingAnalysis:
         """Return empty analysis."""

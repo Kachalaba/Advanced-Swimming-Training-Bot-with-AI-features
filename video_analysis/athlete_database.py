@@ -669,6 +669,23 @@ def _save_analysis_for_athlete(
                 parts.append(f"{foot_strike.title()} strike")
             session.ai_summary = " · ".join(parts)
 
+    elif session_type == "cycling":
+        cycling_result = analysis.get("cycling_analysis", analysis)
+        cycling = cycling_result.get("analysis", cycling_result) if isinstance(cycling_result, dict) else {}
+        if isinstance(cycling, dict):
+            cadence = float(cycling.get("cadence") or 0)
+            knee_extension = float(cycling.get("avg_knee_angle_bottom") or 0)
+            session.duration_sec = float(cycling.get("duration_sec") or 0)
+            session.stability_score = float(cycling.get("upper_body_stability") or 0)
+            session.ai_score = int(round(float(cycling.get("bike_fit_score") or 0)))
+            session.exercise_type = "side_view_bike_fit"
+            parts = []
+            if cadence:
+                parts.append(f"{cadence:.0f} rpm")
+            if knee_extension:
+                parts.append(f"{knee_extension:.0f}° knee extension")
+            session.ai_summary = " · ".join(parts)
+
     elif session_type == "dryland":
         exercise_stats = analysis.get("exercise_stats")
         if exercise_stats:

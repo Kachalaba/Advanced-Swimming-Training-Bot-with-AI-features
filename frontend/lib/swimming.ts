@@ -96,6 +96,15 @@ export type SwimmingResultEvent = {
     status: "pass" | "partial";
     warnings: string[];
   };
+  waterline_baseline: {
+    available: boolean;
+    position_y_pct: number | null;
+    slope_pct: number | null;
+    confidence_pct: number;
+    observed_coverage_pct: number;
+    usable_coverage_pct: number;
+    drift_pct: number | null;
+  };
   coverage: {
     available_zones: number;
     total_zones: number;

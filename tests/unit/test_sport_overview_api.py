@@ -78,6 +78,47 @@ def test_running_overview_reads_persisted_sessions(monkeypatch, tmp_path):
     assert body["sessions"][0]["summary"] == "178 spm · Midfoot strike"
 
 
+def test_cycling_overview_reads_fit_metrics_and_evidence(monkeypatch, tmp_path):
+    client, database = _client(monkeypatch, tmp_path)
+    athlete_id = database.add_athlete(Athlete(name="Cyclist"))
+    database.add_session(
+        TrainingSession(
+            athlete_id=athlete_id,
+            session_type="cycling",
+            date="2026-06-14T11:00:00",
+            duration_sec=15.0,
+            video_path="/tmp/cycling.mp4",
+            full_analysis=json.dumps(
+                {
+                    "cycling_analysis": {
+                        "analysis": {
+                            "cadence": 92,
+                            "avg_knee_angle_bottom": 147,
+                            "upper_body_stability": 89,
+                            "pedal_smoothness": 84,
+                            "bike_fit_score": 87,
+                            "rock_detected": False,
+                        },
+                        "frames_total": 120,
+                        "frames_with_pose": 108,
+                    }
+                }
+            ),
+        )
+    )
+
+    response = client.get(f"/api/athletes/{athlete_id}/sports/cycling/overview")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["latest_score"] == 87.0
+    assert body["headline_metrics"]["cadence"]["value"] == 92.0
+    assert body["headline_metrics"]["knee_extension"]["value"] == 147.0
+    assert body["sessions"][0]["quality"]["pose_coverage"] == 90.0
+    assert body["sessions"][0]["has_video"] is True
+    assert body["sessions"][0]["summary"] == "92 rpm · 147° knee extension"
+
+
 def test_sport_overview_returns_404_for_unknown_athlete(monkeypatch, tmp_path):
     client, _ = _client(monkeypatch, tmp_path)
 

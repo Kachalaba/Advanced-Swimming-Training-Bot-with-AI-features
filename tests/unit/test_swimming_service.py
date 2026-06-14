@@ -59,6 +59,12 @@ def _fake_batch(cycles: int, fps: float = 10.0) -> ObservationBatch:
                 },
                 "tracking_confidence": 0.95,
                 "waterline_confidence": 0.9,
+                "waterline": WaterlineEstimate(
+                    slope=0.01,
+                    intercept=82.0 + math.sin(frame_index / 9.0),
+                    confidence=0.9,
+                    observed=frame_index % 5 != 0,
+                ),
                 "blur_quality": 0.9,
             }
         )
@@ -134,6 +140,11 @@ def test_pipeline_emits_stable_stages_and_structured_result(tmp_path):
     assert len(result["cycles"]) == 4
     assert result["primary_issue"]["issue_code"] == "hips_drop"
     assert result["video_path"] == "annotated.mp4"
+    assert result["waterline_baseline"]["available"] is True
+    assert abs(result["waterline_baseline"]["position_y_pct"] - 46.4) <= 0.2
+    assert result["waterline_baseline"]["observed_coverage_pct"] >= 75.0
+    assert result["waterline_baseline"]["confidence_pct"] == 90.0
+    assert result["waterline_baseline"]["drift_pct"] < 2.0
 
 
 def test_pipeline_returns_reshoot_error_for_one_cycle(tmp_path):

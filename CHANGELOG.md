@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 ### Added
+- Added a quality-gated cycling web workflow with upload, SSE progress,
+  annotated video, cadence and joint-geometry evidence, athlete save, and
+  persisted history.
+- Added a visible swimming waterline baseline contract with surface position,
+  confidence, frame coverage, and temporal drift evidence.
 - Added normalized athlete sport overviews for swimming, running, cycling, and
   dryland without inventing data for empty or malformed sessions.
 - Added persisted running analysis, stable athlete selection, idempotent saves,
@@ -13,6 +18,10 @@
   `app.py` (only the light/dark `:root` variables remain dynamic).
 
 ### Changed
+- Cycling scoring now excludes unavailable joints instead of treating missing
+  evidence as a failed measurement.
+- Swimming and cycling services share one MediaPipe processing lock so cached
+  pose inference cannot overlap across concurrent jobs.
 - Declared Next.js + FastAPI as the primary product and Streamlit as the frozen
   legacy/demo shell.
 - Replaced fabricated cycling and dryland athlete metrics with truthful
@@ -23,6 +32,10 @@
   8-tab Streamlit shell, the FastAPI + Next.js web app, and the four CI workflows.
 
 ### Fixed
+- Removed the production build dependency on downloading Google Fonts so the
+  local pilot can build and start without external font access.
+- Corrected cycling top/bottom knee-angle semantics, made extrema robust to
+  outliers, and reset temporal state between clips.
 - `StrokeAnalyzer` keypoint lookup now resolves the canonical integer-indexed
   MediaPipe format (`{11: {"x", "y"}}`) via the inherited `_get_point`, which the
   previous duplicate silently dropped.

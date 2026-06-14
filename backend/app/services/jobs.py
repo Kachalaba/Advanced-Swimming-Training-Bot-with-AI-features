@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class Job:
     id: str
-    kind: str  # running | swimming | rehabilitation | tool
+    kind: str  # running | swimming | cycling | rehabilitation | tool
     workspace: Path
     status: str = "queued"  # queued | running | done | error
     events: list[dict[str, Any]] = field(default_factory=list)
