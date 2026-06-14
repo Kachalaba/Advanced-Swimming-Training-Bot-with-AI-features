@@ -2,10 +2,21 @@
 
 ## [Unreleased]
 ### Added
+- Added normalized athlete sport overviews for swimming, running, cycling, and
+  dryland without inventing data for empty or malformed sessions.
+- Added persisted running analysis, stable athlete selection, idempotent saves,
+  and durable copies of annotated running/swimming videos.
+- Added real running and swimming history to the Next.js sport landing pages.
+- Added frontend and API tests for sport history, running save, and honest empty
+  states.
 - Extracted the static Streamlit theme into `assets/styles.css`, loaded once by
   `app.py` (only the light/dark `:root` variables remain dynamic).
 
 ### Changed
+- Declared Next.js + FastAPI as the primary product and Streamlit as the frozen
+  legacy/demo shell.
+- Replaced fabricated cycling and dryland athlete metrics with truthful
+  capability and web-readiness states.
 - `StrokeAnalyzer` and `ExerciseAnalyzer` now inherit `BaseAnalyzer`, removing
   duplicated `_get_point` / `_smooth` helpers (per the architecture guideline).
 - Refreshed `CLAUDE.md`, `AGENTS.md`, and `ARCHITECTURE.md` to match the current
@@ -51,4 +62,3 @@
 
 ### Fixed
 - Suppressed unused exception binding in Google Sheets storage to satisfy `ruff` static checks.
-

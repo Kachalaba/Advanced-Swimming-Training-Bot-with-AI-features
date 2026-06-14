@@ -4,9 +4,9 @@
 
 AI-powered triathlon + rehabilitation video analysis platform. Analyzes swimming,
 running, cycling, dryland exercises, and physiotherapy/ROM via computer vision
-(YOLOv8 + MediaPipe). Two shells share one CV core: a Streamlit prototype
-(`app.py` + `pages/`) and the production web app (`backend/` FastAPI +
-`frontend/` Next.js).
+(YOLOv8 + MediaPipe). The primary product is `frontend/` Next.js + `backend/`
+FastAPI. The Streamlit shell (`app.py` + `pages/`) is a frozen legacy/demo
+fallback: keep it compatible, but put new product workflows in the web app.
 
 ## Architecture
 
@@ -49,7 +49,10 @@ tests/
 ## Development commands
 
 ```bash
-# Run app
+# Run primary product
+docker compose up --build
+
+# Run legacy Streamlit demo
 python3 -m streamlit run app.py
 
 # Run tests
@@ -121,9 +124,12 @@ Add new keys to **both** `"uk"` and `"en"` sections in `i18n/translations.py`.
 
 ### Database
 
-- **Active backend**: `AthleteDatabase` in `athlete_database.py` (raw SQLite)
-- **ORM models**: `AthleteModel` / `SessionModel` in `models.py` (SQLAlchemy)
-- For new features, prefer the ORM via `get_engine()` + `Session`
+- **Active product backend**: `AthleteDatabase` in `athlete_database.py`
+  (raw SQLite, shared by FastAPI and Streamlit)
+- **Incomplete migration target**: `AthleteModel` / `SessionModel` in
+  `models.py` (SQLAlchemy)
+- Until an explicit migration lands, use the active database helpers and stable
+  athlete IDs. Do not create a third persistence path.
 
 ## Environment variables
 
