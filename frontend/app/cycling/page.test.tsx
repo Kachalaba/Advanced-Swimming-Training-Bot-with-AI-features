@@ -11,5 +11,9 @@ describe("CyclingPage", () => {
     expect(screen.queryByText("Sweet spot intervals")).not.toBeInTheDocument();
     expect(screen.queryByText("Demo metrics")).not.toBeInTheDocument();
     expect(screen.getByText("Web analysis adapter planned")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Workflow planned" }),
+    ).toBeDisabled();
+    expect(screen.queryByText("Upload first session")).not.toBeInTheDocument();
   });
 });

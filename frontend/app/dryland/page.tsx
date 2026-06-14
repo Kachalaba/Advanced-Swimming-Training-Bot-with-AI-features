@@ -27,6 +27,7 @@ export default function DrylandPage() {
         { tag: "Available", variant: "success", title: "Dryland analysis is available in the shared core", detail: "The web workflow will reuse the capture-quality and athlete-history contracts." },
         { tag: "Evidence", variant: "info", title: "No athlete conclusions before measurement", detail: "This page intentionally stays empty until a real session is captured and saved." },
       ]}
+      uploadAvailable={false}
       uploader={
         <p className="py-10 text-center text-sm text-slate-400">
           Dryland capture will open after exercise selection and readiness checks are connected.

@@ -27,6 +27,7 @@ export default function CyclingPage() {
         { tag: "Available", variant: "success", title: "Cycling analyzer exists in the shared core", detail: "The next product step is a FastAPI adapter with quality gates and annotated output." },
         { tag: "Boundary", variant: "info", title: "Power is not estimated from video", detail: "Video supports posture and movement analysis; power requires a connected sensor or imported activity." },
       ]}
+      uploadAvailable={false}
       uploader={
         <p className="py-10 text-center text-sm text-slate-400">
           Cycling upload will open after the web adapter and confidence checks are connected.

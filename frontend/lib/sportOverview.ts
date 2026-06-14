@@ -55,6 +55,7 @@ export function toSportLandingData(overview: SportOverview) {
       duration: formatDuration(session.duration_sec),
       date: session.date.slice(0, 10),
       score: session.score,
+      hasVideo: session.has_video,
       thumb:
         overview.sport === "swimming"
           ? "from-cyan-500/30 to-blue-500/20"

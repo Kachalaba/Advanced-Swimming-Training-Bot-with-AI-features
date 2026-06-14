@@ -103,4 +103,30 @@ describe("SportLanding", () => {
       screen.getByText("Insights appear after a saved analysis"),
     ).toBeInTheDocument();
   });
+
+  it("does not offer upload actions before a web workflow is connected", () => {
+    render(
+      <SportLanding
+        title="Cycling"
+        subtitle="Analysis"
+        badges={[]}
+        hint="Measured data only"
+        accentRgb="16,185,129"
+        metrics={[]}
+        sessions={[]}
+        insights={[]}
+        uploadAvailable={false}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Workflow planned" }),
+    ).toBeDisabled();
+    expect(screen.queryByText("Upload first session")).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "No saved web sessions yet. This workflow opens after the analysis adapter is connected.",
+      ),
+    ).toBeInTheDocument();
+  });
 });

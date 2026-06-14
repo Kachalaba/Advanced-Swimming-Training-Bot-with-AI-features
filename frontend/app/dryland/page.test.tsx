@@ -11,5 +11,9 @@ describe("DrylandPage", () => {
     expect(screen.queryByText("Core + mobility")).not.toBeInTheDocument();
     expect(screen.queryByText("Demo metrics")).not.toBeInTheDocument();
     expect(screen.getByText("Web workflow planned")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Workflow planned" }),
+    ).toBeDisabled();
+    expect(screen.queryByText("Upload first session")).not.toBeInTheDocument();
   });
 });
