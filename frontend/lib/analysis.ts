@@ -40,6 +40,29 @@ export async function uploadRunningVideo(
   return { jobId: data.job_id };
 }
 
+export async function saveRunningAnalysis(
+  jobId: string,
+  input: { athleteId?: number; athleteName?: string },
+): Promise<{ sessionId: number }> {
+  const res = await fetch(
+    `${BACKEND_URL}/api/analysis/running/${jobId}/save`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(
+        input.athleteId
+          ? { athlete_id: input.athleteId }
+          : { athlete_name: input.athleteName ?? "Athlete" },
+      ),
+    },
+  );
+  if (!res.ok) {
+    throw new Error(`Save failed: ${res.status}`);
+  }
+  const data = (await res.json()) as { session_id: number };
+  return { sessionId: data.session_id };
+}
+
 export function subscribeAnalysis(
   jobId: string,
   onEvent: (event: AnalysisEvent) => void,
