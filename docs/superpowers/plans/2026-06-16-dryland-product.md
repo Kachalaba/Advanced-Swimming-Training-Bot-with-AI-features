@@ -279,7 +279,7 @@ git commit -m "feat: add profile-driven dryland analyzer"
 - Create: `backend/app/services/dryland.py`
 - Create: `tests/unit/test_dryland_service.py`
 
-- [ ] **Step 1: Write failing service tests**
+- [x] **Step 1: Write failing service tests**
 
 ```python
 # tests/unit/test_dryland_service.py
@@ -350,13 +350,13 @@ def test_select_active_angles_outputs_expected_keys():
     assert set(angles[0]) == {"L.knee", "R.knee"}
 ```
 
-- [ ] **Step 2: Run service tests to verify failure**
+- [x] **Step 2: Run service tests to verify failure**
 
 Run: `pytest tests/unit/test_dryland_service.py -v`
 
 Expected: FAIL because `backend.app.services.dryland` does not exist.
 
-- [ ] **Step 3: Implement service skeleton and quality gates**
+- [x] **Step 3: Implement service skeleton and quality gates**
 
 ```python
 # backend/app/services/dryland.py
@@ -437,7 +437,7 @@ def dryland_quality(frames_total: int, frames_with_pose: int, metric_ready_frame
     }
 ```
 
-- [ ] **Step 4: Implement metric readiness and active angle helpers**
+- [x] **Step 4: Implement metric readiness and active angle helpers**
 
 ```python
 # backend/app/services/dryland.py
@@ -478,7 +478,7 @@ def select_active_angles(exercise_type: str, keypoints_list: list[dict[str, tupl
     return frames
 ```
 
-- [ ] **Step 5: Implement `analyze_dryland_video()` generator**
+- [x] **Step 5: Implement `analyze_dryland_video()` generator**
 
 ```python
 # backend/app/services/dryland.py
@@ -670,13 +670,13 @@ def analyze_dryland_video(video_path: Path, output_dir: Path, exercise_type: str
     )
 ```
 
-- [ ] **Step 7: Run service tests to verify pass**
+- [x] **Step 7: Run service tests to verify pass**
 
 Run: `pytest tests/unit/test_dryland_service.py -v`
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit service**
+- [x] **Step 8: Commit service**
 
 ```bash
 git add backend/app/services/dryland.py tests/unit/test_dryland_service.py
