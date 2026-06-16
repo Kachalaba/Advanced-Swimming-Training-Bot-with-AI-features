@@ -119,6 +119,49 @@ def test_cycling_overview_reads_fit_metrics_and_evidence(monkeypatch, tmp_path):
     assert body["sessions"][0]["summary"] == "92 rpm · 147° knee extension"
 
 
+def test_dryland_overview_reads_repetition_metrics_and_evidence(monkeypatch, tmp_path):
+    client, database = _client(monkeypatch, tmp_path)
+    athlete_id = database.add_athlete(Athlete(name="Dryland Athlete"))
+    database.add_session(
+        TrainingSession(
+            athlete_id=athlete_id,
+            session_type="dryland",
+            date="2026-06-14T12:00:00",
+            duration_sec=11.0,
+            video_path="/tmp/dryland.mp4",
+            full_analysis=json.dumps(
+                {
+                    "dryland_analysis": {
+                        "exercise_type": "push_up",
+                        "analysis": {
+                            "total_reps": 6,
+                            "avg_tempo": 1.8,
+                            "avg_range_of_motion": 86,
+                            "stability_score": 91,
+                        },
+                        "quality": {
+                            "pose_coverage": 84,
+                            "metric_ready_frames": 92,
+                            "minimum_required_frames": 20,
+                        },
+                    }
+                }
+            ),
+        )
+    )
+
+    response = client.get(f"/api/athletes/{athlete_id}/sports/dryland/overview")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["latest_score"] == 91.0
+    assert body["headline_metrics"]["total_reps"]["value"] == 6.0
+    assert body["headline_metrics"]["avg_tempo"]["unit"] == "sec"
+    assert body["sessions"][0]["quality"]["pose_coverage"] == 84.0
+    assert body["sessions"][0]["quality"]["metric_ready_frames"] == 92.0
+    assert body["sessions"][0]["summary"] == "Push-Up · 6 reps · 1.8s tempo"
+
+
 def test_sport_overview_returns_404_for_unknown_athlete(monkeypatch, tmp_path):
     client, _ = _client(monkeypatch, tmp_path)
 

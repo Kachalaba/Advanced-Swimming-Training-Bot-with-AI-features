@@ -43,7 +43,7 @@
   <tr>
     <td colspan="2" valign="top">
       <img src="docs/screenshots/dryland.png" width="100%" /><br/>
-      <b>🤸 Суходіл</b> — дизайн-напрямок модуля. Web-аналіз ще підключається; інтерфейс не показує вигаданих вимірювань.
+      <b>🤸 Суходіл</b> — squat, lunge і push-up workflow з explicit exercise selection, quality gate, annotated evidence video та збереженням у картку атлета.
     </td>
   </tr>
 </table>
@@ -103,9 +103,9 @@
 | 🏊 **Плавання** | Завантаження відео, waterline-aware аналіз із видимим baseline evidence, annotated video, збереження атлету й реальна історія |
 | 🏃 **Біг** | Завантаження відео, каденс, постановка стопи, симетрія рук, annotated video, збереження й порівняння сесій |
 | 🚴 **Велосипед** | Side-view upload, quality gate, каденс, кути коліна у верхній/нижній точках, плавність педалювання, стабільність корпусу, annotated video та історія |
+| 🤸 **Суходіл** | Explicit squat/lunge/push-up upload, fixed side-view quality gate, repetitions, tempo, ROM, stability, per-rep evidence table, annotated video та історія |
 | 🩺 **Реабілітація** | Live-камера та upload, ROM L/R, симетрія, quality gate, прогрес і Clinical Handoff Pack |
 | 🧰 **Відеоінструменти** | Обрізання, витяг кадрів, прогрес задачі та збереження результату |
-| 🤸 **Суходіл** | Exercise analyzer існує; web capture і збереження історії ще не підключені |
 
 ---
 
@@ -173,13 +173,13 @@ cd frontend && npm run lint && npm run test
 
 - [x] Web-пайплайни плавання та бігу з annotated video і збереженням атлету
 - [x] Web-пайплайн велосипеда з quality gate, annotated video та історією
+- [x] Web-пайплайн суходолу: squat/lunge/push-up, quality gate, annotated video та історія
 - [x] Waterline baseline evidence для складної бокової зйомки плавання
 - [x] База атлетів і реальна історія спортивних сесій
 - [x] Темний web-застосунок (Next.js + FastAPI)
 - [x] **Реабілітація: ROM, симетрія, відео + live-камера, постуральна карта**
 - [x] **Clinical Pilot: пацієнти, курси, quality gate, прогрес і handoff-звіт**
 - [ ] Спільний перемикач української / English для всього web-продукту
-- [ ] Перенесення суходолу у web-пайплайн
 - [ ] Durable job queue, authentication і контроль доступу
 - [ ] Інтеграція Garmin / Strava, календар тренувань
 

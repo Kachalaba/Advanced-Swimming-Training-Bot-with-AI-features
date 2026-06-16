@@ -15,8 +15,10 @@ from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from video_analysis.athlete_database import save_analysis_to_athlete, save_analysis_to_db
+from video_analysis.constants import DRYLAND_SUPPORTED_EXERCISES
 
 from ..services import cycling as cycling_pipeline
+from ..services import dryland as dryland_pipeline
 from ..services import running as running_pipeline
 from ..services import swimming as swimming_pipeline
 from ..services.jobs import Job, registry, stream_job_events
@@ -124,6 +126,37 @@ def _run_cycling_pipeline_in_thread(
         job.status = "error"
 
 
+def _run_dryland_pipeline_in_thread(
+    job: Job,
+    video_path: Path,
+    exercise_type: str,
+    fps: float,
+) -> None:
+    try:
+        job.status = "running"
+        for event in dryland_pipeline.analyze_dryland_video(
+            video_path=video_path,
+            output_dir=job.workspace,
+            exercise_type=exercise_type,
+            fps=fps,
+        ):
+            payload = event.to_dict()
+            job.push_event(payload)
+            if payload["type"] == "result":
+                job.result = payload
+                job.status = "done"
+            elif payload["type"] == "error":
+                job.error = payload["message"]
+                job.status = "error"
+        if job.status == "running":
+            job.status = "done"
+    except Exception as exc:
+        logger.exception("Dryland job %s failed", job.id)
+        job.error = str(exc)
+        job.push_event({"type": "error", "message": str(exc)})
+        job.status = "error"
+
+
 def _get_swimming_job(job_id: str) -> Job:
     job = registry.get(job_id)
     if job is None or job.kind != "swimming":
@@ -141,6 +174,13 @@ def _get_running_job(job_id: str) -> Job:
 def _get_cycling_job(job_id: str) -> Job:
     job = registry.get(job_id)
     if job is None or job.kind != "cycling":
+        raise HTTPException(status_code=404, detail="Job not found")
+    return job
+
+
+def _get_dryland_job(job_id: str) -> Job:
+    job = registry.get(job_id)
+    if job is None or job.kind != "dryland":
         raise HTTPException(status_code=404, detail="Job not found")
     return job
 
@@ -367,6 +407,96 @@ async def save_cycling_job(
             job,
             request,
             "cycling",
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"session_id": session_id}
+
+
+@router.post("/dryland")
+async def upload_dryland(
+    video: UploadFile = File(...),
+    exercise_type: str = Form(...),
+    fps: float = Form(15.0),
+) -> dict[str, str]:
+    if exercise_type not in DRYLAND_SUPPORTED_EXERCISES:
+        raise HTTPException(status_code=400, detail=f"Unsupported dryland exercise: {exercise_type}")
+    try:
+        suffix = validate_video_upload(
+            filename=video.filename,
+            content_type=video.content_type,
+            declared_size=getattr(video, "size", None),
+        )
+    except UploadValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    job = registry.create(kind="dryland")
+    job.source_name = video.filename
+    video_path = job.workspace / f"input{suffix}"
+    try:
+        with video_path.open("wb") as target:
+            copy_upload_with_limit(video.file, target)
+    except UploadValidationError as exc:
+        shutil.rmtree(job.workspace, ignore_errors=True)
+        raise HTTPException(status_code=413, detail=str(exc)) from exc
+
+    Thread(
+        target=_run_dryland_pipeline_in_thread,
+        args=(job, video_path, exercise_type, fps),
+        daemon=True,
+    ).start()
+    return {"job_id": job.id}
+
+
+@router.get("/dryland/{job_id}")
+async def get_dryland_job(job_id: str) -> dict:
+    job = _get_dryland_job(job_id)
+    return {
+        "id": job.id,
+        "status": job.status,
+        "result": job.result,
+        "error": job.error,
+        "event_count": len(job.events),
+        "saved_session_id": job.saved_session_id,
+    }
+
+
+@router.get("/dryland/{job_id}/events")
+async def stream_dryland_events(job_id: str):
+    job = _get_dryland_job(job_id)
+    return StreamingResponse(
+        stream_job_events(job),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@router.get("/dryland/{job_id}/video")
+async def stream_dryland_video(job_id: str):
+    job = _get_dryland_job(job_id)
+    video_path = job.workspace / "annotated.mp4"
+    if not video_path.exists():
+        raise HTTPException(status_code=404, detail="Annotated video not ready")
+    return FileResponse(video_path, media_type="video/mp4")
+
+
+@router.post("/dryland/{job_id}/save")
+async def save_dryland_job(
+    job_id: str,
+    request: SaveAnalysisRequest,
+) -> dict[str, int]:
+    job = _get_dryland_job(job_id)
+    if job.status != "done" or not job.result:
+        raise HTTPException(status_code=409, detail="Dryland analysis is not ready")
+    try:
+        session_id = await asyncio.to_thread(
+            _save_completed_sport_job,
+            job,
+            request,
+            "dryland",
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

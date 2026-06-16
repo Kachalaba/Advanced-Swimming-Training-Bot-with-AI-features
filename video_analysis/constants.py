@@ -166,6 +166,41 @@ RUN_MIN_ANKLE_EXCURSION_BODY_RATIO = 0.02
 RUN_MIN_ANKLE_EXCURSION_PX = 3.0
 
 # ---------------------------------------------------------------------------
+# Dryland exercise analysis
+# ---------------------------------------------------------------------------
+DRYLAND_SUPPORTED_EXERCISES = ("squat", "lunge", "push_up")
+DRYLAND_MIN_VALID_FRAMES = 20
+DRYLAND_MIN_POSE_COVERAGE_PCT = 35.0
+DRYLAND_WARN_POSE_COVERAGE_PCT = 70.0
+DRYLAND_MAX_INTERPOLATION_GAP_FRAMES = 3
+DRYLAND_MIN_REP_DURATION_SEC = 0.45
+DRYLAND_MAX_REP_DURATION_SEC = 8.0
+
+DRYLAND_EXERCISE_PROFILES = {
+    "squat": {
+        "tracked_joint": "knee",
+        "angle_keys": ("L.knee", "R.knee"),
+        "ready_threshold": 165.0,
+        "effort_threshold": 105.0,
+        "min_rom": 35.0,
+    },
+    "lunge": {
+        "tracked_joint": "knee",
+        "angle_keys": ("L.knee", "R.knee"),
+        "ready_threshold": 158.0,
+        "effort_threshold": 110.0,
+        "min_rom": 30.0,
+    },
+    "push_up": {
+        "tracked_joint": "elbow",
+        "angle_keys": ("L.elbow", "R.elbow"),
+        "ready_threshold": 150.0,
+        "effort_threshold": 90.0,
+        "min_rom": 35.0,
+    },
+}
+
+# ---------------------------------------------------------------------------
 # Rehabilitation / kinesiotherapy
 # ---------------------------------------------------------------------------
 # These are configurable exercise targets for video feedback, not diagnostic

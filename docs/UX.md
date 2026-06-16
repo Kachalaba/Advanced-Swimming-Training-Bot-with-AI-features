@@ -1,5 +1,13 @@
 # Sprint Bot Scenario Playbook
 
+## Web Product: Dryland Analysis
+- **Entry point**: `/dryland` opens the dark SPRINT AI sport landing page with real athlete history, not demo metrics.
+- **Exercise selection**: athlete/clinician must choose `Squat`, `Lunge`, or `Push-up` before upload. The selected profile controls the backend metric target and avoids guessing the exercise from noisy pose data.
+- **Capture guidance**: fixed side view, full body visible, no cropped joints, complete ready -> effort -> ready repetitions.
+- **Quality gate**: clips with too few metric-ready frames or low pose coverage are rejected with reshoot guidance instead of producing a weak score.
+- **Result page**: `/dryland/{jobId}` shows annotated evidence video, confirmed reps, tempo, ROM, stability, pose coverage, metric-ready frames, and a per-rep table.
+- **History**: successful jobs can be saved to an athlete and then appear in the dryland sport overview.
+
 ## /start Onboarding
 - **Happy path**: роль → приватность → имя → тренер → группа → язык → карточка профиля.
 - **Защита**: отказ приватности сбрасывает состояние и отзывает инвайт; неверные trainer-ID/инвайты дают подсказки.

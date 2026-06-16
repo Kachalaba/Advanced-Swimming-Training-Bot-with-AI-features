@@ -687,12 +687,26 @@ def _save_analysis_for_athlete(
             session.ai_summary = " · ".join(parts)
 
     elif session_type == "dryland":
-        exercise_stats = analysis.get("exercise_stats")
-        if exercise_stats:
-            session.reps = getattr(exercise_stats, "total_reps", 0)
-            session.avg_tempo = getattr(exercise_stats, "avg_tempo", 0)
-            session.stability_score = getattr(exercise_stats, "stability_score", 0)
-        session.exercise_type = analysis.get("main_movement", "")
+        dryland_result = analysis.get("dryland_analysis", analysis)
+        dryland = dryland_result.get("analysis", dryland_result) if isinstance(dryland_result, dict) else {}
+        if isinstance(dryland, dict):
+            exercise_type = str(dryland_result.get("exercise_type") or dryland.get("exercise_type") or "").strip()
+            reps = int(dryland.get("total_reps") or 0)
+            tempo = float(dryland.get("avg_tempo") or 0)
+            stability = float(dryland.get("stability_score") or 0)
+            session.exercise_type = exercise_type
+            session.reps = reps
+            session.avg_tempo = tempo
+            session.stability_score = stability
+            session.ai_score = int(round(stability))
+            parts = []
+            if exercise_type:
+                parts.append(exercise_type.replace("_", "-").title())
+            if reps:
+                parts.append(f"{reps} reps")
+            if tempo:
+                parts.append(f"{tempo:.1f}s tempo")
+            session.ai_summary = " · ".join(parts)
 
     elif session_type == "rehab":
         rehab = analysis.get("rehab_analysis", analysis)

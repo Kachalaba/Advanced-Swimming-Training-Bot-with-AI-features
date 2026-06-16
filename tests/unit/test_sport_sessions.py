@@ -93,6 +93,50 @@ def test_normalizes_swimming_analysis_and_zone_scores():
     assert normalized["quality"]["pose_coverage"] == 84.0
 
 
+def test_normalizes_dryland_analysis_into_reps_tempo_and_insights():
+    session = _session(
+        session_type="dryland",
+        video_path="/tmp/dryland.mp4",
+        payload={
+            "dryland_analysis": {
+                "type": "result",
+                "exercise_type": "squat",
+                "analysis": {
+                    "exercise_type": "squat",
+                    "tracked_joint": "knee",
+                    "total_reps": 4,
+                    "avg_tempo": 2.1,
+                    "avg_range_of_motion": 72.0,
+                    "stability_score": 88.0,
+                    "min_angle": 90.0,
+                    "max_angle": 170.0,
+                },
+                "quality": {
+                    "status": "pass",
+                    "pose_coverage": 81.0,
+                    "metric_ready_frames": 76,
+                    "minimum_required_frames": 20,
+                    "warnings": [],
+                },
+            }
+        },
+    )
+
+    normalized = normalize_sport_session(session, "dryland")
+
+    assert normalized is not None
+    assert normalized["score"] == 88.0
+    assert normalized["summary"] == "Squat · 4 reps · 2.1s tempo"
+    assert normalized["has_video"] is True
+    assert normalized["metrics"]["total_reps"]["value"] == 4.0
+    assert normalized["metrics"]["avg_tempo"]["unit"] == "sec"
+    assert normalized["metrics"]["avg_range_of_motion"]["value"] == 72.0
+    assert normalized["metrics"]["stability_score"]["value"] == 88.0
+    assert normalized["quality"]["pose_coverage"] == 81.0
+    assert normalized["quality"]["metric_ready_frames"] == 76
+    assert normalized["insights"][0]["code"] == "dryland_evidence"
+
+
 def test_malformed_json_is_kept_as_basic_session_without_invented_metrics():
     session = _session(
         session_type="running",
