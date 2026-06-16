@@ -18,13 +18,12 @@ import { useEffect, useState } from "react";
 import { api, type Athlete } from "@/lib/api";
 import { sections } from "@/lib/sections";
 import { Logo } from "@/components/ui/Logo";
-import {
-  REHAB_LOCALE_STORAGE_KEY,
-  type RehabLocale,
-} from "@/lib/rehabCopy";
+import { useAppLocale, type AppLocale } from "@/lib/appLocale";
 
-const rehabNavLabels = {
+const shellCopy = {
   uk: {
+    tagline: "Тріатлонна аналітика",
+    workspace: "Kachamba Lab",
     swimming: "Плавання",
     running: "Біг",
     cycling: "Велоспорт",
@@ -36,8 +35,20 @@ const rehabNavLabels = {
     athletes: "Атлети",
     search: "Пошук сесій і вправ…",
     loading: "Завантаження…",
+    switchAthlete: "Змінити атлета",
+    addAthlete: "Додати атлета",
+    profile: "Профіль",
+    settings: "Налаштування",
+    signOut: "Вийти",
+    notifications: "Сповіщення",
+    userMenu: "Меню користувача",
+    language: "Мова",
+    switchToUk: "Перемкнути мову на українську",
+    switchToEn: "Switch language to English",
   },
   en: {
+    tagline: "Triathlon Intelligence",
+    workspace: "Kachamba Lab",
     swimming: "Swimming",
     running: "Running",
     cycling: "Cycling",
@@ -49,8 +60,20 @@ const rehabNavLabels = {
     athletes: "Athletes",
     search: "Search sessions and drills…",
     loading: "Loading…",
+    switchAthlete: "Switch athlete",
+    addAthlete: "Add athlete",
+    profile: "Profile",
+    settings: "Settings",
+    signOut: "Sign out",
+    notifications: "Notifications",
+    userMenu: "User menu",
+    language: "Language",
+    switchToUk: "Перемкнути мову на українську",
+    switchToEn: "Switch language to English",
   },
 } as const;
+
+const localeOptions: AppLocale[] = ["uk", "en"];
 
 export function TopNav() {
   const pathname = usePathname();
@@ -58,27 +81,14 @@ export function TopNav() {
   const [roster, setRoster] = useState<Athlete[]>([]);
   const [athleteOpen, setAthleteOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const [rehabLocale, setRehabLocale] = useState<RehabLocale>("uk");
-  const onRehabPage = pathname?.startsWith("/rehabilitation");
-  const navCopy = rehabNavLabels[rehabLocale];
+  const defaultLocale = pathname?.startsWith("/rehabilitation") ? "uk" : "en";
+  const { locale, setLocale } = useAppLocale(defaultLocale);
+  const copy = shellCopy[locale];
 
   useEffect(() => {
     api.me().then(setMe).catch(() => undefined);
     api.listAthletes().then(setRoster).catch(() => undefined);
   }, []);
-
-  useEffect(() => {
-    if (!onRehabPage) return;
-    const stored = window.localStorage.getItem(REHAB_LOCALE_STORAGE_KEY);
-    if (stored === "uk" || stored === "en") setRehabLocale(stored);
-    const onLocaleChange = (event: Event) => {
-      const value = (event as CustomEvent<RehabLocale>).detail;
-      if (value === "uk" || value === "en") setRehabLocale(value);
-    };
-    window.addEventListener("rehab-locale-change", onLocaleChange);
-    return () =>
-      window.removeEventListener("rehab-locale-change", onLocaleChange);
-  }, [onRehabPage]);
 
   return (
     <header className="sticky top-0 z-40 backdrop-blur-xl bg-bg/80 border-b border-white/[0.06]">
@@ -92,15 +102,15 @@ export function TopNav() {
                   SPRINT AI
                 </span>
                 <span className="text-[10px] text-slate-500 tracking-widest uppercase">
-                  Triathlon Intelligence
+                  {copy.tagline}
                 </span>
               </div>
             </Link>
             <div className="hidden md:flex items-center gap-1.5 text-xs">
-              <span className="text-slate-400">Kachamba Lab</span>
+              <span className="text-slate-400">{copy.workspace}</span>
               <ChevronRight className="w-3 h-3 text-slate-600" />
               <span className="text-slate-200 font-medium">
-                {onRehabPage ? navCopy.athletes : "Athletes"}
+                {copy.athletes}
               </span>
               <ChevronRight className="w-3 h-3 text-slate-600" />
               <span className="text-slate-200 font-medium">
@@ -112,14 +122,37 @@ export function TopNav() {
           <div className="flex items-center gap-2">
             <button className="hidden sm:flex items-center gap-2 px-3 h-8 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] rounded-lg text-xs text-slate-400 transition-colors">
               <Search className="w-3.5 h-3.5" />
-              <span>{onRehabPage ? navCopy.search : "Search sessions, drills…"}</span>
+              <span>{copy.search}</span>
               <kbd className="px-1.5 py-0.5 bg-white/[0.06] rounded text-[10px] font-mono text-slate-500">
                 ⌘K
               </kbd>
             </button>
 
+            <div
+              aria-label={copy.language}
+              className="hidden items-center rounded-lg border border-white/[0.06] bg-white/[0.04] p-0.5 text-[10px] font-semibold sm:flex"
+            >
+              {localeOptions.map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-label={value === "uk" ? copy.switchToUk : copy.switchToEn}
+                  aria-pressed={locale === value}
+                  onClick={() => setLocale(value)}
+                  className={`h-7 rounded-md px-2 transition-colors ${
+                    locale === value
+                      ? "bg-cyan-400 text-slate-950"
+                      : "text-slate-500 hover:text-slate-200"
+                  }`}
+                >
+                  {value === "uk" ? "UA" : "EN"}
+                </button>
+              ))}
+            </div>
+
             <div className="relative">
               <button
+                aria-label={copy.switchAthlete}
                 onClick={() => setAthleteOpen((v) => !v)}
                 className="flex items-center gap-2 px-2.5 h-8 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] rounded-lg text-xs transition-colors"
               >
@@ -127,14 +160,14 @@ export function TopNav() {
                   {me?.initials ?? "—"}
                 </div>
                 <span className="text-slate-200 font-medium hidden sm:inline">
-                  {me?.name ?? (onRehabPage ? navCopy.loading : "Loading…")}
+                  {me?.name ?? copy.loading}
                 </span>
                 <ChevronDown className="w-3 h-3 text-slate-500" />
               </button>
               {athleteOpen ? (
                 <div className="absolute right-0 top-10 w-56 bg-elevated border border-white/[0.08] rounded-xl shadow-2xl shadow-black/40 p-1 animate-fade-in">
                   <div className="px-3 py-2 text-[10px] uppercase tracking-wider text-slate-500 font-semibold">
-                    Switch athlete
+                    {copy.switchAthlete}
                   </div>
                   {roster.map((a) => (
                     <button
@@ -153,20 +186,24 @@ export function TopNav() {
                   <div className="border-t border-white/[0.06] mt-1 pt-1">
                     <button className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-400 hover:bg-white/[0.05] rounded-lg transition-colors">
                       <Plus className="w-3.5 h-3.5" />
-                      Add athlete
+                      {copy.addAthlete}
                     </button>
                   </div>
                 </div>
               ) : null}
             </div>
 
-            <button className="w-8 h-8 flex items-center justify-center bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] rounded-lg transition-colors relative">
+            <button
+              aria-label={copy.notifications}
+              className="w-8 h-8 flex items-center justify-center bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] rounded-lg transition-colors relative"
+            >
               <Bell className="w-3.5 h-3.5 text-slate-300" />
               <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-cyan-400" />
             </button>
 
             <div className="relative">
               <button
+                aria-label={copy.userMenu}
                 onClick={() => setUserMenuOpen((v) => !v)}
                 className="w-8 h-8 rounded-lg bg-gradient-to-br from-slate-700 to-slate-800 border border-white/[0.06] flex items-center justify-center hover:border-white/[0.12] transition-colors"
               >
@@ -183,9 +220,9 @@ export function TopNav() {
                     </p>
                   </div>
                   {[
-                    { icon: User, label: "Profile" },
-                    { icon: Settings, label: "Settings" },
-                    { icon: LogOut, label: "Sign out" },
+                    { icon: User, label: copy.profile },
+                    { icon: Settings, label: copy.settings },
+                    { icon: LogOut, label: copy.signOut },
                   ].map((item) => (
                     <button
                       key={item.label}
@@ -217,7 +254,7 @@ export function TopNav() {
                 }`}
               >
                 <Icon className="w-3.5 h-3.5" />
-                {onRehabPage ? navCopy[s.id] : s.label}
+                {copy[s.id]}
                 {active ? (
                   <span className="absolute bottom-0 left-0 right-0 h-px bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]" />
                 ) : null}
