@@ -32,6 +32,43 @@ export type AnalysisEvent = ProgressEvent | ResultEvent | ErrorEvent;
 
 export type DrylandExerciseType = "squat" | "lunge" | "push_up";
 
+export type DrylandRep = {
+  rep_number: number;
+  start_frame: number;
+  effort_frame: number;
+  end_frame: number;
+  duration_sec: number;
+  min_angle: number;
+  max_angle: number;
+  range_of_motion: number;
+  active_side: string;
+};
+
+export type DrylandAnalysis = {
+  exercise_type: DrylandExerciseType;
+  tracked_joint: "knee" | "elbow" | string;
+  total_reps: number;
+  avg_tempo: number;
+  avg_range_of_motion: number;
+  stability_score: number;
+  min_angle: number;
+  max_angle: number;
+  reps: DrylandRep[];
+  angle_history?: number[];
+};
+
+export type DrylandResultEvent = ResultEvent & {
+  exercise_type: DrylandExerciseType;
+  analysis: DrylandAnalysis;
+  quality: {
+    status: "pass" | "fail";
+    pose_coverage: number;
+    metric_ready_frames: number;
+    minimum_required_frames: number;
+    warnings?: string[];
+  };
+};
+
 type AnalysisSport = "running" | "cycling" | "dryland";
 
 async function uploadSportVideo(

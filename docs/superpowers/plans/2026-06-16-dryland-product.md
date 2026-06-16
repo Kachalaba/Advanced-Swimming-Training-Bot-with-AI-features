@@ -1242,7 +1242,7 @@ git commit -m "feat: connect dryland upload workspace"
 - Create: `frontend/app/dryland/[jobId]/page.tsx`
 - Create: `frontend/app/dryland/[jobId]/page.test.tsx`
 
-- [ ] **Step 1: Write failing result-page tests**
+- [x] **Step 1: Write failing result-page tests**
 
 ```tsx
 // frontend/app/dryland/[jobId]/page.test.tsx
@@ -1261,13 +1261,13 @@ it("renders progress and final dryland result", async () => {
 });
 ```
 
-- [ ] **Step 2: Run result-page tests to verify failure**
+- [x] **Step 2: Run result-page tests to verify failure**
 
 Run: `cd frontend && npm test -- 'dryland/[jobId]/page.test.tsx'`
 
 Expected: FAIL because the route does not exist.
 
-- [ ] **Step 3: Implement result page**
+- [x] **Step 3: Implement result page**
 
 ```tsx
 // frontend/app/dryland/[jobId]/page.tsx
@@ -1328,13 +1328,13 @@ export default function DrylandResultPage({ params }: { params: Promise<{ jobId:
 }
 ```
 
-- [ ] **Step 4: Run result-page tests**
+- [x] **Step 4: Run result-page tests**
 
 Run: `cd frontend && npm test -- 'dryland/[jobId]/page.test.tsx'`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit result page**
+- [x] **Step 5: Commit result page**
 
 ```bash
 git add frontend/app/dryland/[jobId]/page.tsx frontend/app/dryland/[jobId]/page.test.tsx
