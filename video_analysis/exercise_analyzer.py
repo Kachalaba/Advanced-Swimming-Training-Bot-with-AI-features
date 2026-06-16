@@ -1,11 +1,14 @@
+from __future__ import annotations
+
 """
-🏋️ Exercise Analyzer for Dryland Training
+Dryland exercise analyzer.
 
 Features:
-- Rep counter (automatic)
-- Tempo analysis (seconds per rep)
-- Range of motion (min/max angles)
-- Stability score (deviation between reps)
+- explicit squat / lunge / push-up profiles
+- full ready -> effort -> ready repetition detection
+- tempo analysis
+- range-of-motion evidence
+- movement consistency score
 """
 
 import logging
@@ -16,21 +19,29 @@ import cv2
 import numpy as np
 
 from video_analysis.base_analyzer import BaseAnalyzer
+from video_analysis.constants import (
+    DRYLAND_EXERCISE_PROFILES,
+    DRYLAND_MAX_INTERPOLATION_GAP_FRAMES,
+    DRYLAND_MAX_REP_DURATION_SEC,
+    DRYLAND_MIN_REP_DURATION_SEC,
+)
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
 class RepData:
-    """Data for a single repetition."""
+    """Data for a single confirmed repetition."""
 
     rep_number: int
     start_frame: int
+    effort_frame: int
     end_frame: int
     duration_sec: float
     min_angle: float
     max_angle: float
     range_of_motion: float
+    active_side: str = ""
 
 
 @dataclass
@@ -38,6 +49,7 @@ class ExerciseStats:
     """Overall exercise statistics."""
 
     exercise_type: str
+    tracked_joint: str
     total_reps: int
     avg_tempo: float
     avg_range_of_motion: float
@@ -51,176 +63,225 @@ class ExerciseStats:
 class ExerciseAnalyzer(BaseAnalyzer):
     """Analyzes dryland exercises for rep counting, tempo, and form."""
 
-    # Thresholds for rep detection
-    THRESHOLDS = {
-        "elbow": {"low": 70, "high": 140},
-        "knee": {"low": 100, "high": 165},
-    }
-
     def __init__(self, fps: float = 10.0):
         super().__init__()
         self.fps = fps
-        self.angle_history = []
+        self.angle_history: List[float] = []
         self.reps: List[RepData] = []
 
-    def analyze(self, angles_list: List[Dict], exercise_type: str = "default") -> ExerciseStats:
-        """
-        Analyze exercise from angle data.
+    def analyze(
+        self,
+        angles_list: List[Dict],
+        exercise_type: str = "squat",
+        fps: Optional[float] = None,
+    ) -> ExerciseStats:
+        """Analyze exercise angle frames using an explicit exercise profile."""
 
-        Args:
-            angles_list: List of angle dicts per frame
-            exercise_type: Type of exercise
+        self.fps = float(fps or self.fps)
+        self.angle_history = []
+        self.reps = []
 
-        Returns:
-            ExerciseStats with metrics
-        """
-        # Determine joint to track
-        joint = "elbow"
-        if angles_list and "knee" in str(angles_list[0]).lower():
-            joint = "knee"
-
-        # Extract angle series
-        angles = self._extract_angles(angles_list, joint)
+        profile = self._profile(exercise_type)
+        tracked_joint = str(profile["tracked_joint"])
+        angles, sides, valid = self._extract_profile_angles(angles_list, profile)
         self.angle_history = angles
 
-        if len(angles) < 10:
-            return self._empty_stats(exercise_type)
+        if len(angles) < 3 or sum(valid) < 3:
+            return self._empty_stats(exercise_type, tracked_joint, angles)
 
-        # Smooth angles
-        smoothed = self._smooth(angles, window=3)
+        # Rep confirmation uses measured angles directly. Zero-padded
+        # convolution can corrupt the ready phase at clip boundaries, which is
+        # exactly where short demo recordings often start and end.
+        self.reps = self._detect_reps(angles, sides, valid, profile)
+        return self._calc_stats(exercise_type, tracked_joint, angles)
 
-        # Detect reps
-        self.reps = self._detect_reps(smoothed, joint)
+    def _profile(self, exercise_type: str) -> Dict:
+        try:
+            return DRYLAND_EXERCISE_PROFILES[exercise_type]
+        except KeyError as exc:
+            raise ValueError(f"Unsupported dryland exercise: {exercise_type}") from exc
 
-        # Calculate stats
-        return self._calc_stats(exercise_type, smoothed)
+    def _extract_profile_angles(self, angles_list: List[Dict], profile: Dict) -> tuple[List[float], List[str], List[bool]]:
+        """Extract one active side per frame without combining incomplete sides."""
 
-    def _extract_angles(self, angles_list: List[Dict], joint: str) -> List[float]:
-        """Extract angle series for target joint."""
-        series = []
+        values: List[float] = []
+        sides: List[str] = []
+        valid: List[bool] = []
 
         for angles in angles_list:
             if not angles:
-                series.append(np.nan)
+                values.append(0.0)
+                sides.append("")
+                valid.append(False)
                 continue
 
-            # Find matching angles
-            left = angles.get(f"L.{joint}")
-            right = angles.get(f"R.{joint}")
+            candidates: List[tuple[float, str]] = []
+            for key in profile["angle_keys"]:
+                angle = angles.get(key)
+                if angle is None:
+                    continue
+                side = "left" if key.startswith("L.") else "right"
+                candidates.append((float(angle), side))
 
-            if left is not None and right is not None:
-                series.append((left + right) / 2)
-            elif left is not None:
-                series.append(left)
-            elif right is not None:
-                series.append(right)
-            else:
-                series.append(np.nan)
+            if not candidates:
+                values.append(0.0)
+                sides.append("")
+                valid.append(False)
+                continue
 
-        # Interpolate NaNs
-        arr = np.array(series)
-        nans = np.isnan(arr)
-        if not nans.all():
-            x = np.arange(len(arr))
-            arr[nans] = np.interp(x[nans], x[~nans], arr[~nans])
-        else:
-            arr = np.full(len(series), 90.0)
+            angle, side = min(candidates, key=lambda item: item[0])
+            values.append(angle)
+            sides.append(side)
+            valid.append(True)
 
-        return arr.tolist()
+        return self._interpolate_short_gaps(values, sides, valid)
 
-    # ``_smooth`` is inherited from BaseAnalyzer; callers pass window=3 to keep
-    # the original rep-detection smoothing behaviour.
+    def _interpolate_short_gaps(
+        self,
+        values: List[float],
+        sides: List[str],
+        valid: List[bool],
+    ) -> tuple[List[float], List[str], List[bool]]:
+        """Bridge short dropouts only; long gaps stay invalid for rep logic."""
 
-    def _detect_reps(self, angles: List[float], joint: str) -> List[RepData]:
-        """Detect repetitions from angle series."""
-        thresh = self.THRESHOLDS.get(joint, self.THRESHOLDS["elbow"])
-        low_thresh = thresh["low"]
-        high_thresh = thresh["high"]
+        output = values[:]
+        output_sides = sides[:]
+        output_valid = valid[:]
+        index = 0
+        while index < len(output):
+            if output_valid[index]:
+                index += 1
+                continue
 
-        # Find peaks (extended) and valleys (contracted)
-        peaks = []
-        valleys = []
+            start = index
+            while index < len(output) and not output_valid[index]:
+                index += 1
+            end = index - 1
+            gap = end - start + 1
+            if start == 0 or index >= len(output) or gap > DRYLAND_MAX_INTERPOLATION_GAP_FRAMES:
+                continue
 
-        for i in range(2, len(angles) - 2):
-            # Local max
-            if angles[i] > angles[i - 1] and angles[i] > angles[i + 1]:
-                if angles[i] > high_thresh - 20:
-                    peaks.append(i)
-            # Local min
-            if angles[i] < angles[i - 1] and angles[i] < angles[i + 1]:
-                if angles[i] < low_thresh + 30:
-                    valleys.append(i)
+            left = output[start - 1]
+            right = output[index]
+            step = (right - left) / (gap + 1)
+            fill_side = output_sides[start - 1] or output_sides[index]
+            for offset in range(gap):
+                frame = start + offset
+                output[frame] = left + step * (offset + 1)
+                output_sides[frame] = fill_side
+                output_valid[frame] = True
 
-        # Match valleys -> peak -> valley = 1 rep
-        reps = []
+        fallback = next((value for value, ok in zip(output, output_valid) if ok), 0.0)
+        output = [value if ok else fallback for value, ok in zip(output, output_valid)]
+        return output, output_sides, output_valid
+
+    def _detect_reps(self, angles: List[float], sides: List[str], valid: List[bool], profile: Dict) -> List[RepData]:
+        """Detect confirmed ready -> effort -> ready repetitions."""
+
+        ready_threshold = float(profile["ready_threshold"])
+        effort_threshold = float(profile["effort_threshold"])
+        min_rom = float(profile["min_rom"])
+        reps: List[RepData] = []
         rep_num = 0
-        used_valleys = set()
+        phase = "seek_ready"
+        start_frame: Optional[int] = None
+        effort_frame: Optional[int] = None
+        effort_side = ""
+        min_angle = 0.0
+        max_angle = 0.0
+        effort_min_angle = 0.0
 
-        for i, v1 in enumerate(valleys):
-            if v1 in used_valleys:
+        for index, angle in enumerate(angles):
+            if not valid[index]:
+                phase = "seek_ready"
+                start_frame = None
+                effort_frame = None
+                effort_side = ""
+                effort_min_angle = 0.0
                 continue
 
-            # Find peak after valley
-            peak = None
-            for p in peaks:
-                if p > v1:
-                    peak = p
-                    break
-
-            if peak is None:
+            if phase == "seek_ready":
+                if angle >= ready_threshold:
+                    start_frame = index
+                    min_angle = angle
+                    max_angle = angle
+                    effort_side = sides[index]
+                    phase = "seek_effort"
                 continue
 
-            # Find valley after peak
-            v2 = None
-            for v in valleys:
-                if v > peak and v not in used_valleys:
-                    v2 = v
-                    break
-
-            if v2 is None:
+            if start_frame is None:
+                phase = "seek_ready"
                 continue
 
-            # Valid rep
-            rep_num += 1
-            used_valleys.add(v1)
-            used_valleys.add(v2)
+            min_angle = min(min_angle, angle)
+            max_angle = max(max_angle, angle)
 
-            duration = (v2 - v1) / self.fps
-            min_a = min(angles[v1 : v2 + 1])
-            max_a = max(angles[v1 : v2 + 1])
+            if phase == "seek_effort":
+                if angle <= effort_threshold:
+                    effort_frame = index
+                    effort_side = sides[index] or effort_side
+                    effort_min_angle = angle
+                    phase = "seek_return"
+                continue
 
-            reps.append(
-                RepData(
-                    rep_number=rep_num,
-                    start_frame=v1,
-                    end_frame=v2,
-                    duration_sec=duration,
-                    min_angle=min_a,
-                    max_angle=max_a,
-                    range_of_motion=max_a - min_a,
-                )
-            )
+            if phase != "seek_return" or effort_frame is None:
+                continue
+
+            if angle < effort_min_angle:
+                effort_min_angle = angle
+                effort_frame = index
+                effort_side = sides[index] or effort_side
+
+            if angle >= ready_threshold:
+                duration = (index - start_frame) / self.fps
+                rom = max_angle - min_angle
+                if (
+                    DRYLAND_MIN_REP_DURATION_SEC <= duration <= DRYLAND_MAX_REP_DURATION_SEC
+                    and rom >= min_rom
+                ):
+                    rep_num += 1
+                    reps.append(
+                        RepData(
+                            rep_number=rep_num,
+                            start_frame=start_frame,
+                            effort_frame=effort_frame,
+                            end_frame=index,
+                            duration_sec=round(duration, 2),
+                            min_angle=round(min_angle, 1),
+                            max_angle=round(max_angle, 1),
+                            range_of_motion=round(rom, 1),
+                            active_side=effort_side,
+                        )
+                    )
+
+                start_frame = index
+                effort_frame = None
+                effort_side = sides[index]
+                effort_min_angle = 0.0
+                min_angle = angle
+                max_angle = angle
+                phase = "seek_effort"
 
         return reps
 
-    def _calc_stats(self, exercise_type: str, angles: List[float]) -> ExerciseStats:
-        """Calculate exercise statistics."""
+    def _calc_stats(self, exercise_type: str, tracked_joint: str, angles: List[float]) -> ExerciseStats:
+        """Calculate exercise statistics from confirmed repetitions."""
+
         if not self.reps:
-            return self._empty_stats(exercise_type)
+            return self._empty_stats(exercise_type, tracked_joint, angles)
 
         durations = [r.duration_sec for r in self.reps]
         roms = [r.range_of_motion for r in self.reps]
+        avg_tempo = float(np.mean(durations))
+        avg_rom = float(np.mean(roms))
 
-        avg_tempo = np.mean(durations)
-        avg_rom = np.mean(roms)
-
-        # Stability: lower std = higher score
-        rom_std = np.std(roms) if len(roms) > 1 else 0
-        dur_std = np.std(durations) if len(durations) > 1 else 0
-        stability = max(0, 100 - rom_std * 2 - dur_std * 10)
+        rom_std = float(np.std(roms)) if len(roms) > 1 else 0.0
+        dur_std = float(np.std(durations)) if len(durations) > 1 else 0.0
+        stability = max(0.0, 100.0 - rom_std * 2.0 - dur_std * 10.0)
 
         return ExerciseStats(
             exercise_type=exercise_type,
+            tracked_joint=tracked_joint,
             total_reps=len(self.reps),
             avg_tempo=round(avg_tempo, 2),
             avg_range_of_motion=round(avg_rom, 1),
@@ -231,15 +292,22 @@ class ExerciseAnalyzer(BaseAnalyzer):
             angle_history=angles,
         )
 
-    def _empty_stats(self, exercise_type: str) -> ExerciseStats:
+    def _empty_stats(
+        self,
+        exercise_type: str,
+        tracked_joint: str,
+        angles: Optional[List[float]] = None,
+    ) -> ExerciseStats:
         return ExerciseStats(
             exercise_type=exercise_type,
+            tracked_joint=tracked_joint,
             total_reps=0,
             avg_tempo=0,
             avg_range_of_motion=0,
             stability_score=0,
-            min_angle=0,
-            max_angle=0,
+            min_angle=round(min(angles), 1) if angles else 0,
+            max_angle=round(max(angles), 1) if angles else 0,
+            angle_history=angles or [],
         )
 
     def get_rep_at_frame(self, frame_idx: int) -> Optional[int]:
@@ -247,9 +315,6 @@ class ExerciseAnalyzer(BaseAnalyzer):
         for rep in self.reps:
             if rep.start_frame <= frame_idx <= rep.end_frame:
                 return rep.rep_number
-        # After last rep
-        if self.reps and frame_idx > self.reps[-1].end_frame:
-            return self.reps[-1].rep_number
         return 0
 
     def draw_rep_counter(self, frame: np.ndarray, frame_idx: int) -> np.ndarray:
@@ -258,11 +323,9 @@ class ExerciseAnalyzer(BaseAnalyzer):
 
         current_rep = self.get_rep_at_frame(frame_idx)
 
-        # Background
         cv2.rectangle(frame, (w - 150, 10), (w - 10, 80), (0, 0, 0), -1)
         cv2.rectangle(frame, (w - 150, 10), (w - 10, 80), (0, 200, 255), 2)
 
-        # Rep count
         cv2.putText(
             frame,
             f"{current_rep}",
@@ -288,7 +351,7 @@ class ExerciseAnalyzer(BaseAnalyzer):
 
 
 def generate_exercise_chart(stats: ExerciseStats, output_path: str) -> Optional[str]:
-    """Generate angle chart for exercise."""
+    """Generate an angle chart for exercise evidence."""
     try:
         import matplotlib
 
@@ -298,14 +361,10 @@ def generate_exercise_chart(stats: ExerciseStats, output_path: str) -> Optional[
         fig, axes = plt.subplots(2, 1, figsize=(12, 8))
         fig.patch.set_facecolor("#1a1a2e")
 
-        # Chart 1: Angle over time
         ax1 = axes[0]
         ax1.set_facecolor("#16213e")
-
         timestamps = [i / 10.0 for i in range(len(stats.angle_history))]
         ax1.plot(timestamps, stats.angle_history, color="#00d9ff", linewidth=2)
-
-        # Mark reps
         for rep in stats.reps:
             t = rep.start_frame / 10.0
             ax1.axvline(x=t, color="#10b981", linestyle="--", alpha=0.7)
@@ -317,24 +376,20 @@ def generate_exercise_chart(stats: ExerciseStats, output_path: str) -> Optional[
                 fontsize=10,
                 fontweight="bold",
             )
-
-        ax1.set_xlabel("Час (сек)", color="white", fontsize=11)
-        ax1.set_ylabel("Кут (°)", color="white", fontsize=11)
-        ax1.set_title("📐 Кут суглоба в часі", color="white", fontsize=14, fontweight="bold")
+        ax1.set_xlabel("Time (sec)", color="white", fontsize=11)
+        ax1.set_ylabel("Angle (deg)", color="white", fontsize=11)
+        ax1.set_title("Joint angle over time", color="white", fontsize=14, fontweight="bold")
         ax1.tick_params(colors="white")
         ax1.grid(True, alpha=0.3, color="#4a5568")
 
-        # Chart 2: Rep comparison
         ax2 = axes[1]
         ax2.set_facecolor("#16213e")
-
         if stats.reps:
             x = np.arange(len(stats.reps))
             roms = [r.range_of_motion for r in stats.reps]
             durations = [r.duration_sec for r in stats.reps]
 
-            ax2.bar(x, roms, color="#00d9ff", alpha=0.8, label="Амплітуда (°)")
-
+            ax2.bar(x, roms, color="#00d9ff", alpha=0.8, label="ROM (deg)")
             ax2_twin = ax2.twinx()
             ax2_twin.plot(
                 x,
@@ -343,27 +398,25 @@ def generate_exercise_chart(stats: ExerciseStats, output_path: str) -> Optional[
                 marker="o",
                 linewidth=2,
                 markersize=8,
-                label="Темп (с)",
+                label="Tempo (sec)",
             )
 
-            ax2.set_xlabel("Повторення", color="white", fontsize=11)
-            ax2.set_ylabel("Амплітуда (°)", color="#00d9ff", fontsize=11)
-            ax2_twin.set_ylabel("Темп (с)", color="#f59e0b", fontsize=11)
-            ax2.set_title("📊 Аналіз повторень", color="white", fontsize=14, fontweight="bold")
+            ax2.set_xlabel("Repetition", color="white", fontsize=11)
+            ax2.set_ylabel("ROM (deg)", color="#00d9ff", fontsize=11)
+            ax2_twin.set_ylabel("Tempo (sec)", color="#f59e0b", fontsize=11)
+            ax2.set_title("Repetition evidence", color="white", fontsize=14, fontweight="bold")
             ax2.set_xticks(x)
             ax2.set_xticklabels([f"R{r.rep_number}" for r in stats.reps])
             ax2.tick_params(colors="white")
             ax2_twin.tick_params(colors="white")
-
             ax2.legend(loc="upper left", facecolor="#16213e", labelcolor="white")
             ax2_twin.legend(loc="upper right", facecolor="#16213e", labelcolor="white")
 
         plt.tight_layout()
         plt.savefig(output_path, facecolor="#1a1a2e", dpi=150, bbox_inches="tight")
         plt.close()
-
         return output_path
 
-    except Exception as e:
-        logger.warning(f"Chart generation failed: {e}")
+    except Exception as exc:
+        logger.warning("Chart generation failed: %s", exc)
         return None

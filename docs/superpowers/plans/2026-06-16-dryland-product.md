@@ -39,7 +39,7 @@
 - Modify: `video_analysis/exercise_analyzer.py`
 - Create: `tests/unit/test_exercise_analyzer.py`
 
-- [ ] **Step 1: Write failing analyzer tests**
+- [x] **Step 1: Write failing analyzer tests**
 
 ```python
 # tests/unit/test_exercise_analyzer.py
@@ -129,13 +129,13 @@ def test_state_does_not_leak_between_clips():
     assert analyzer.get_rep_at_frame(20) == 0
 ```
 
-- [ ] **Step 2: Run analyzer tests to verify failure**
+- [x] **Step 2: Run analyzer tests to verify failure**
 
 Run: `pytest tests/unit/test_exercise_analyzer.py -v`
 
 Expected: FAIL because `ExerciseStats.tracked_joint` and `RepData.effort_frame` do not exist and the old valley-peak-valley detector cannot count ready-effort-ready cycles.
 
-- [ ] **Step 3: Add Dryland constants**
+- [x] **Step 3: Add Dryland constants**
 
 ```python
 # video_analysis/constants.py
@@ -172,7 +172,7 @@ DRYLAND_EXERCISE_PROFILES = {
 }
 ```
 
-- [ ] **Step 4: Implement analyzer dataclasses and profile lookup**
+- [x] **Step 4: Implement analyzer dataclasses and profile lookup**
 
 ```python
 # video_analysis/exercise_analyzer.py
@@ -211,7 +211,7 @@ class ExerciseStats:
     angle_history: list[float] = field(default_factory=list)
 ```
 
-- [ ] **Step 5: Implement bounded extraction and cycle detection**
+- [x] **Step 5: Implement bounded extraction and cycle detection**
 
 ```python
 # video_analysis/exercise_analyzer.py
@@ -260,13 +260,13 @@ def _interpolate_short_gaps(self, values: list[float], valid: list[bool]) -> lis
     return [value if ok else fallback for value, ok in zip(output, valid)]
 ```
 
-- [ ] **Step 6: Run analyzer tests to verify pass**
+- [x] **Step 6: Run analyzer tests to verify pass**
 
 Run: `pytest tests/unit/test_exercise_analyzer.py -v`
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit analyzer**
+- [x] **Step 7: Commit analyzer**
 
 ```bash
 git add video_analysis/constants.py video_analysis/exercise_analyzer.py tests/unit/test_exercise_analyzer.py
