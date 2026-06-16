@@ -1,8 +1,4 @@
-from backend.app.services.dryland import (
-    dryland_quality,
-    metric_ready,
-    select_active_angles,
-)
+from backend.app.services.dryland import dryland_quality, metric_ready, select_active_angles
 
 
 def test_metric_ready_squat_accepts_one_complete_side():

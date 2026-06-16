@@ -1348,25 +1348,25 @@ git commit -m "feat: add dryland result page"
 - Modify: `docs/UX.md`
 - Inspect: `frontend/components/layout/TopNav.tsx`
 
-- [ ] **Step 1: Update product docs**
+- [x] **Step 1: Update product docs**
 
 ```markdown
 Dryland analysis now supports explicit squat, lunge, and push-up upload workflows in the FastAPI + Next.js product. The workflow is quality-gated, renders annotated evidence video, persists athlete sessions, and shows saved metrics in sport overview history.
 ```
 
-- [ ] **Step 2: Run backend focused tests**
+- [x] **Step 2: Run backend focused tests**
 
 Run: `pytest tests/unit/test_exercise_analyzer.py tests/unit/test_dryland_service.py tests/unit/test_dryland_api.py tests/unit/test_athlete_database.py tests/unit/test_sport_sessions.py tests/unit/test_sport_overview_api.py -v`
 
 Expected: PASS.
 
-- [ ] **Step 3: Run frontend focused tests**
+- [x] **Step 3: Run frontend focused tests**
 
 Run: `cd frontend && npm test -- analysis.test.ts dryland/page.test.tsx 'dryland/[jobId]/page.test.tsx'`
 
 Expected: PASS.
 
-- [ ] **Step 4: Run lint and type gates**
+- [x] **Step 4: Run lint and type gates**
 
 Run: `PATH="$PWD/.venv/bin:$PATH" make lint`
 
@@ -1376,13 +1376,13 @@ Run: `cd frontend && npm run typecheck`
 
 Expected: PASS.
 
-- [ ] **Step 5: Run production build**
+- [x] **Step 5: Run production build**
 
 Run: `cd frontend && npm run build`
 
 Expected: PASS.
 
-- [ ] **Step 6: Run browser QA on the local product surface**
+- [x] **Step 6: Run browser QA on the local product surface**
 
 Open: `http://127.0.0.1:3000/dryland`
 
@@ -1393,9 +1393,9 @@ Verify:
 - selecting lunge changes guidance to “both feet visible”;
 - selecting push-up changes guidance to “camera at torso height”;
 - upload is disabled only while upload is in progress;
-- saved Dryland sessions appear in the overview after a successful save.
+- saved Dryland sessions appear in the overview after a successful save (covered by API, persistence, sport overview, and frontend save tests; no dryland sample clip is present for manual browser upload/save QA).
 
-- [ ] **Step 7: Commit docs and verification fixes**
+- [x] **Step 7: Commit docs and verification fixes**
 
 ```bash
 git add README.md docs/UX.md frontend/components/layout/TopNav.tsx

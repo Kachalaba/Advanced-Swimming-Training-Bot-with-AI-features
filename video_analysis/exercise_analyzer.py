@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 Dryland exercise analyzer.
 
@@ -10,6 +8,8 @@ Features:
 - range-of-motion evidence
 - movement consistency score
 """
+
+from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
@@ -101,7 +101,9 @@ class ExerciseAnalyzer(BaseAnalyzer):
         except KeyError as exc:
             raise ValueError(f"Unsupported dryland exercise: {exercise_type}") from exc
 
-    def _extract_profile_angles(self, angles_list: List[Dict], profile: Dict) -> tuple[List[float], List[str], List[bool]]:
+    def _extract_profile_angles(
+        self, angles_list: List[Dict], profile: Dict
+    ) -> tuple[List[float], List[str], List[bool]]:
         """Extract one active side per frame without combining incomplete sides."""
 
         values: List[float] = []
@@ -235,10 +237,7 @@ class ExerciseAnalyzer(BaseAnalyzer):
             if angle >= ready_threshold:
                 duration = (index - start_frame) / self.fps
                 rom = max_angle - min_angle
-                if (
-                    DRYLAND_MIN_REP_DURATION_SEC <= duration <= DRYLAND_MAX_REP_DURATION_SEC
-                    and rom >= min_rom
-                ):
+                if DRYLAND_MIN_REP_DURATION_SEC <= duration <= DRYLAND_MAX_REP_DURATION_SEC and rom >= min_rom:
                     rep_num += 1
                     reps.append(
                         RepData(

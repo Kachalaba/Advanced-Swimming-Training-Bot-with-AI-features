@@ -131,7 +131,9 @@ def metric_ready(exercise_type: str, keypoints: dict[str, tuple[float, float]]) 
     return False
 
 
-def select_active_angles(exercise_type: str, keypoints_list: list[dict[str, tuple[float, float]]]) -> list[dict[str, float]]:
+def select_active_angles(
+    exercise_type: str, keypoints_list: list[dict[str, tuple[float, float]]]
+) -> list[dict[str, float]]:
     """Convert frame keypoints into the angle dicts consumed by ExerciseAnalyzer."""
 
     frames: list[dict[str, float]] = []

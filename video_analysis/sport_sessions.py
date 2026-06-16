@@ -363,7 +363,9 @@ def _dryland_session(session: TrainingSession, stored: Dict[str, Any]) -> Dict[s
     quality = result.get("quality")
     if isinstance(quality, dict):
         normalized["quality"] = {
-            key: value for key, value in quality.items() if isinstance(value, (int, float)) and math.isfinite(float(value))
+            key: value
+            for key, value in quality.items()
+            if isinstance(value, (int, float)) and math.isfinite(float(value))
         }
     else:
         normalized["quality"] = _pose_quality(result)
