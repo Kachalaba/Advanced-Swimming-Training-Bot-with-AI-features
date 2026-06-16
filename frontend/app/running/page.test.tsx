@@ -30,6 +30,9 @@ describe("RunningPage", () => {
 
     expect(screen.queryByText("18:42")).not.toBeInTheDocument();
     expect(screen.queryByText("Tempo run · Track")).not.toBeInTheDocument();
+    expect(screen.queryByText("Coming soon")).not.toBeInTheDocument();
     expect(screen.getByText("No sessions yet")).toBeInTheDocument();
+    expect(screen.getByText("Capture checklist")).toBeInTheDocument();
+    expect(screen.getByText("Lock the camera")).toBeInTheDocument();
   });
 });
