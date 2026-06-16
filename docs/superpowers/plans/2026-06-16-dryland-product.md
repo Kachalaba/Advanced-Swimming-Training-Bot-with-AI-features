@@ -1402,7 +1402,7 @@ git add README.md docs/UX.md frontend/components/layout/TopNav.tsx
 git commit -m "docs: mark dryland workflow production ready"
 ```
 
-- [ ] **Step 8: Prepare PR or main merge**
+- [x] **Step 8: Prepare PR or main merge**
 
 Run: `git status --short`
 
