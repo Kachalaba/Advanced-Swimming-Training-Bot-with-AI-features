@@ -851,7 +851,7 @@ git commit -m "feat: expose dryland analysis api"
 - Modify: `tests/unit/test_sport_sessions.py`
 - Modify: `tests/unit/test_sport_overview_api.py`
 
-- [ ] **Step 1: Write persistence and overview tests**
+- [x] **Step 1: Write persistence and overview tests**
 
 ```python
 # tests/unit/test_sport_sessions.py
@@ -875,13 +875,13 @@ def test_dryland_session_normalizes_reps_tempo_and_quality():
     assert "Squat" in result["summary"]
 ```
 
-- [ ] **Step 2: Run focused tests to verify failure**
+- [x] **Step 2: Run focused tests to verify failure**
 
 Run: `pytest tests/unit/test_sport_sessions.py::test_dryland_session_normalizes_reps_tempo_and_quality -v`
 
 Expected: FAIL because Dryland normalization is not implemented.
 
-- [ ] **Step 3: Implement Dryland normalization**
+- [x] **Step 3: Implement Dryland normalization**
 
 ```python
 # video_analysis/sport_sessions.py
@@ -923,7 +923,7 @@ def _dryland_session(session: TrainingSession, stored: Dict[str, Any]) -> Dict[s
     return normalized
 ```
 
-- [ ] **Step 4: Route Dryland in normalizer**
+- [x] **Step 4: Route Dryland in normalizer**
 
 ```python
 # video_analysis/sport_sessions.py
@@ -940,7 +940,7 @@ def normalize_sport_session(session: TrainingSession) -> Dict[str, Any]:
     return _base_session(session)
 ```
 
-- [ ] **Step 5: Persist Dryland top-level session fields**
+- [x] **Step 5: Persist Dryland top-level session fields**
 
 ```python
 # video_analysis/athlete_database.py
@@ -955,13 +955,13 @@ elif session_type == "dryland":
     session.ai_summary = f"{session.exercise_type.replace('_', '-').title()} · {session.reps} reps · {session.avg_tempo:.1f}s tempo"
 ```
 
-- [ ] **Step 6: Run persistence tests**
+- [x] **Step 6: Run persistence tests**
 
 Run: `pytest tests/unit/test_athlete_database.py tests/unit/test_sport_sessions.py tests/unit/test_sport_overview_api.py -v`
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit persistence**
+- [x] **Step 7: Commit persistence**
 
 ```bash
 git add video_analysis/athlete_database.py video_analysis/sport_sessions.py tests/unit/test_athlete_database.py tests/unit/test_sport_sessions.py tests/unit/test_sport_overview_api.py

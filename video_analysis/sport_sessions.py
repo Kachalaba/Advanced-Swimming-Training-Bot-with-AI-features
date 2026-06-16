@@ -329,6 +329,77 @@ def _cycling_session(session: TrainingSession, stored: Dict[str, Any]) -> Dict[s
     return normalized
 
 
+def _dryland_session(session: TrainingSession, stored: Dict[str, Any]) -> Dict[str, Any]:
+    normalized = _base_session(session)
+    result = stored.get("dryland_analysis", stored)
+    if not isinstance(result, dict):
+        return normalized
+    analysis = result.get("analysis", result)
+    if not isinstance(analysis, dict):
+        return normalized
+
+    exercise = str(result.get("exercise_type") or analysis.get("exercise_type") or session.exercise_type or "dryland")
+    pairs = [
+        _metric("total_reps", "Reps", analysis.get("total_reps"), "", higher_is_better=None),
+        _metric("avg_tempo", "Average tempo", analysis.get("avg_tempo"), "sec", higher_is_better=None),
+        _metric(
+            "avg_range_of_motion",
+            "Average ROM",
+            analysis.get("avg_range_of_motion"),
+            "deg",
+            higher_is_better=True,
+        ),
+        _metric(
+            "stability_score",
+            "Movement consistency",
+            analysis.get("stability_score"),
+            "/100",
+            higher_is_better=True,
+        ),
+    ]
+    normalized["metrics"] = {key: value for pair in pairs if pair for key, value in [pair]}
+    normalized["score"] = _number(analysis.get("stability_score"))
+
+    quality = result.get("quality")
+    if isinstance(quality, dict):
+        normalized["quality"] = {
+            key: value for key, value in quality.items() if isinstance(value, (int, float)) and math.isfinite(float(value))
+        }
+    else:
+        normalized["quality"] = _pose_quality(result)
+
+    reps = _number(analysis.get("total_reps"))
+    tempo = _number(analysis.get("avg_tempo"))
+    summary_parts = [exercise.replace("_", "-").title()]
+    if reps is not None:
+        summary_parts.append(f"{reps:.0f} reps")
+    if tempo is not None:
+        summary_parts.append(f"{tempo:.1f}s tempo")
+    normalized["summary"] = " · ".join(summary_parts)
+
+    warnings = result.get("quality", {}).get("warnings") if isinstance(result.get("quality"), dict) else []
+    insights = []
+    if warnings:
+        insights.append(
+            {
+                "code": "dryland_quality_warning",
+                "level": "info",
+                "title": "Capture quality warning saved",
+                "detail": str(warnings[0]),
+            }
+        )
+    insights.append(
+        {
+            "code": "dryland_evidence",
+            "level": "success" if normalized["score"] is not None and normalized["score"] >= 80 else "info",
+            "title": "Confirmed full repetitions",
+            "detail": "Review the annotated video and per-rep evidence before changing exercise load.",
+        }
+    )
+    normalized["insights"] = insights
+    return normalized
+
+
 def normalize_sport_session(
     session: TrainingSession,
     sport: str,
@@ -344,6 +415,8 @@ def normalize_sport_session(
         return _swimming_session(session, stored)
     if sport == "cycling":
         return _cycling_session(session, stored)
+    if sport == "dryland":
+        return _dryland_session(session, stored)
     return _base_session(session)
 
 

@@ -294,6 +294,40 @@ class TestSaveAnalysis:
         assert saved.exercise_type == "side_view_bike_fit"
         assert saved.ai_summary == "92 rpm · 146° knee extension"
 
+    def test_dryland_analysis_populates_history_fields(self, tmp_path):
+        import video_analysis.athlete_database as athlete_database
+
+        database = AthleteDatabase(str(tmp_path / "dryland.db"))
+        athlete_id = database.add_athlete(Athlete(name="Dryland Athlete"))
+
+        session_id = athlete_database.save_analysis_to_athlete(
+            athlete_id=athlete_id,
+            session_type="dryland",
+            analysis={
+                "dryland_analysis": {
+                    "type": "result",
+                    "exercise_type": "squat",
+                    "analysis": {
+                        "total_reps": 5,
+                        "avg_tempo": 2.2,
+                        "avg_range_of_motion": 74.0,
+                        "stability_score": 89.4,
+                    },
+                }
+            },
+            database=database,
+        )
+
+        saved = database.get_session(session_id)
+        assert saved is not None
+        assert saved.session_type == "dryland"
+        assert saved.exercise_type == "squat"
+        assert saved.reps == 5
+        assert saved.avg_tempo == 2.2
+        assert saved.stability_score == 89.4
+        assert saved.ai_score == 89
+        assert saved.ai_summary == "Squat · 5 reps · 2.2s tempo"
+
     def test_rehab_analysis_populates_existing_session_fields(self, tmp_path):
         import json
 
