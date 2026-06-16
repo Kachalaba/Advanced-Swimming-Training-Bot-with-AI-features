@@ -974,7 +974,7 @@ git commit -m "feat: persist dryland sport sessions"
 - Modify: `frontend/lib/analysis.ts`
 - Modify: `frontend/lib/analysis.test.ts`
 
-- [ ] **Step 1: Write failing frontend API tests**
+- [x] **Step 1: Write failing frontend API tests**
 
 ```ts
 // frontend/lib/analysis.test.ts
@@ -1000,13 +1000,13 @@ it("builds dryland annotated video URLs", () => {
 });
 ```
 
-- [ ] **Step 2: Run frontend API tests to verify failure**
+- [x] **Step 2: Run frontend API tests to verify failure**
 
 Run: `cd frontend && npm test -- analysis.test.ts`
 
 Expected: FAIL because Dryland helpers are missing.
 
-- [ ] **Step 3: Implement Dryland helpers and types**
+- [x] **Step 3: Implement Dryland helpers and types**
 
 ```ts
 // frontend/lib/analysis.ts
@@ -1071,13 +1071,13 @@ export function drylandAnnotatedVideoUrl(jobId: string): string {
 }
 ```
 
-- [ ] **Step 4: Run frontend API tests**
+- [x] **Step 4: Run frontend API tests**
 
 Run: `cd frontend && npm test -- analysis.test.ts`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit frontend client**
+- [x] **Step 5: Commit frontend client**
 
 ```bash
 git add frontend/lib/analysis.ts frontend/lib/analysis.test.ts
