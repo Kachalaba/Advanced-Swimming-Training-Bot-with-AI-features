@@ -690,7 +690,7 @@ git commit -m "feat: add dryland analysis service"
 - Modify: `backend/app/services/jobs.py`
 - Create: `tests/unit/test_dryland_api.py`
 
-- [ ] **Step 1: Write failing API tests**
+- [x] **Step 1: Write failing API tests**
 
 ```python
 # tests/unit/test_dryland_api.py
@@ -736,13 +736,13 @@ def test_dryland_save_requires_done_job():
     assert response.status_code == 409
 ```
 
-- [ ] **Step 2: Run API tests to verify failure**
+- [x] **Step 2: Run API tests to verify failure**
 
 Run: `pytest tests/unit/test_dryland_api.py -v`
 
 Expected: FAIL because `/api/analysis/dryland` routes are missing.
 
-- [ ] **Step 3: Add Dryland router helpers**
+- [x] **Step 3: Add Dryland router helpers**
 
 ```python
 # backend/app/api/analysis.py
@@ -778,7 +778,7 @@ def _get_dryland_job(job_id: str) -> Job:
     return job
 ```
 
-- [ ] **Step 4: Add Dryland endpoints**
+- [x] **Step 4: Add Dryland endpoints**
 
 ```python
 # backend/app/api/analysis.py
@@ -829,13 +829,13 @@ async def save_dryland_job(job_id: str, request: SaveAnalysisRequest) -> dict[st
     return {"session_id": session_id}
 ```
 
-- [ ] **Step 5: Run API tests**
+- [x] **Step 5: Run API tests**
 
 Run: `pytest tests/unit/test_dryland_api.py -v`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit API**
+- [x] **Step 6: Commit API**
 
 ```bash
 git add backend/app/api/analysis.py backend/app/services/jobs.py tests/unit/test_dryland_api.py
