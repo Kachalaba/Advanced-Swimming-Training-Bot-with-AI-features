@@ -1091,7 +1091,7 @@ git commit -m "feat: add dryland frontend api client"
 - Modify: `frontend/app/dryland/page.tsx`
 - Modify: `frontend/app/dryland/page.test.tsx`
 
-- [ ] **Step 1: Write failing landing tests**
+- [x] **Step 1: Write failing landing tests**
 
 ```tsx
 // frontend/app/dryland/page.test.tsx
@@ -1119,13 +1119,13 @@ it("does not show a planned workflow badge", () => {
 });
 ```
 
-- [ ] **Step 2: Run landing tests to verify failure**
+- [x] **Step 2: Run landing tests to verify failure**
 
 Run: `cd frontend && npm test -- dryland/page.test.tsx`
 
 Expected: FAIL because the current page still says the web workflow is planned.
 
-- [ ] **Step 3: Implement `DrylandUploader`**
+- [x] **Step 3: Implement `DrylandUploader`**
 
 ```tsx
 // frontend/components/sports/DrylandUploader.tsx
@@ -1188,7 +1188,7 @@ export function DrylandUploader() {
 }
 ```
 
-- [ ] **Step 4: Wire landing page to real workflow**
+- [x] **Step 4: Wire landing page to real workflow**
 
 ```tsx
 // frontend/app/dryland/page.tsx
@@ -1223,13 +1223,13 @@ export default async function DrylandPage() {
 }
 ```
 
-- [ ] **Step 5: Run landing tests**
+- [x] **Step 5: Run landing tests**
 
 Run: `cd frontend && npm test -- dryland/page.test.tsx`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit landing**
+- [x] **Step 6: Commit landing**
 
 ```bash
 git add frontend/components/sports/DrylandUploader.tsx frontend/app/dryland/page.tsx frontend/app/dryland/page.test.tsx
