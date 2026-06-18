@@ -72,7 +72,7 @@ export default function PatientDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const copy = clinicalCopy[locale];
-  const progress = episode?.progress ?? [];
+  const progress = useMemo(() => episode?.progress ?? [], [episode?.progress]);
   const comparison = useMemo(
     () => (episode ? compareRehabProgress(progress, episode.protocol) : null),
     [episode, progress],

@@ -64,6 +64,7 @@ export function LiveRehabWorkspace({
   const [update, setUpdate] = useState<LiveRehabUpdate | null>(null);
   const [transportError, setTransportError] = useState<string | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
+  const [sessionActive, setSessionActive] = useState(false);
   const [savedSessionId, setSavedSessionId] = useState<number | null>(null);
   const { status, error: cameraError, start: startCamera, stop: stopCamera } =
     useCameraSource(videoRef, {
@@ -97,6 +98,7 @@ export function LiveRehabWorkspace({
     schedulerRef.current = null;
     const sessionId = sessionIdRef.current;
     sessionIdRef.current = null;
+    setSessionActive(false);
     if (sessionId) {
       await deleteLiveRehabSession(sessionId).catch(() => undefined);
     }
@@ -112,6 +114,7 @@ export function LiveRehabWorkspace({
       await startCamera();
       const session = await createLiveRehabSession(protocol, 5);
       sessionIdRef.current = session.sessionId;
+      setSessionActive(true);
       schedulerRef.current = createFrameScheduler<Blob>(async (blob) => {
         const sessionId = sessionIdRef.current;
         if (!sessionId) return;
@@ -126,6 +129,8 @@ export function LiveRehabWorkspace({
       });
       timerRef.current = window.setInterval(capture, ANALYSIS_INTERVAL_MS);
     } catch {
+      sessionIdRef.current = null;
+      setSessionActive(false);
       stopCamera();
     }
   }, [capture, copy.liveError, protocol, startCamera, stopCamera]);
@@ -189,7 +194,7 @@ export function LiveRehabWorkspace({
     setFullscreen(true);
   };
 
-  const isLive = status === "live" && sessionIdRef.current !== null;
+  const isLive = status === "live" && sessionActive;
   const cameraLevel = update?.camera_level ?? null;
   const levelLabel =
     cameraLevel?.status === "level"

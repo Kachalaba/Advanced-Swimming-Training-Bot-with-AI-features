@@ -87,6 +87,7 @@ export default function HistoryPage() {
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [athleteName, setAthleteName] = useState("Athlete");
   const [error, setError] = useState<string | null>(null);
+  const [referenceTime] = useState(() => Date.now());
 
   useEffect(() => {
     api
@@ -102,13 +103,13 @@ export default function HistoryPage() {
 
   const filtered = useMemo(() => {
     const days = Number(period.slice(0, -1));
-    const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+    const cutoff = referenceTime - days * 24 * 60 * 60 * 1000;
     return sessions.filter((session) => {
       const matchesSport = sport === "all" || session.session_type === sport;
       const date = new Date(session.date).getTime();
       return matchesSport && (!Number.isFinite(date) || date >= cutoff);
     });
-  }, [period, sessions, sport]);
+  }, [period, referenceTime, sessions, sport]);
 
   const totals = (Object.keys(sportLabels) as SessionSport[]).map((item) => {
     const rows = sessions.filter((session) => session.session_type === item);

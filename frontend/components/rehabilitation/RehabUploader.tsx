@@ -1,7 +1,7 @@
 "use client";
 
 import { CheckCircle2, Loader2, Save, Upload } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { rehabCopy, type RehabLocale } from "@/lib/rehabCopy";
 import {
@@ -53,7 +53,7 @@ export function RehabUploader({
     };
   }, [onAnalysisChange]);
 
-  async function analyze(file: File) {
+  const analyze = useCallback(async (file: File) => {
     onAnalysisChange?.(null);
     setError(null);
     setResult(null);
@@ -86,7 +86,7 @@ export function RehabUploader({
       setError(copy.uploadError);
       setProgress(0);
     }
-  }
+  }, [copy.uploadError, onAnalysisChange, protocol]);
 
   useEffect(() => {
     if (
@@ -97,7 +97,7 @@ export function RehabUploader({
     }
     analyzedInitialFileRef.current = initialFile;
     void analyze(initialFile);
-  }, [initialFile]);
+  }, [analyze, initialFile]);
 
   const progressLabel =
     progress === 0
