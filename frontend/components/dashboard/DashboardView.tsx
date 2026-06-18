@@ -4,22 +4,28 @@ import {
   Activity,
   ArrowUpRight,
   Award,
+  Bike,
+  ChevronDown,
   Clock,
+  Dumbbell,
   Filter,
   Flame,
+  Footprints,
+  HeartPulse,
   Play,
   Plus,
   Sparkles,
   Target,
   TrendingUp,
   Upload,
+  Waves,
   Zap,
 } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 
 import { ChartContainer } from "@/components/ui/ChartContainer";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { FileDropZone } from "@/components/ui/FileDropZone";
 import { LiveSparkline } from "@/components/ui/LiveSparkline";
 import { MetricCard } from "@/components/ui/MetricCard";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
@@ -83,8 +89,74 @@ const phaseColors: Record<(typeof timelineDays)[number]["type"], string> = {
 
 type Period = "7d" | "30d" | "90d";
 
+const analysisRoutes = [
+  {
+    href: "/swimming",
+    label: "Swimming",
+    detail: "Waterline-aware freestyle",
+    icon: Waves,
+    color: "text-cyan-300",
+  },
+  {
+    href: "/running",
+    label: "Running",
+    detail: "Cadence and gait",
+    icon: Footprints,
+    color: "text-orange-300",
+  },
+  {
+    href: "/cycling",
+    label: "Cycling",
+    detail: "Bike fit and posture",
+    icon: Bike,
+    color: "text-emerald-300",
+  },
+  {
+    href: "/dryland",
+    label: "Dryland",
+    detail: "Strength movement evidence",
+    icon: Dumbbell,
+    color: "text-violet-300",
+  },
+  {
+    href: "/rehabilitation",
+    label: "Rehabilitation",
+    detail: "Live ROM or uploaded video",
+    icon: HeartPulse,
+    color: "text-rose-300",
+  },
+] as const;
+
+function AnalysisQuickStart() {
+  return (
+    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+      {analysisRoutes.map(({ href, label, detail, icon: Icon, color }) => (
+        <Link
+          key={href}
+          href={href}
+          className="group flex items-center gap-3 rounded-xl border border-white/[0.06] bg-white/[0.025] p-3 transition hover:border-cyan-400/20 hover:bg-white/[0.045]"
+        >
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/[0.06] bg-black/20">
+            <Icon className={`h-4 w-4 ${color}`} />
+          </span>
+          <span className="min-w-0">
+            <span className="block text-sm font-medium text-slate-200 transition group-hover:text-white">
+              {label}
+            </span>
+            <span className="block truncate text-[11px] text-slate-500">
+              {detail}
+            </span>
+          </span>
+          <ArrowUpRight className="ml-auto h-3.5 w-3.5 text-slate-600 transition group-hover:text-cyan-300" />
+        </Link>
+      ))}
+    </div>
+  );
+}
+
 export function DashboardView({ athleteName }: { athleteName: string }) {
   const [period, setPeriod] = useState<Period>("7d");
+  const [analysisMenuOpen, setAnalysisMenuOpen] = useState(false);
 
   return (
     <div className="animate-slide-up space-y-8">
@@ -132,10 +204,48 @@ export function DashboardView({ athleteName }: { athleteName: string }) {
               value={period}
               onChange={setPeriod}
             />
-            <button className="flex items-center gap-2 px-3 h-8 bg-cyan-400 hover:bg-cyan-300 text-slate-900 text-xs font-semibold rounded-lg transition-all duration-200 active:scale-[0.98]">
-              <Upload className="w-3.5 h-3.5" />
-              Upload session
-            </button>
+            <div className="relative">
+              <button
+                type="button"
+                aria-haspopup="menu"
+                aria-expanded={analysisMenuOpen}
+                onClick={() => setAnalysisMenuOpen((open) => !open)}
+                className="flex h-8 items-center gap-2 rounded-lg bg-cyan-400 px-3 text-xs font-semibold text-slate-900 transition-all duration-200 hover:bg-cyan-300 active:scale-[0.98]"
+              >
+                <Upload className="h-3.5 w-3.5" />
+                Upload session
+                <ChevronDown className="h-3 w-3" />
+              </button>
+              {analysisMenuOpen ? (
+                <div
+                  role="menu"
+                  aria-label="Choose analysis workflow"
+                  className="absolute right-0 top-10 z-30 w-72 rounded-xl border border-white/[0.08] bg-elevated p-2 shadow-2xl shadow-black/50"
+                >
+                  {analysisRoutes.map(
+                    ({ href, label, detail, icon: Icon, color }) => (
+                      <Link
+                        key={href}
+                        href={href}
+                        role="menuitem"
+                        onClick={() => setAnalysisMenuOpen(false)}
+                        className="flex items-center gap-3 rounded-lg px-3 py-2.5 transition hover:bg-white/[0.05]"
+                      >
+                        <Icon className={`h-4 w-4 ${color}`} />
+                        <span>
+                          <span className="block text-xs font-semibold text-slate-200">
+                            {label}
+                          </span>
+                          <span className="block text-[10px] text-slate-500">
+                            {detail}
+                          </span>
+                        </span>
+                      </Link>
+                    ),
+                  )}
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
 
@@ -306,9 +416,12 @@ export function DashboardView({ athleteName }: { athleteName: string }) {
               Click any session to open the analysis view
             </p>
           </div>
-          <button className="text-xs text-slate-400 hover:text-slate-200 flex items-center gap-1 transition-colors">
+          <Link
+            href="/history"
+            className="flex items-center gap-1 text-xs text-slate-400 transition-colors hover:text-slate-200"
+          >
             View all <ArrowUpRight className="w-3 h-3" />
-          </button>
+          </Link>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {recentSessions.map((s) => (
@@ -352,10 +465,10 @@ export function DashboardView({ athleteName }: { athleteName: string }) {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <ChartContainer
-          title="Upload new session"
-          subtitle="Multi-angle video supported"
+          title="Start a new analysis"
+          subtitle="Choose the workflow before uploading"
         >
-          <FileDropZone />
+          <AnalysisQuickStart />
         </ChartContainer>
         <ChartContainer title="Goals" subtitle="Set your race targets">
           <EmptyState
