@@ -67,6 +67,16 @@ describe("TopNav", () => {
     expect((await screen.findAllByText("Nikita")).length).toBeGreaterThan(0);
   });
 
+  it("marks the overview route as the active page", () => {
+    mocks.pathname = "/";
+    render(<TopNav />);
+
+    expect(screen.getByRole("link", { name: "Overview" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+  });
+
   it("switches navigation chrome to Ukrainian and persists the choice", async () => {
     const user = userEvent.setup();
     render(<TopNav />);

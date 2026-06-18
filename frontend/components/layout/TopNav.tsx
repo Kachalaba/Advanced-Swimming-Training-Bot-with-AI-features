@@ -24,6 +24,7 @@ const shellCopy = {
   uk: {
     tagline: "Тріатлонна аналітика",
     workspace: "Kachamba Lab",
+    overview: "Огляд",
     swimming: "Плавання",
     running: "Біг",
     cycling: "Велоспорт",
@@ -49,6 +50,7 @@ const shellCopy = {
   en: {
     tagline: "Triathlon Intelligence",
     workspace: "Kachamba Lab",
+    overview: "Overview",
     swimming: "Swimming",
     running: "Running",
     cycling: "Cycling",
@@ -247,6 +249,7 @@ export function TopNav() {
               <Link
                 key={s.id}
                 href={s.href}
+                aria-current={active ? "page" : undefined}
                 className={`relative flex items-center gap-2 px-3.5 h-10 text-xs font-medium whitespace-nowrap transition-colors duration-200 ${
                   active
                     ? "text-slate-100"

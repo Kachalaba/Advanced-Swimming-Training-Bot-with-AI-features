@@ -4,6 +4,7 @@ import {
   Footprints,
   HeartPulse,
   History,
+  LayoutDashboard,
   Sparkles,
   Waves,
   Wrench,
@@ -11,6 +12,7 @@ import {
 } from "lucide-react";
 
 export type SectionId =
+  | "overview"
   | "swimming"
   | "running"
   | "cycling"
@@ -28,6 +30,7 @@ export type Section = {
 };
 
 export const sections: Section[] = [
+  { id: "overview", label: "Overview", href: "/", icon: LayoutDashboard },
   { id: "swimming", label: "Swimming", href: "/swimming", icon: Waves },
   { id: "running", label: "Running", href: "/running", icon: Footprints },
   { id: "cycling", label: "Cycling", href: "/cycling", icon: Bike },
