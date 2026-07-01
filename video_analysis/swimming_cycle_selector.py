@@ -55,7 +55,7 @@ class SwimmingCycleSelector(BaseAnalyzer):
         peaks = self._local_peaks(signal, min_gap=max(4, int(round(self.fps * 0.7))))
         candidates = [
             self._build_cycle(frames, signal, start, end, index)
-            for index, (start, end) in enumerate(zip(peaks, peaks[1:]), start=1)
+            for index, (start, end) in enumerate(zip(peaks, peaks[1:], strict=False), start=1)
         ]
         reliable = [cycle for cycle in candidates if cycle.complete and cycle.quality >= SWIM_CONFIDENCE_MEDIUM]
         selected = sorted(reliable, key=lambda cycle: cycle.quality, reverse=True)[:limit]

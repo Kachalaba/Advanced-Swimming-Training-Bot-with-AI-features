@@ -73,7 +73,7 @@ class BiomechanicsVisualizer:
         self.mp_pose = mp.solutions.pose
         # Shared cached model — avoids reloading on every instantiation
         self.pose = get_pose_detector(video_mode=True)
-        self.trajectories = {
+        self.trajectories: Dict[str, deque] = {
             "left_wrist": deque(maxlen=trajectory_length),
             "right_wrist": deque(maxlen=trajectory_length),
             "left_ankle": deque(maxlen=trajectory_length),
@@ -193,7 +193,7 @@ class BiomechanicsVisualizer:
         # Joints
         for name, (x, y, c) in kps.items():
             if c > self.min_conf:
-                col = COLORS.get(
+                joint_col = COLORS.get(
                     "shoulder"
                     if "shoulder" in name
                     else (
@@ -210,7 +210,7 @@ class BiomechanicsVisualizer:
                         )
                     )
                 )
-                cv2.circle(frame, (x, y), 6, col, -1, cv2.LINE_AA)
+                cv2.circle(frame, (x, y), 6, joint_col, -1, cv2.LINE_AA)
                 cv2.circle(frame, (x, y), 6, (255, 255, 255), 1, cv2.LINE_AA)
         return frame
 

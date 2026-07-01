@@ -351,7 +351,7 @@ def analyze_dryland_video(
         yield ErrorEvent(str(exc))
         return
 
-    for index, (frame_info, keypoints) in enumerate(zip(frames, keypoints_list)):
+    for index, (frame_info, keypoints) in enumerate(zip(frames, keypoints_list, strict=False)):
         frame = cv2.imread(_frame_path(frame_info))
         if frame is None:
             continue

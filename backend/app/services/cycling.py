@@ -254,7 +254,7 @@ def analyze_cycling_video(
         yield ErrorEvent(str(exc))
         return
 
-    for frame_info, keypoints in zip(frames, keypoints_list):
+    for frame_info, keypoints in zip(frames, keypoints_list, strict=False):
         frame = cv2.imread(_frame_path(frame_info))
         if frame is None:
             continue

@@ -3,8 +3,10 @@ target-version = "py311"
 line-length = 120
 
 [tool.ruff.lint]
-select = ["E", "F"]
-ignore = ["E501"]
+select = ["E", "F", "B"]
+# E501: long lines handled by black; B008: FastAPI's File()/Depends() in
+# argument defaults is the framework's intended idiom.
+ignore = ["E501", "B008"]
 
 [tool.ruff.lint.per-file-ignores]
 "backend/app/services/running.py" = ["E402"]

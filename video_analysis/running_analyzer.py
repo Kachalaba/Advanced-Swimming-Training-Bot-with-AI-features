@@ -494,7 +494,7 @@ class RunningAnalyzer(BaseAnalyzer):
         same_side_intervals = []
         for side in ("left", "right"):
             side_frames = sorted(step.frame for step in self.steps if step.side == side)
-            for start, end in zip(side_frames, side_frames[1:]):
+            for start, end in zip(side_frames, side_frames[1:], strict=False):
                 interval_sec = (end - start) / self.fps
                 if RUN_MIN_SAME_SIDE_STEP_INTERVAL_SEC <= interval_sec <= RUN_MAX_SAME_SIDE_STEP_INTERVAL_SEC:
                     same_side_intervals.append(interval_sec)
@@ -507,11 +507,11 @@ class RunningAnalyzer(BaseAnalyzer):
         if not self.hip_heights:
             return 0.0
 
-        samples = dict(zip(self.hip_height_frames, self.hip_heights))
+        samples = dict(zip(self.hip_height_frames, self.hip_heights, strict=False))
         cycle_ranges = []
         for side in ("left", "right"):
             side_frames = sorted(step.frame for step in self.steps if step.side == side)
-            for start, end in zip(side_frames, side_frames[1:]):
+            for start, end in zip(side_frames, side_frames[1:], strict=False):
                 values = [samples[frame] for frame in range(start, end + 1) if frame in samples]
                 if len(values) >= 5:
                     cycle_ranges.append(float(np.percentile(values, 90) - np.percentile(values, 10)))

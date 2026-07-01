@@ -22,7 +22,6 @@ docs/
 examples/
 *.md
 !README.md
-reports/
 data/*.db
 frontend/.next/
 frontend/node_modules/

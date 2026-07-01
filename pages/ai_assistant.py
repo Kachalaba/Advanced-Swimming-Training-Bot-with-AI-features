@@ -125,7 +125,7 @@ def render_ai_tab():
             "Як покращити body roll?",
             "Вправи для плечей",
         ]
-        for i, (col, question) in enumerate(zip(quick_cols, quick_questions)):
+        for i, (col, question) in enumerate(zip(quick_cols, quick_questions, strict=False)):
             with col:
                 if st.button(question, key=f"quick_{i}", use_container_width=True):
                     response = st.session_state.ai_chat.chat(question)

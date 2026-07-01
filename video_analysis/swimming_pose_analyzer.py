@@ -165,7 +165,7 @@ class SwimmingPoseAnalyzer:
             return self._empty_result()
 
         # Adjust for crop
-        for name, kp in keypoints.items():
+        for kp in keypoints.values():
             kp.x += crop_offset[0]
             kp.y += crop_offset[1]
 
@@ -190,7 +190,7 @@ class SwimmingPoseAnalyzer:
 
     def _detect_with_rotation(self, frame: np.ndarray, bbox: Optional[List[int]]) -> Tuple:
         """Detect pose with rotation compensation."""
-        best_kps, best_vis, best_method = None, 0, "none"
+        best_kps, best_vis, best_method = None, 0.0, "none"
 
         # Estimate orientation
         angles = [0]
@@ -212,7 +212,7 @@ class SwimmingPoseAnalyzer:
 
             if results.pose_landmarks:
                 kps = self._extract_keypoints(results.pose_landmarks, rotated.shape[:2])
-                avg_vis = np.mean([kp.visibility for kp in kps.values()])
+                avg_vis = float(np.mean([kp.visibility for kp in kps.values()]))
 
                 if avg_vis > best_vis:
                     if angle != 0:
@@ -378,7 +378,7 @@ class SwimmingPoseAnalyzer:
             return 0.0
 
         # Max distance from middle points to line
-        max_dist = 0
+        max_dist = 0.0
         for i in range(1, len(points) - 1):
             # Distance from point to line
             dist = abs(dy * xs[i] - dx * ys[i] + xs[-1] * ys[0] - ys[-1] * xs[0]) / length
@@ -589,7 +589,7 @@ class SwimmingPoseAnalyzer:
                     cv2.line(frame, pt1, pt2, color, 2)
 
         # Draw keypoints
-        for name, kp in keypoints.items():
+        for kp in keypoints.values():
             if kp.get("vis", 0) > 0.3:
                 pt = (int(kp["x"]), int(kp["y"]))
                 cv2.circle(frame, pt, 4, (255, 255, 255), -1)

@@ -84,7 +84,7 @@ class TrajectoryAnalyzer:
 
     def _extract_trajectory(self, detections: List[Dict]) -> List[Dict]:
         """Extract center points and bbox dimensions from detections."""
-        trajectory = []
+        trajectory: List[Dict] = []
 
         for det in detections:
             if not det.get("bbox"):
@@ -254,7 +254,7 @@ class TrajectoryAnalyzer:
             scores.append(score)
 
         # Consistency: lower variance = better
-        consistency = 100.0 - min(np.std(scores), 100.0)
+        consistency = 100.0 - min(float(np.std(scores)), 100.0)
 
         return {
             "streamline_scores": scores,
