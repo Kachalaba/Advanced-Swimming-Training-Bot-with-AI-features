@@ -1,6 +1,6 @@
 """Run local swimming video analysis end-to-end.
 
-This script demonstrates how to process an mp4 locally without Telegram
+This script demonstrates how to process an mp4 locally without the web UI
 or external services. It extracts frames, runs swimmer detection, computes
 splits/stroke metrics, and generates charts/PDF reports.
 """

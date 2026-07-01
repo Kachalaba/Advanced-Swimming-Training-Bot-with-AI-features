@@ -15,6 +15,10 @@ logger = logging.getLogger(__name__)
 
 sys.path.insert(0, str(Path(__file__).parent))
 
+from video_analysis.monitoring import init_sentry  # noqa: E402
+
+init_sentry()
+
 
 def _load_static_css() -> str:
     """Return the static premium stylesheet, or an empty string if missing."""
