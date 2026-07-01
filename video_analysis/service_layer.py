@@ -134,15 +134,11 @@ class AnalysisService:
 
     def _get_ai_coach(self) -> AICoachProtocol:
         if self._ai_coach is None:
-            try:
-                from video_analysis.ai_chat import AIChat
+            from video_analysis.ai_chat import AIChat
 
-                self._ai_coach = AIChat(athlete_name=self.athlete_name)
-            except Exception as exc:
-                logger.warning("AIChat init failed (%s), using keyword fallback", exc)
-                from video_analysis.ai_chat import AIChat
-
-                self._ai_coach = AIChat(athlete_name=self.athlete_name)
+            # AIChat handles a missing API key / SDK internally by switching
+            # to its keyword-based fallback, so no try/except is needed here.
+            self._ai_coach = AIChat(athlete_name=self.athlete_name)
         return self._ai_coach
 
     # ------------------------------------------------------------------

@@ -5,11 +5,13 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Dict, List
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 import cv2
 import numpy as np
-from ultralytics import YOLO
+
+if TYPE_CHECKING:
+    from ultralytics import YOLO
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +22,10 @@ _yolo_model_cache: Dict[str, "YOLO"] = {}
 def _get_yolo_model(model_name: str) -> "YOLO":
     """Return a cached YOLO model, loading it only on first call."""
     if model_name not in _yolo_model_cache:
+        # Lazy import — ultralytics pulls in torch (~1 GB); keep module importable
+        # (and unit-testable) without the full ML stack installed.
+        from ultralytics import YOLO
+
         logger.info(f"Loading YOLO model: {model_name}")
         _yolo_model_cache[model_name] = YOLO(model_name)
     return _yolo_model_cache[model_name]
@@ -68,8 +74,8 @@ class SwimmerDetector:
         results = self.model(frame, verbose=False)
 
         # Find person with highest confidence
-        best_detection = None
-        best_conf = 0
+        best_detection: Optional[Dict[str, Any]] = None
+        best_conf = 0.0
 
         for result in results:
             boxes = result.boxes
@@ -291,7 +297,7 @@ class SwimmerDetector:
             Best matching detection
         """
         best_det = None
-        best_score = -1
+        best_score = -1.0
 
         for det in detections:
             score = 0.0

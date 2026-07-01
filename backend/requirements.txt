@@ -14,5 +14,8 @@ pandas==2.1.4
 matplotlib==3.8.2
 Pillow==10.2.0
 
-# Reused by athlete_database.py and reports
+# Reused by athlete_database.py and report generation
 SQLAlchemy==2.0.29
+
+# Optional error tracking (no-op without SENTRY_DSN)
+sentry-sdk==1.40.6

@@ -126,16 +126,6 @@ python3 -m streamlit run app.py
 
 ---
 
-## 🎬 Telegram Bot
-
-Також доступний Telegram бот для швидкого аналізу:
-
-1. Знайдіть бота: `@YourSwimmingBot`
-2. Надішліть відео
-3. Отримайте аналіз прямо в чат
-
----
-
 ## 📞 Підтримка
 
 - GitHub Issues: [Створити issue](https://github.com/Kachalaba/Advanced-Swimming-Training-Bot-with-AI-features/issues)

@@ -104,7 +104,7 @@ def create_side_by_side(
     output_height = target_height + 50  # Space for labels
 
     # Create video writer
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    fourcc = cv2.VideoWriter.fourcc(*"mp4v")
     out = cv2.VideoWriter(output_path, fourcc, fps, (output_width, output_height))
 
     if not out.isOpened():
@@ -216,7 +216,7 @@ def extract_highlight(
     # Output FPS adjusted for slow motion
     output_fps = fps * slow_factor
 
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    fourcc = cv2.VideoWriter.fourcc(*"mp4v")
     out = cv2.VideoWriter(output_path, fourcc, output_fps, (width, height))
 
     cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
@@ -360,7 +360,7 @@ def create_zoom_video(
     else:
         out_w, out_h = orig_width, orig_height
 
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    fourcc = cv2.VideoWriter.fourcc(*"mp4v")
     out = cv2.VideoWriter(output_path, fourcc, fps, (out_w, out_h))
 
     while True:
@@ -423,7 +423,7 @@ def create_tracked_zoom(
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    fourcc = cv2.VideoWriter.fourcc(*"mp4v")
     out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
 
     # Calculate crop dimensions

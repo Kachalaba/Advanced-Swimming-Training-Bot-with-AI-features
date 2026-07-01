@@ -821,7 +821,7 @@ def generate_stroke_chart(analysis: StrokeAnalysis, output_path: str) -> Optiona
             fontweight="bold",
         )
         ax3.tick_params(colors="white")
-        for bar, count in zip(bars, counts):
+        for bar, count in zip(bars, counts, strict=False):
             ax3.text(
                 bar.get_x() + bar.get_width() / 2,
                 bar.get_height() + 0.5,

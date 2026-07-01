@@ -173,8 +173,8 @@ class ExerciseAnalyzer(BaseAnalyzer):
                 output_sides[frame] = fill_side
                 output_valid[frame] = True
 
-        fallback = next((value for value, ok in zip(output, output_valid) if ok), 0.0)
-        output = [value if ok else fallback for value, ok in zip(output, output_valid)]
+        fallback = next((value for value, ok in zip(output, output_valid, strict=False) if ok), 0.0)
+        output = [value if ok else fallback for value, ok in zip(output, output_valid, strict=False)]
         return output, output_sides, output_valid
 
     def _detect_reps(self, angles: List[float], sides: List[str], valid: List[bool], profile: Dict) -> List[RepData]:

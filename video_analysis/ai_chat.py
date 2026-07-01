@@ -16,6 +16,11 @@ from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
+# Claude model for coaching chat. claude-3-5-sonnet-20241022 was retired by
+# Anthropic (Oct 2025) and now returns 404, silently degrading the chat to the
+# keyword fallback. Overridable without a code change via env var.
+CLAUDE_MODEL = os.environ.get("SPRINT_AI_CLAUDE_MODEL", "claude-sonnet-5")
+
 
 @dataclass
 class ChatMessage:
@@ -198,10 +203,11 @@ class AIChat:
             for msg in self.history[-10:]:
                 messages.append({"role": msg.role, "content": msg.content})
 
+            # No sampling params: claude-sonnet-5 rejects non-default
+            # temperature/top_p with a 400.
             result = self._client.messages.create(
-                model="claude-3-5-sonnet-20241022",
+                model=CLAUDE_MODEL,
                 max_tokens=512,
-                temperature=0.2,
                 system=self._build_system(),
                 messages=messages,
             )

@@ -42,7 +42,7 @@ def test_lunge_uses_more_flexed_knee_and_side_label():
     frames = []
     left = [170, 165, 150, 124, 104, 94, 110, 138, 160, 170]
     right = [171, 168, 166, 160, 154, 150, 156, 164, 168, 170]
-    for left_angle, right_angle in zip(left, right):
+    for left_angle, right_angle in zip(left, right, strict=False):
         frames.append({"L.knee": left_angle, "R.knee": right_angle})
 
     result = analyzer.analyze(frames, exercise_type="lunge")

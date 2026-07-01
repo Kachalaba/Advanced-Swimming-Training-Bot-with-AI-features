@@ -66,7 +66,7 @@ class VideoOverlayGenerator:
         # Try better codecs for quality
         # h264 > avc1 > mp4v
         for codec in ["avc1", "mp4v"]:
-            fourcc = cv2.VideoWriter_fourcc(*codec)
+            fourcc = cv2.VideoWriter.fourcc(*codec)
             writer = cv2.VideoWriter(str(output_path), fourcc, self.fps, (width, height))
             if writer.isOpened():
                 logger.info(f"Using codec: {codec} at {self.fps} fps")

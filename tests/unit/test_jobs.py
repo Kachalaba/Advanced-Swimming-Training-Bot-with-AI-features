@@ -2,6 +2,8 @@
 
 import asyncio
 import json
+import os
+import time
 
 from backend.app.services.jobs import Job, stream_job_events
 
@@ -48,3 +50,48 @@ def test_stream_includes_events_added_after_subscription(tmp_path):
     chunk = asyncio.run(collect())
     event = json.loads(chunk.removeprefix("data: ").strip())
     assert event["type"] == "result"
+
+
+def test_prune_stale_removes_expired_jobs_and_orphan_dirs(tmp_path):
+    from backend.app.services.jobs import JobRegistry
+
+    registry = JobRegistry(tmp_path / "jobs")
+
+    # Finished job past the TTL: dropped from the registry, workspace removed.
+    old_done = registry.create("running")
+    old_done.status = "done"
+    old_done.created_at -= 100_000
+    stale_mtime = time.time() - 100_000
+    os.utime(old_done.workspace, (stale_mtime, stale_mtime))
+
+    # Running job past the TTL: must survive untouched.
+    old_running = registry.create("swimming")
+    old_running.status = "running"
+    old_running.created_at -= 100_000
+    os.utime(old_running.workspace, (stale_mtime, stale_mtime))
+
+    # Orphaned directory from a previous process, older than the TTL.
+    orphan = registry.root / "orphan123"
+    orphan.mkdir()
+    os.utime(orphan, (stale_mtime, stale_mtime))
+
+    registry.prune_stale(ttl_seconds=3600)
+
+    assert registry.get(old_done.id) is None
+    assert not old_done.workspace.exists()
+    assert registry.get(old_running.id) is old_running
+    assert old_running.workspace.exists()
+    assert not orphan.exists()
+
+
+def test_prune_stale_keeps_recent_finished_jobs(tmp_path):
+    from backend.app.services.jobs import JobRegistry
+
+    registry = JobRegistry(tmp_path / "jobs")
+    job = registry.create("cycling")
+    job.status = "done"
+
+    registry.prune_stale(ttl_seconds=3600)
+
+    assert registry.get(job.id) is job
+    assert job.workspace.exists()

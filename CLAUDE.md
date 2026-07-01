@@ -136,8 +136,10 @@ Add new keys to **both** `"uk"` and `"en"` sections in `i18n/translations.py`.
 |----------|---------|-------------|
 | `ANTHROPIC_API_KEY` | — | Claude API key for AI coaching + chat |
 | `OPENAI_API_KEY` | — | OpenAI fallback for AI coaching |
+| `SPRINT_AI_CLAUDE_MODEL` | `claude-sonnet-5` | Claude model for AI coaching + chat |
 | `ATHLETE_DB_PATH` | `data/athletes_orm.db` | SQLAlchemy DB path |
-| `SENTRY_DSN` | — | Sentry error tracking DSN |
+| `SENTRY_DSN` | — | Sentry error tracking DSN (no-op when unset) |
+| `SPRINT_AI_JOB_TTL_HOURS` | `24` | TTL for finished analysis jobs + their workspaces |
 
 ## Testing
 

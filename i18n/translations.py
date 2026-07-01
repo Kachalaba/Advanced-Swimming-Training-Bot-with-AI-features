@@ -4,9 +4,10 @@ Sprint AI — UI translations (Ukrainian / English).
 Usage:
     from i18n.translations import t
     st.markdown(t("tab_swimming"))
-"""
 
-import streamlit as st
+Streamlit is imported lazily inside ``_current_lang`` so that TRANSLATIONS
+stays importable (and unit-testable) in environments without streamlit.
+"""
 
 TRANSLATIONS: dict = {
     "uk": {
@@ -408,6 +409,17 @@ TRANSLATIONS: dict = {
 }
 
 
+def _current_lang() -> str:
+    """Read the active language from Streamlit session state, default 'uk'."""
+    try:
+        import streamlit as st
+
+        return st.session_state.get("lang", "uk")
+    except Exception:
+        # No streamlit installed / no active session — behave as default lang.
+        return "uk"
+
+
 def t(key: str, **fmt) -> str:
     """Return translated string for *key* in the active language.
 
@@ -418,7 +430,7 @@ def t(key: str, **fmt) -> str:
         t("status_extract_frames")           # plain key
         t("result_score", score=87)          # with interpolation
     """
-    lang = st.session_state.get("lang", "uk")
+    lang = _current_lang()
     val = TRANSLATIONS.get(lang, TRANSLATIONS["uk"]).get(key)
     if val is None:
         val = TRANSLATIONS["uk"].get(key, key)
@@ -432,4 +444,4 @@ def t(key: str, **fmt) -> str:
 
 def get_lang() -> str:
     """Return the current UI language code ('uk' or 'en')."""
-    return st.session_state.get("lang", "uk")
+    return _current_lang()

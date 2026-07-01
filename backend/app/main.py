@@ -4,6 +4,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api import analysis, athletes, clinical, health, rehabilitation, tools
 from app.core.config import settings
 
+# video_analysis resolves the same way as in app.api.* (PYTHONPATH=/ in the
+# container image, repo root on sys.path in local dev).
+from video_analysis.monitoring import init_sentry
+
+init_sentry()
+
 app = FastAPI(
     title="SPRINT AI Backend",
     version="0.1.0",

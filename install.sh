@@ -149,10 +149,10 @@ main() {
 
     local repo_dir="$script_dir"
     if [ ! -f "$repo_dir/docker-compose.yml" ] || [ ! -f "$repo_dir/.env.example" ]; then
-        repo_dir="$script_dir/Sprint-Bot"
+        repo_dir="$script_dir/Advanced-Swimming-Training-Bot-with-AI-features"
         if [ ! -d "$repo_dir" ]; then
-            echo "Клонирую репозиторий Sprint-Bot..."
-            git clone https://github.com/Kachalaba/Sprint-Bot.git "$repo_dir"
+            echo "Клонирую репозиторий SPRINT AI..."
+            git clone https://github.com/Kachalaba/Advanced-Swimming-Training-Bot-with-AI-features.git "$repo_dir"
         fi
         cd "$repo_dir"
     else
@@ -164,17 +164,19 @@ main() {
         exit 1
     fi
 
-    cp .env.example .env
+    if [ ! -f .env ]; then
+        cp .env.example .env
+    fi
 
-    read -rp "Введите BOT_TOKEN: " BOT_TOKEN
-    read -rp "Введите ADMIN_IDS (через запятую): " ADMIN_IDS
-
-    update_env_value "BOT_TOKEN" "$BOT_TOKEN"
-    update_env_value "ADMIN_IDS" "$ADMIN_IDS"
+    read -rp "Введите ANTHROPIC_API_KEY (Enter — пропустить, offline-режим): " ANTHROPIC_API_KEY
+    if [ -n "$ANTHROPIC_API_KEY" ]; then
+        update_env_value "ANTHROPIC_API_KEY" "\"$ANTHROPIC_API_KEY\""
+    fi
 
     docker-compose up -d --build
 
-    echo "Sprint-Bot успешно запущен!"
+    echo "SPRINT AI успешно запущен!"
+    echo "Frontend: http://localhost:3000 | Backend API: http://localhost:8000/api/health"
 }
 
 main "$@"
