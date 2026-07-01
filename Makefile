@@ -1,4 +1,4 @@
-.PHONY: format lint test typecheck
+.PHONY: format lint test test-cov typecheck
 
 format:
 	isort .
@@ -15,3 +15,7 @@ typecheck:
 
 test:
 	pytest
+
+# Used by CI (tests.yml) — produces coverage.xml for the artifact upload.
+test-cov:
+	pytest --cov=video_analysis --cov=backend/app --cov-report=term --cov-report=xml

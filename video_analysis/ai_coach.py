@@ -13,6 +13,11 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
+# Claude model for structured coaching analysis. claude-3-5-sonnet-20241022
+# was retired by Anthropic (Oct 2025) and now returns 404, silently degrading
+# analysis to offline mode. Overridable without a code change via env var.
+CLAUDE_MODEL = os.environ.get("SPRINT_AI_CLAUDE_MODEL", "claude-sonnet-5")
+
 
 @dataclass
 class CoachingAdvice:
@@ -275,10 +280,11 @@ class AICoach:
     def _analyze_with_claude(self, context: str) -> CoachingAdvice:
         """Analyze using Anthropic Claude with Tool Use for guaranteed structured JSON."""
         try:
+            # No sampling params: claude-sonnet-5 rejects non-default
+            # temperature/top_p with a 400.
             message = self.client.messages.create(
-                model="claude-3-5-sonnet-20241022",
+                model=CLAUDE_MODEL,
                 max_tokens=1024,
-                temperature=0.2,
                 system=self.SYSTEM_PROMPT,
                 tools=[self._COACHING_TOOL],
                 tool_choice={"type": "any"},

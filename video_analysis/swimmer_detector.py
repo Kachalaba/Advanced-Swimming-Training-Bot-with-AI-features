@@ -9,17 +9,20 @@ from typing import Dict, List
 
 import cv2
 import numpy as np
-from ultralytics import YOLO
 
 logger = logging.getLogger(__name__)
 
 # Module-level YOLO model cache — avoids re-loading on every analysis call
-_yolo_model_cache: Dict[str, "YOLO"] = {}
+_yolo_model_cache: Dict[str, "YOLO"] = {}  # noqa: F821
 
 
-def _get_yolo_model(model_name: str) -> "YOLO":
+def _get_yolo_model(model_name: str) -> "YOLO":  # noqa: F821
     """Return a cached YOLO model, loading it only on first call."""
     if model_name not in _yolo_model_cache:
+        # Lazy import — ultralytics pulls in torch (~1 GB); keep module importable
+        # (and unit-testable) without the full ML stack installed.
+        from ultralytics import YOLO
+
         logger.info(f"Loading YOLO model: {model_name}")
         _yolo_model_cache[model_name] = YOLO(model_name)
     return _yolo_model_cache[model_name]
